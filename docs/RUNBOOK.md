@@ -18,3 +18,15 @@ This is an operator checklist, **not** a claim that deployment is operational:
 8. Rotate token and pause monitoring if compromised, rate-limited, or unexpected billing/usage occurs.
 
 The config intentionally does not contain a real `database_id`, route, or secret. No credentials, paid model, or provider write is required for local code tests.
+
+## P0.2-A: Cloudflare-local D1 acceptance (CI verified)
+
+This is a strictly local test. It uses `getPlatformProxy` and temporary local workerd/D1 bindings, never the owner's Cloudflare account:
+
+```sh
+npm ci --ignore-scripts
+npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.158.0
+node --experimental-strip-types --test tests/cloudflare-local.test.mjs
+```
+
+Do not use the dummy UUID in `worker/wrangler.local.jsonc` for any deploy or remote migration. `tests/cloudflare-local.test.mjs` executes complete schema statements through D1.prepare and tests restart persistence and lease fencing. To validate the actual Wrangler migration command on remote D1, explicit owner approval and disposable resources are still required. The original `worker/wrangler.jsonc` intentionally lacks a real D1 ID and has no publicly exposed route.
