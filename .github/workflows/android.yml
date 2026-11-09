@@ -1,4 +1,4 @@
-name: Android native pilot build (no backend credentials)
+name: Android GitHub preview build (no backend credentials)
 
 on:
   push:
@@ -36,8 +36,9 @@ jobs:
         run: |
           test -f android/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump permissions android/app/build/outputs/apk/debug/app-debug.apk > /tmp/naraya-apk-permissions.txt
-          if grep -Fq 'android.permission.INTERNET' /tmp/naraya-apk-permissions.txt; then
-            echo 'ERROR: Offline pilot APK unexpectedly requests INTERNET'
+          grep -Fq 'android.permission.INTERNET' /tmp/naraya-apk-permissions.txt
+          if grep -Eq 'android.permission.(READ_CONTACTS|READ_SMS|SEND_SMS|READ_CALL_LOG|RECORD_AUDIO|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES)' /tmp/naraya-apk-permissions.txt; then
+            echo 'ERROR: Unnecessary sensitive permission detected'
             exit 1
           fi
           sha256sum android/app/build/outputs/apk/debug/app-debug.apk
