@@ -1,0 +1,33 @@
+name: Live public GitHub read, local Cloudflare D1
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-public-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install isolated pinned Wrangler tool
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.158.0
+      - name: Prove actual GitHub GET and D1-local observation
+        run: node --experimental-strip-types --test tests/github-live.test.mjs
+      - name: Assert no cloud credentials or deployment
+        run: |
+          test ! -f .env
+          test ! -f worker/.dev.vars
