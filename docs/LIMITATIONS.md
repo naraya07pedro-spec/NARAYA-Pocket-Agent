@@ -10,3 +10,7 @@
 - GitHub API and D1 can be down. No 24/7 uptime promise, SLA, independent performance results, real-world ROI, or autonomous access to apps on a powered-off phone.
 - Observations are source snapshots, not signed authenticity proof; GitHub default-branch head changes do not guarantee a business outcome.
 - No license grant for this public source at the current stage; commercial/open-source decision deferred.
+
+## P0.2-B and P1-A (9 November 2026)
+
+Live GitHub public API reading and local Cloudflare workerd/D1 persistence are CI verified, but neither is a deployed Worker nor a real remote Cron trigger. An Android Kotlin/Compose debug APK has been built by CI, but the current app only stores public GitHub monitor drafts on the phone and has no INTERNET permission, login, backend sync, agent execution or notifications. Real-device installation, RAM, battery, uptime and powered-off-phone acceptance remain unverified. Never embed the owner-only bearer token in the APK. A debug-signed Android artifact is not a production-signed release.
