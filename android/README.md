@@ -34,3 +34,14 @@ Install the debug APK on a consenting Android device. Add a public repository, u
 
 ## Next gate: server-authenticated cloud
 The current Cloudflare Worker requires a high-authority **operator bearer token that must never be embedded in an APK**. Implement a genuine user identity verified server-side, scoped monitor ownership, and explicit consent before any Android-to-Worker writes. Real Cloudflare D1/Cron and phone-off autonomy remain [issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2).
+
+## P1-B source CI evidence (2026-11-10)
+
+Source commit `d90887a3d407d5178368ce197bb99e6e8c84545a` passed **all 5 workflows**:
+- [Backend offline tests + TypeScript](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086317): SUCCESS.
+- [Local Cloudflare workerd/D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086457): SUCCESS.
+- [Worker's official live GitHub GET](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086552): SUCCESS.
+- [Native Android debug APK + unit tests + manifest permission gate](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432): SUCCESS. APK SHA-256 `aefbceab40f1cf17c54a930cf682540d21f5d6766e0ea21a9562cdf6434d48ad`; [ephemeral artifact 13696608733](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432/artifacts/13696608733), expires 16 November 2026 UTC.
+- [Android GitHub adapter real network acceptance](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086200): SUCCESS; JUnit XML asserts **1 test executed, 0 skipped, 0 failed, 0 errors**.
+
+This is CI at source SHA, not yet the merge SHA. **No physical Android, Cloudflare remote, powered-off device, RAM/battery benchmark, OAuth login, or cloud sync verified.**

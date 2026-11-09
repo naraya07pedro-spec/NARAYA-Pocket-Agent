@@ -6,13 +6,24 @@
 
 **Testing introduced:** deterministic JVM tests for parser, statuses, oversized responses, invalid slug, I/O failures and schema migration; independent live network JVM integration test with GitHub branch-ref SHA cross-check and explicit no-skip CI gate; clean Android CI that inspects actual APK permissions and generates a debug APK.
 
-**Evidence gate:** GitHub Actions must pass on PR HEAD SHA and final merged `main` SHA before this stage is marked complete. Do not claim physical Android acceptance, RAM results, cloud sync or autonomous phone-off task execution.
+**Source CI result:** 5/5 workflows SUCCESS on source SHA `d90887a3d407d5178368ce197bb99e6e8c84545a`. Exact links and APK SHA-256 in the evidence section below. Verify PR HEAD and final merged `main` separately before calling stage complete. No physical device, RAM, cloud sync or phone-off autonomy claim.
 
 **Unverified:** mobile physical hardware, WiFi/mobile data behavior, RAM/PSS and battery, Google/OIDC identity, cloud monitoring and remote Cloudflare deployment. Free-spend guardrail and issue #2 remain unchanged.
 
+## P1-B source CI evidence (2026-11-10)
+
+Source commit `d90887a3d407d5178368ce197bb99e6e8c84545a` passed **all 5 workflows**:
+- [Backend offline tests + TypeScript](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086317): SUCCESS.
+- [Local Cloudflare workerd/D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086457): SUCCESS.
+- [Worker's official live GitHub GET](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086552): SUCCESS.
+- [Native Android debug APK + unit tests + manifest permission gate](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432): SUCCESS. APK SHA-256 `aefbceab40f1cf17c54a930cf682540d21f5d6766e0ea21a9562cdf6434d48ad`; [ephemeral artifact 13696608733](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432/artifacts/13696608733), expires 16 November 2026 UTC.
+- [Android GitHub adapter real network acceptance](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086200): SUCCESS; JUnit XML asserts **1 test executed, 0 skipped, 0 failed, 0 errors**.
+
+This is CI at source SHA, not yet the merge SHA. **No physical Android, Cloudflare remote, powered-off device, RAM/battery benchmark, OAuth login, or cloud sync verified.**
+
 ---
 
-# Progress ledger | NARAYA Pocket Agent
+## Earlier milestones (historical)
 
 Rules: **Implemented** = source exists. **Tested** = observed in named environment. **CI verified** = public run and exact commit SHA. **Live verified** = real Cloudflare/owner device/provider. None imply a later level automatically.
 
