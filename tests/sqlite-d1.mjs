@@ -1,0 +1,33 @@
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
+
+function statement(sql, args = [], connection) {
+  return {
+    bind(...values) { return statement(sql, values, connection); },
+    async run() {
+      const result = connection.prepare(sql).run(...args);
+      return { success: true, meta: { changes: Number(result.changes) } };
+    },
+    async first() { return connection.prepare(sql).get(...args) ?? null; },
+    async all() { return { results: connection.prepare(sql).all(...args) }; },
+  };
+}
+export function makeTestDb() {
+  const connection = new DatabaseSync(':memory:');
+  connection.exec('PRAGMA foreign_keys = ON;');
+  connection.exec(fs.readFileSync(new URL('../worker/migrations/0001_initial.sql', import.meta.url), 'utf8'));
+  return {
+    connection,
+    prepare(sql) { return statement(sql, [], connection); },
+    async batch(stmts) {
+      connection.exec('BEGIN IMMEDIATE;');
+      try {
+        const result = [];
+        for (const stmt of stmts) result.push(await stmt.run());
+        connection.exec('COMMIT;');
+        return result;
+      } catch (e) { connection.exec('ROLLBACK;'); throw e; }
+    },
+    close() { connection.close(); },
+  };
+}

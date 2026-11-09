@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "naraya-pocket-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-09",
+  "workers_dev": false,
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "naraya-pocket-agent",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
