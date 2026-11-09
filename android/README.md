@@ -10,9 +10,9 @@ This is a **real native Android app source**, not the cloud agent or a connected
 - No personal/customer data or API secrets. Do not store anything sensitive in these unencrypted drafts.
 
 ## Reproduce
-Use Android Studio with JDK 17, Android SDK Platform 37 and Gradle 9.4.1. Open the `android/` subproject, then run `:app:testDebugUnitTest` and `:app:assembleDebug`.
+Use Android Studio with JDK 17, Android SDK Platform 37.0 (SDK Manager: `platforms;android-37.0`) and Gradle 9.4.1. Open the `android/` subproject, then run `:app:testDebugUnitTest` and `:app:assembleDebug`.
 
-The [Android CI workflow](../.github/workflows/android.yml) uses a clean Ubuntu runner, official Android SDK components, pinned AGP 9.2.1 and Gradle 9.4.1, and uploads the unsigned debug APK as a limited-retention artifact. A passing build is not owner-device acceptance or a measured low-RAM claim.
+The [Android CI workflow](../.github/workflows/android.yml) uses a clean Ubuntu runner, official Android SDK components, pinned AGP 9.2.1 and Gradle 9.4.1, and uploads the debug-signed test APK (not a production/release signature) as a limited-retention artifact. A passing build is not owner-device acceptance or a measured low-RAM claim.
 
 ## Security and next gate
 The current Worker uses an owner-only bearer token. **Never copy it to Android**. Before remote sync, implement OIDC/Firebase user authentication and server-side verification, with scoped user records and approval controls. For this milestone, Android does not request network access.
