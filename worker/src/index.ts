@@ -72,7 +72,10 @@ export default {
     try {
       const { pathname } = new URL(request.url);
       if (pathname === '/health' && request.method === 'GET') return json({ service: 'naraya-pocket-agent', status: 'pilot' });
-      if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32) return json({ error: 'owner_auth_not_configured' }, 503);
+      if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
+          !env.OWNER_ID || !/^[A-Za-z0-9_-]{1,64}$/.test(env.OWNER_ID)) {
+        return json({ error: 'owner_auth_not_configured' }, 503);
+      }
       if (!await authorized(request, env.OWNER_API_TOKEN)) return json({ error: 'unauthorized' }, 401);
       if (pathname === '/v1/monitors' && request.method === 'GET') return await listMonitors(env);
       if (pathname === '/v1/monitors' && request.method === 'POST') return await createMonitor(request, env);

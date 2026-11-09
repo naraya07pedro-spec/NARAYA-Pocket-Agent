@@ -67,6 +67,9 @@ export async function boundedJson(request: Request): Promise<unknown> {
 }
 
 export function ownerId(envOwnerId?: string): string {
-  if (envOwnerId && /^[A-Za-z0-9_-]{1,64}$/.test(envOwnerId)) return envOwnerId;
-  return 'pilot';
+  // Missing or invalid authority must never silently become the same shared owner.
+  if (!envOwnerId || !/^[A-Za-z0-9_-]{1,64}$/.test(envOwnerId)) {
+    throw new InputError('owner_not_configured');
+  }
+  return envOwnerId;
 }
