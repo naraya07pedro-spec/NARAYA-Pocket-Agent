@@ -1,0 +1,53 @@
+name: Android native pilot build (no backend credentials)
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Install Android SDK Platform 37
+        run: |
+          sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+      - name: Unit tests and debug-signed pilot APK
+        run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify built APK permissions and absence of local secrets
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump permissions android/app/build/outputs/apk/debug/app-debug.apk > /tmp/naraya-apk-permissions.txt
+          if grep -Fq 'android.permission.INTERNET' /tmp/naraya-apk-permissions.txt; then
+            echo 'ERROR: Offline pilot APK unexpectedly requests INTERNET'
+            exit 1
+          fi
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk
+          test ! -f android/google-services.json
+          test ! -f android/app/google-services.json
+          test ! -f android/local.properties
+          test ! -f .env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: naraya-pocket-agent-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
