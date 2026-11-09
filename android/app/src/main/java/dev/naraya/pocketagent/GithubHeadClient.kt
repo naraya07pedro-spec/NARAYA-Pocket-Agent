@@ -75,7 +75,7 @@ enum class HeadError {
     INVALID_PROVIDER_DATA, NETWORK_ERROR
 }
 
-class GithubHeadClient(
+internal class GithubHeadClient(
     private val transport: GithubTransport = PublicGithubHttpTransport,
 ) {
     /** Synchronous networking: caller MUST dispatch off the Android main thread. */
