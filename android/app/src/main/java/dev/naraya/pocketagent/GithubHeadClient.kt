@@ -8,6 +8,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
+import java.nio.charset.CharacterCodingException
 import java.nio.charset.StandardCharsets
 
 /** Only ever GETs official public GitHub commit metadata; no auth headers or arbitrary URLs. */
@@ -57,10 +58,16 @@ internal fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
     require(maxBytes > 0)
     val out = ByteArrayOutputStream(minOf(1024, maxBytes))
     val chunk = ByteArray(1024)
+    var emptyReads = 0
     while (true) {
         val size = input.read(chunk)
         if (size == -1) return out.toByteArray()
-        if (size == 0) continue
+        if (size == 0) {
+            emptyReads++
+            if (emptyReads > 8) throw InvalidProviderBody()
+            continue
+        }
+        emptyReads = 0
         if (out.size() + size > maxBytes) throw InvalidProviderBody()
         out.write(chunk, 0, size)
     }
@@ -87,6 +94,8 @@ internal class GithubHeadClient(
         val response = try {
             transport.get(url)
         } catch (_: InvalidProviderBody) {
+            return HeadCheckResult.Failure(HeadError.INVALID_PROVIDER_DATA)
+        } catch (_: CharacterCodingException) {
             return HeadCheckResult.Failure(HeadError.INVALID_PROVIDER_DATA)
         } catch (_: IOException) {
             return HeadCheckResult.Failure(HeadError.NETWORK_ERROR)

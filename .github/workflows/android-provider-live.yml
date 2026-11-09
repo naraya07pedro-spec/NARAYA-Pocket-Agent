@@ -34,6 +34,17 @@ jobs:
         env:
           NARAYA_ANDROID_LIVE_GITHUB: '1'
         run: gradle --no-daemon --project-dir android :app:testDebugUnitTest --tests 'dev.naraya.pocketagent.GithubHeadLiveTest'
+      - name: Verify live test was executed and not silently skipped
+        run: |
+          python3 - <<'PY'
+          from xml.etree import ElementTree as ET
+          from pathlib import Path
+          p = Path("android/app/build/test-results/testDebugUnitTest/TEST-dev.naraya.pocketagent.GithubHeadLiveTest.xml")
+          root = ET.parse(p).getroot()
+          assert int(root.attrib.get("tests", 0)) == 1, root.attrib
+          assert all(int(root.attrib.get(k, 0)) == 0 for k in ("skipped", "failures", "errors")), root.attrib
+          print("NARAYA_ANDROID_LIVE_TEST_VERIFIED", root.attrib)
+          PY
       - name: Guard against local credentials
         run: |
           test ! -f android/google-services.json
