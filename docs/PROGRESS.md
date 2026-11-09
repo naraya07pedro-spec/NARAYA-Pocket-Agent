@@ -29,3 +29,17 @@ Rules: **Implemented** = source exists. **Tested** = observed in named environme
 **Evidence class:** CI_VERIFIED on *local Cloudflare runtime*, NOT LIVE_VERIFIED on Cloudflare's remote platform. No remote D1, Cron delivery, powered-off Android, external provider GET, account billing or uptime proof. No Cloudflare resource created or deployed.
 
 **Next:** P0.2-B owner-approved disposable remote D1/Worker, exact remote migration, genuine GitHub GET, powered-off-phone demonstration and verified quota accounting. Issue #2 remains open. Android P1 later requires proper end-user identity; owner bearer token never enters APK.
+
+## 2026-11-09 | P0.2-B partial, P1-A mobile pilot | public provider and Android source
+
+**Implemented on development branch:** an independently triggered, read-only live GitHub provider acceptance job; official commit-head GET -> shipped scheduler -> local Cloudflare workerd/D1 -> separate official GitHub ref cross-check. A Kotlin/Jetpack Compose Android draft manager allows creation, listing and removal of public GitHub repo monitor drafts saved through local SharedPreferences. It has no INTERNET permission, cloud credentials, agent inference, background service, or user-auth pretence.
+
+**Verified CI before final documentation changes:**
+- [Live GitHub network read 42661442994](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442994): SUCCESS on SHA `dddbba531304c29efc6495983d1500173999b40a`. Public GitHub source `naraya07pedro-spec/NARAYA-Pocket-Agent`, matching branch HEAD `7dd952b9a1f1a02d1f68f538e11164e542beff4c`. Stored locally via workerd/D1; no deployed Cloudflare.
+- [Android native build 42661442547](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442547): SUCCESS on same source SHA, Gradle 9.4.1 / AGP 9.2.1, SDK 37.0, JVM unit tests and debug APK artifact. This does not prove a real-device install or resource footprint.
+- Existing offline 12-case suite and Cloudflare-local D1 2-case suite were also SUCCESS on the same source SHA.
+- Early Android CI failures (runs `42661033339` and `42661215368`) were from SDK setup configuration: an obsolete `tools` package and the wrong `platforms;android-37` identifier. Fixed by installing platform-tools and `platforms;android-37.0`, without skipping source tests.
+
+**Still NOT verified:** remote Cloudflare Worker/D1 or real Cron; end-to-end phone-off autonomy; Android owner-device install and RAM measurements; Google/OIDC user authentication, sync, or approval; business workflows; external write state. No provider writes, no cloud resource provisioning and no paid API use.
+
+**Next evidence gates:** final PR/main SHA CI, APK manifest no-INTERNET proof, and owner-approved remote D1/Cron acceptance. See issue #2 and ADR-0002.
