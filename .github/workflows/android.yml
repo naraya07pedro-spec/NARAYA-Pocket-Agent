@@ -1,0 +1,45 @@
+name: Android native pilot build (no backend credentials)
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK Platform 37
+        run: |
+          sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+      - name: Unit tests and unsigned debug APK
+        run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug
+      - name: Check APK has no cleartext networking or secret files
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          test ! -f android/google-services.json
+          test ! -f android/app/google-services.json
+          test ! -f android/local.properties
+          test ! -f .env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: naraya-pocket-agent-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
