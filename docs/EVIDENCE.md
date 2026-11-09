@@ -29,3 +29,16 @@
 | Android running/phone switched off | NOT_VERIFIED | No APK or owner-device acceptance yet |
 
 **Boundaries:** Local `getPlatformProxy` emulates Cloudflare bindings via `workerd`, not a remotely provisioned Cloudflare service. The test applies complete migration statements through D1.prepare rather than running remote Wrangler migrations. CI success does not certify external cloud availability or cost. Source commit tested is different from later documentation-only commits; review exact run SHA.
+
+## 2026-11-09: P0.2-B partial + P1-A evidence additions
+
+| Requirement | Status | Evidence / boundary |
+| --- | --- | --- |
+| Real GitHub provider read | LIVE_PROVIDER_READ_TESTED | [CI 42661442994](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442994) succeeded on SHA `dddbba531304c29efc6495983d1500173999b40a`: official public GitHub GET + local workerd/D1 observation + independent GitHub ref matched HEAD `7dd952b9a1f1a02d1f68f538e11164e542beff4c`. This is read-only source truth, not a live Cloudflare deployment. |
+| Android product artifact | APK_CI_VERIFIED | [Android CI 42661442547](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442547) built an experimental debug APK and executed JVM unit tests. Not a physical-device acceptance, polished production app or secure cloud-connected client. |
+| Android auth boundary | SOURCE_IMPLEMENTED | Manifest contains no INTERNET permission; no owner token is embedded. Actual APK permission inspection is a separate follow-on CI gate. |
+| Android RAM/battery | NOT_MEASURED | No physical device benchmark, PSS, battery, thermal or crash evidence. |
+| Independent remote autonomy | NOT_VERIFIED | Local D1 and GitHub Actions tests cannot prove a powered-off phone and operational cloud scheduler. |
+| Engineering ADR and runbook | DOCUMENTED | [ADR-0002](ADR/0002-android-offline-draft-pilot.md), [Android acceptance](ANDROID_ACCEPTANCE.md) and [live provider acceptance](LIVE_PROVIDER_ACCEPTANCE.md). |
+
+Historical passing build/run IDs are deliberately linked to **exact tested source SHAs**. Do not upgrade source-only additions to current-main CI proof until the final merged SHA passes.
