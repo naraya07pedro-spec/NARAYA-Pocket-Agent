@@ -1,3 +1,20 @@
+# Evidence register | NARAYA Pocket Agent
+
+## Current milestone: 2026-11-10 P1-B
+
+| Gate | Status pending final CI | Interpretation |
+| --- | --- | --- |
+| Manual Android-to-public-GitHub read | IMPLEMENTED + CI IN PROGRESS | Real JVM adapter test uses fixed official endpoint; physical Android network not yet checked |
+| Local snapshot after verified read | IMPLEMENTED + JVM TESTED PENDING | Versioned schema with backward compatibility and corruption isolation; real device persistence not yet checked |
+| APK build and permissions | CI IN PROGRESS | Real debug APK must request INTERNET but not contacts/location/SMS/microphone |
+| UI/background safety | SOURCE REVIEWED | Manual-only, coroutine IO; no continuous background polling, no local LLM, no owner bearer token |
+| Full cloud agent when phone off | NOT VERIFIED | Cloudflare remote Worker, D1, Cron and authenticated Android sync still absent |
+| Resource benchmark | NOT MEASURED | No device memory, thermal or battery data exists |
+
+**Evidence standard:** see PR and GitHub Actions links in final progress update. The earlier phase tables below are historical snapshots, not statements about today's full implementation.
+
+---
+
 # Evidence register | Stage P0.1
 
 | Check | Current evidence class | Evidence / gap |

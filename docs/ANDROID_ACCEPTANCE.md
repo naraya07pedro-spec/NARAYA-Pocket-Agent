@@ -1,15 +1,24 @@
-# Android P1-A experimental acceptance
+# Android acceptance matrix | P1-A history + P1-B active
 
-## What the native APK can actually do
-Open a Kotlin/Jetpack Compose screen; validate a public GitHub owner/repository slug; choose 30, 60 or 120 minutes; persist up to 20 local drafts; display and remove them. A fresh app launch reads drafts from Android SharedPreferences. None of these drafts is an active remote monitor.
+## P1-B functionality (Android debug APK)
+A native Kotlin/Compose screen creates, lists, and removes up to 20 public repository drafts. A user pressing **Check now** triggers one official public GitHub HTTPS GET, validates commit SHA, and stores last successful SHA + timestamp offline. Version-tolerant cache decoding retains P1-A drafts. No user login, cloud control, AI, notifications, or background automation exists.
 
-## Verification gates
-1. **Source/config present:** `android/app/src/main`, Gradle files, Android manifest without INTERNET permission, RepoRules and DraftStore.
-2. **JVM unit tests:** `:app:testDebugUnitTest` tests repository validation.
-3. **APK build:** `:app:assembleDebug` produces debug-signed APK. Must link an exact CI run and commit SHA.
-4. **Device acceptance (not yet verified):** install the APK on a consenting, non-sensitive Android test device. Create a draft, force stop app, reopen, confirm same state. Delete draft and reopen.
-5. **Security:** inspect APK permissions and artifacts; verify no owner bearer token, cloud provider API key, or permission grants network access.
-6. **Performance (not yet verified):** record Android device model, RAM, OS, APK SHA-256, PSS, startup latency, battery impact, and crash/ANR counts. Do not invent values.
+## Evidence gates
+1. **JVM deterministic tests:** repository slug validation; bounded response streams; GitHub HTTP status / error handling; malformed data; cached record migration; corrupt neighbor isolation. See `GithubHeadClientTest`, `DraftCodecTest`, and `RepoRulesTest`.
+2. **JVM live-provider path:** the exact Android GithubHeadClient's HTTP transport reads a real public GitHub commit and checks the SHA against an independent official GitHub branch-ref GET. This is a JVM network test, **not an Android device test**. Workflow verifies the test was not skipped.
+3. **Debug APK build:** JDK 17 / AGP 9.2.1 / SDK 37.0 / Gradle 9.4.1. GitHub Actions creates debug-signed APK, inspects the manifest to confirm INTERNET permission and reject unnecessary sensitive permissions, records SHA-256, then uploads a temporary artifact.
+4. **On-device functional acceptance (NOT VERIFIED):** install APK, add repo, live refresh, force-stop app, restart offline and validate last persisted SHA/date, trigger network failure and verify last snapshot remains; check version upgrade from P1-A draft storage.
+5. **Performance (NOT MEASURED):** actual Android device model, OS, total RAM, APK SHA-256 and workload; idle/active PSS and app start latency via `adb shell dumpsys meminfo dev.naraya.pocketagent`, repeated attempts and battery/thermal notes. No fabricated measurements.
+6. **Cloud autonomy (NOT VERIFIED):** owner-approved remotely deployed Cloudflare D1/Worker/Cron must continue working independently while device is powered off, then resync only after proper user identity is built.
 
-## Limitations
-No cloud sync, no sign-in, no agent autonomy, no approval flow, no AI, no provider write, no background tasks, and no proof of continued operation while Android is powered off. Only the cloud runtime is intended to work while the device is off, after a future owner-approved deployment.
+## Device operator commands (consented test hardware only)
+```sh
+adb shell am force-stop dev.naraya.pocketagent
+adb shell monkey -p dev.naraya.pocketagent 1
+adb shell dumpsys meminfo dev.naraya.pocketagent
+```
+
+**Important:** manual GitHub preview uses the phone's network and therefore cannot operate while that phone is powered off. Only future cloud-side jobs will be able to continue while it is off.
+
+## Security constraints
+Never add `OWNER_API_TOKEN` or private provider secrets to the mobile app. Direct GitHub preview supports only public repositories and uses no authorization. Cloud writes require issuer/audience/expiry/signature-verified end-user identity, server-owned authorization policies, and sensitive action approval independent of client UI.

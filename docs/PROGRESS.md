@@ -1,5 +1,19 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-B: Android manual live-provider preview and durable local snapshots
+
+**Implementation committed to feature branch:** Kotlin `GithubHeadClient` with fixed official GitHub HTTPS GET and redirects disabled; bounded 32 KiB response, UTF-8/SHA validation, error classification; background-thread execution via coroutines; Compose UI manual Check now action; locally saved successful commit SHA/timestamp; backwards-compatible `DraftCodec` retaining P1-A drafts and ignoring individual corrupt records. Android version 0.2.0-alpha adds only INTERNET permission, no backend operator token.
+
+**Testing introduced:** deterministic JVM tests for parser, statuses, oversized responses, invalid slug, I/O failures and schema migration; independent live network JVM integration test with GitHub branch-ref SHA cross-check and explicit no-skip CI gate; clean Android CI that inspects actual APK permissions and generates a debug APK.
+
+**Evidence gate:** GitHub Actions must pass on PR HEAD SHA and final merged `main` SHA before this stage is marked complete. Do not claim physical Android acceptance, RAM results, cloud sync or autonomous phone-off task execution.
+
+**Unverified:** mobile physical hardware, WiFi/mobile data behavior, RAM/PSS and battery, Google/OIDC identity, cloud monitoring and remote Cloudflare deployment. Free-spend guardrail and issue #2 remain unchanged.
+
+---
+
+# Progress ledger | NARAYA Pocket Agent
+
 Rules: **Implemented** = source exists. **Tested** = observed in named environment. **CI verified** = public run and exact commit SHA. **Live verified** = real Cloudflare/owner device/provider. None imply a later level automatically.
 
 ## 2026-11-09 | Stage P0.1 | Safe cloud-monitor backend
