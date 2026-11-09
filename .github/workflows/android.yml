@@ -30,11 +30,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.4.1'
-      - name: Unit tests and unsigned debug APK
+      - name: Unit tests and debug-signed pilot APK
         run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug
-      - name: Check APK has no cleartext networking or secret files
+      - name: Verify built APK permissions and absence of local secrets
         run: |
           test -f android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump permissions android/app/build/outputs/apk/debug/app-debug.apk > /tmp/naraya-apk-permissions.txt
+          if grep -Fq 'android.permission.INTERNET' /tmp/naraya-apk-permissions.txt; then
+            echo 'ERROR: Offline pilot APK unexpectedly requests INTERNET'
+            exit 1
+          fi
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk
           test ! -f android/google-services.json
           test ! -f android/app/google-services.json
           test ! -f android/local.properties
