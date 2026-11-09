@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: Stage P0.1, source implementation + local deterministic tests.** No Android APK, Cloudflare deployment, real owner-provider acceptance, paid AI inference, or 24/7 uptime is claimed. This is a single-owner pilot backend, not a public multi-user service.
+> **Status: Stage P0.2-A, offline + local Cloudflare D1 CI verified.** No Android APK, Cloudflare deployment, real owner-provider acceptance, paid AI inference, or 24/7 uptime is claimed. This is a single-owner pilot backend, not a public multi-user service.
 
 ## What actually works in this milestone
 
@@ -11,7 +11,7 @@
 - Cron-triggered public GitHub default-branch commit-head monitoring using official read-only REST calls.
 - Durable baseline/change observations; atomic conditional lease claims, fencing, pausing, stale-version rejection, bounded retries, and auto-pause after 5 consecutive failures.
 - Strictly bounded workload: at most **3 monitors per owner**, 3 checks per cron tick, intervals 30–1,440 minutes, fixed GitHub API hostname, no redirects, no outbound writes, no paid model API.
-- SQLite-backed deterministic integration tests, including stale worker, duplicate event, malformed provider response, and GitHub rate-limit scenarios.
+- 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
@@ -54,3 +54,15 @@ See [operator runbook](docs/RUNBOOK.md). Wrangler configuration lives at `worker
 **Planned, not implemented:** Android Kotlin/Compose client, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, real-provider read-back, device RAM/battery benchmarks. Do not confuse the intended product with the currently tested backend slice.
 
 Author: Evan Naraya. Public source with no license grant at this stage; see [LICENSE_POLICY](docs/LICENSE_POLICY.md).
+
+## Stage P0.2-A: local Cloudflare D1 acceptance
+
+CI now runs the actual local Cloudflare D1 binding with Wrangler 4.158.0, independently of the SQLite test double. [Offline 12/12, typecheck](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42655079899) and [local D1 2/2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42655079982) passed on source SHA `09f8a927830285e0cbf8f83c19193123c7d9fb19`.
+
+Local reproduction (no Cloudflare account or credentials):
+```sh
+npm ci --ignore-scripts
+npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.158.0
+node --experimental-strip-types --test tests/cloudflare-local.test.mjs
+```
+`worker/wrangler.local.jsonc` has a deliberately **fake D1 ID**, for local tests only. Never deploy this config. **No remote D1 or Cron, no powered-off phone, no real provider verification, no APK, and no claimed free-tier consumption**. See [progress ledger](docs/PROGRESS.md) and [evidence matrix](docs/EVIDENCE.md).
