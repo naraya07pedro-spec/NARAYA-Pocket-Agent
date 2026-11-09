@@ -47,3 +47,16 @@ secrets/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local Cloudflare & Node test artifacts
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+coverage/

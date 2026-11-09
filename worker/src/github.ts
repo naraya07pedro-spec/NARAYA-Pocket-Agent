@@ -25,9 +25,30 @@ export async function readDefaultBranchHead(owner: string, repo: string, fetcher
   if (response.status === 404 || response.status === 409) throw new GithubReadError('NOT_FOUND');
   if (!response.ok) throw new GithubReadError('UPSTREAM_ERROR');
   try {
-    const text = await response.text();
-    if (text.length > 32768) throw new Error('oversize');
-    const data: unknown = JSON.parse(text);
+    // Limit consumed bytes, not just the length of an already buffered response.
+    // Never trust an upstream server to respect Content-Length.
+    if (!response.body) throw new Error('empty_body');
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > 32_768) {
+          await reader.cancel();
+          throw new Error('oversize');
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const data: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     if (!Array.isArray(data) || !data.length || typeof data[0]?.sha !== 'string' ||
         !/^[a-fA-F0-9]{40}$/.test(data[0].sha)) throw new Error('invalid');
     return data[0].sha.toLowerCase();

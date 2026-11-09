@@ -188,3 +188,39 @@ test('GitHub reads are redirect-disabled fixed GET and network rejection is cons
     assert.equal(observations(env).length,0);
   }finally{env.DB.close()}
 });
+
+
+test('missing, invalid or empty owner configuration denies all access and scheduled work', async()=>{
+  const env=make();
+  try {
+    for(const OWNER_ID of [undefined,'', 'owner with spaces', 'x'.repeat(65)]) {
+      const invalid={...env,OWNER_ID};
+      assert.equal((await get(invalid,'/v1/monitors')).status,503);
+      await assert.rejects(runScheduler(invalid,Date.now(),gh(A)),/owner_not_configured/);
+    }
+    assert.equal((await get(env,'/v1/monitors')).status,200);
+  } finally { env.DB.close(); }
+});
+
+test('upstream response is bounded while streaming and malformed UTF-8 cannot create observations', async()=>{
+  const env=make();
+  try {
+    await insert(env);
+    let when=monitorRow(env).next_due_at;
+    const large=async()=>new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(32768).fill(32));
+        controller.enqueue(new Uint8Array([123]));
+        controller.close();
+      },
+    }),{status:200});
+    assert.equal((await runScheduler(env,when,large)).deferred,1);
+    assert.equal(monitorRow(env).last_error_code,'INVALID_PROVIDER_DATA');
+    assert.equal(observations(env).length,0);
+    when=monitorRow(env).next_due_at;
+    const invalidUtf8=async()=>new Response(new Uint8Array([0xff,0xfe]),{status:200});
+    assert.equal((await runScheduler(env,when,invalidUtf8)).deferred,1);
+    assert.equal(monitorRow(env).last_error_code,'INVALID_PROVIDER_DATA');
+    assert.equal(observations(env).length,0);
+  } finally {env.DB.close();}
+});

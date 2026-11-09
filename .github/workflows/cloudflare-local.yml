@@ -1,0 +1,33 @@
+name: Cloudflare D1 local runtime acceptance
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  workerd-d1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install only pinned local Wrangler for acceptance (no cloud credentials)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.158.0
+      - name: Real local workerd D1 migration, persistence, fencing and API tests
+        run: node --experimental-strip-types --test tests/cloudflare-local.test.mjs
+      - name: Assert cloud credentials and dev vars were not added
+        run: |
+          test ! -f .env
+          test ! -f worker/.dev.vars
+          test ! -f android/google-services.json
