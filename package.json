@@ -5,7 +5,7 @@
   "type": "module",
   "engines": { "node": ">=22.16.0 <23" },
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test tests/pocket.test.mjs",
     "typecheck": "tsc --noEmit -p worker/tsconfig.json"
   }
 }

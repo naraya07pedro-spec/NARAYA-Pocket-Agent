@@ -10,6 +10,14 @@ import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
 const schema = readFileSync(new URL('../worker/migrations/0001_initial.sql', import.meta.url), 'utf8');
+async function applySchema(DB) {
+  // D1.exec splits on newlines and cannot execute SQL migration files that
+  // contain multiline CREATE statements. Execute complete statements instead.
+  const sql = schema.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+  const statements = sql.split(';').map(statement=>statement.trim()).filter(Boolean);
+  assert.ok(statements.length >= 5);
+  for (const statement of statements) await DB.prepare(statement).run();
+}
 const TOKEN = 'synthetic-owner-auth-just-for-test-use-987654321';
 const owner = 'local-cloudflare-test';
 const headA = 'a'.repeat(40), headB = 'b'.repeat(40);
@@ -37,7 +45,7 @@ test('Cloudflare local D1: durable migrations, API, cron logic and restart recov
   try {
     platform = await setupPlatform(dir);
     const DB=platform.env.DB;
-    await DB.exec(schema);
+    await applySchema(DB);
     const env={DB, OWNER_ID:owner, OWNER_API_TOKEN:TOKEN};
     const response=await worker.fetch(new Request(base+'/v1/monitors', {
       method:'POST', headers:{...auth,'content-type':'application/json'},
@@ -79,7 +87,7 @@ test('Cloudflare local D1: rejected stale claim and no duplicate observation', {
   let platform;
   try {
     platform=await setupPlatform(dir);
-    const DB=platform.env.DB; await DB.exec(schema);
+    const DB=platform.env.DB; await applySchema(DB);
     const env={DB,OWNER_ID:owner,OWNER_API_TOKEN:TOKEN};
     const result=await worker.fetch(new Request(base+'/v1/monitors',{
       method:'POST',headers:{...auth,'content-type':'application/json'},
