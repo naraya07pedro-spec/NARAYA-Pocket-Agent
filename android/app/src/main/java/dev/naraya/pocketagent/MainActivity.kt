@@ -28,11 +28,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.DateFormat
+import java.util.Date
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,19 +53,31 @@ class MainActivity : ComponentActivity() {
                 onBackground = Color(0xFFF1F5F4),
             )
             MaterialTheme(colorScheme = colors) {
-                MonitorDraftScreen(store)
+                MonitorDraftScreen(store, remember { GithubHeadClient() })
             }
         }
     }
 }
 
+private fun readableError(code: HeadError) = when (code) {
+    HeadError.INVALID_REPOSITORY -> "Invalid public repository"
+    HeadError.RATE_LIMITED -> "GitHub rate limit reached. Try again later."
+    HeadError.NOT_FOUND -> "Repository unavailable or has no commits"
+    HeadError.UPSTREAM_ERROR -> "GitHub could not complete this request"
+    HeadError.INVALID_PROVIDER_DATA -> "GitHub response was invalid or too large"
+    HeadError.NETWORK_ERROR -> "Network error. Your last saved snapshot is unchanged."
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MonitorDraftScreen(store: DraftStore) {
+private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
     var draftRepo by remember { mutableStateOf("") }
     var interval by remember { mutableStateOf(60) }
     var drafts by remember { mutableStateOf(store.list()) }
     var notice by remember { mutableStateOf("") }
+    var checkingId by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("NARAYA Pocket Agent") }) }
     ) { padding ->
@@ -70,10 +88,13 @@ private fun MonitorDraftScreen(store: DraftStore) {
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("OFFLINE PILOT · NO CLOUD CONNECTION", color = Color(0xFF6BD6C3), style = MaterialTheme.typography.labelLarge)
-                    Text("Capture a monitor draft", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Text("LIVE GITHUB PREVIEW · NO CLOUD TASKS", color = Color(0xFF6BD6C3),
+                        style = MaterialTheme.typography.labelLarge)
+                    Text("Check a public repository", style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Drafts stay on this phone. Nothing is scheduled, sent to GitHub, or executed in the background yet. Cloud sync will require a verified user login.",
+                        "Tap Check now for one read-only GitHub request. The last successful commit is saved offline. " +
+                            "No automatic checks, cloud sync or background agent runs yet.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -89,14 +110,11 @@ private fun MonitorDraftScreen(store: DraftStore) {
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Text("Check interval (draft)", style = MaterialTheme.typography.labelMedium)
+                        Text("Future cloud interval (not active)", style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             for (option in listOf(30, 60, 120)) {
-                                if (interval == option) {
-                                    Button(onClick = { interval = option }) { Text("${option}m") }
-                                } else {
-                                    OutlinedButton(onClick = { interval = option }) { Text("${option}m") }
-                                }
+                                if (interval == option) Button(onClick = { interval = option }) { Text("${option}m") }
+                                else OutlinedButton(onClick = { interval = option }) { Text("${option}m") }
                             }
                         }
                         Button(onClick = {
@@ -105,45 +123,78 @@ private fun MonitorDraftScreen(store: DraftStore) {
                                 store.add(draftRepo, interval) -> {
                                     drafts = store.list()
                                     draftRepo = ""
-                                    "Saved on this device. Cloud monitoring is not active."
+                                    "Saved locally. You can check a repo manually below."
                                 }
                                 else -> "Duplicate, storage error, or 20-draft limit"
                             }
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Save offline draft")
-                        }
-                        if (notice.isNotBlank()) {
-                            Text(notice, style = MaterialTheme.typography.bodySmall)
-                        }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Save repository") }
+                        if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            item {
-                Text("Saved locally · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium)
-            }
+            item { Text("Saved on this phone · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium) }
             if (drafts.isEmpty()) {
-                item {
-                    Text("No drafts yet. Add one above to verify offline persistence.", style = MaterialTheme.typography.bodyMedium)
-                }
+                item { Text("No repositories added. Add one above.", style = MaterialTheme.typography.bodyMedium) }
             }
             items(drafts, key = { it.id }) { draft ->
                 Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(draft.repository, fontWeight = FontWeight.Medium)
-                        Text("Every ${draft.intervalMinutes} minutes · DRAFT ONLY", style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(onClick = {
-                            if (store.remove(draft.id)) {
-                                drafts = store.list()
-                                notice = "Draft removed"
-                            } else notice = "Could not save removal"
-                        }) { Text("Remove") }
+                        Text("Every ${draft.intervalMinutes} min · CLOUD DRAFT ONLY", style = MaterialTheme.typography.bodySmall)
+                        if (draft.lastHeadSha != null && draft.lastCheckedAt != null) {
+                            Text("Last saved SHA: ${draft.lastHeadSha.take(12)}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Checked manually: " +
+                                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                    .format(Date(draft.lastCheckedAt)), style = MaterialTheme.typography.bodySmall)
+                        } else Text("No verified local snapshot yet", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                enabled = checkingId == null,
+                                onClick = {
+                                    checkingId = draft.id
+                                    notice = "Checking ${draft.repository} from GitHub..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { github.check(draft.repository) }
+                                        when (result) {
+                                            is HeadCheckResult.Success -> {
+                                                val saved = withContext(Dispatchers.IO) {
+                                                    store.recordHead(draft.id, result.sha, System.currentTimeMillis())
+                                                }
+                                                if (saved) {
+                                                    drafts = store.list()
+                                                    notice = when {
+                                                        draft.lastHeadSha == null -> "Baseline saved for ${draft.repository}"
+                                                        draft.lastHeadSha != result.sha -> "Commit changed: ${draft.repository}"
+                                                        else -> "No change: ${draft.repository}"
+                                                    }
+                                                } else notice = "Could not save snapshot; previous state preserved."
+                                            }
+                                            is HeadCheckResult.Failure -> notice = readableError(result.code)
+                                        }
+                                        checkingId = null
+                                    }
+                                }
+                            ) { Text(if (checkingId == draft.id) "Checking..." else "Check now") }
+                            OutlinedButton(
+                                enabled = checkingId != draft.id,
+                                onClick = {
+                                    if (store.remove(draft.id)) {
+                                        drafts = store.list()
+                                        notice = "Repository removed from this phone"
+                                    } else notice = "Could not save removal"
+                                }
+                            ) { Text("Remove") }
+                        }
                     }
                 }
             }
             item {
                 HorizontalDivider()
                 Text(
-                    "Privacy: this alpha stores only public repository names, local draft IDs, and intervals. It has no INTERNET permission, backend token, Google login, or agent execution capability.",
+                    "One manual HTTPS read goes directly to api.github.com. No GitHub token, " +
+                        "owner Worker credential or personal records are uploaded. GitHub sees the " +
+                        "requester's network address and requested public repository. " +
+                        "No Android background execution or powered-off-phone monitoring is active.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
