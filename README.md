@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: Stage P0.2-A, offline + local Cloudflare D1 CI verified.** No Android APK, Cloudflare deployment, real owner-provider acceptance, paid AI inference, or 24/7 uptime is claimed. This is a single-owner pilot backend, not a public multi-user service.
+> **Status: P0.2-B partial + P1-A experimental Android offline pilot.** Verified: public GitHub network GET through a local workerd/D1 test and debug APK compilation. Not verified: remote Cloudflare D1/Cron, 24/7 uptime, phone-off acceptance, real Android device, paid AI, production release. This is not a public multi-user service.
 
 ## What actually works in this milestone
 
@@ -51,7 +51,7 @@ See [operator runbook](docs/RUNBOOK.md). Wrangler configuration lives at `worker
 - [Progress and acceptance gates](docs/PROGRESS.md) · [Evidence](docs/EVIDENCE.md) · [Limitations](docs/LIMITATIONS.md) · [Budget and quotas](docs/COST_AND_QUOTA.md)
 - [Source of product decisions](docs/PROJECT_BASELINE.md)
 
-**Planned, not implemented:** Android Kotlin/Compose client, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, real-provider read-back, device RAM/battery benchmarks. Do not confuse the intended product with the currently tested backend slice.
+**Planned, not implemented:** authenticated Android-cloud sync, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, live cloud deployment, Android device RAM/battery benchmarks. The current Kotlin/Compose app is an **offline monitor-draft manager** with no INTERNET permission and no autonomous execution.
 
 Author: Evan Naraya. Public source with no license grant at this stage; see [LICENSE_POLICY](docs/LICENSE_POLICY.md).
 
@@ -66,3 +66,13 @@ npm install --no-save --package-lock=false --no-audit --no-fund wrangler@4.158.0
 node --experimental-strip-types --test tests/cloudflare-local.test.mjs
 ```
 `worker/wrangler.local.jsonc` has a deliberately **fake D1 ID**, for local tests only. Never deploy this config. **No remote D1 or Cron, no powered-off phone, no real provider verification, no APK, and no claimed free-tier consumption**. See [progress ledger](docs/PROGRESS.md) and [evidence matrix](docs/EVIDENCE.md).
+
+## P0.2-B partial: genuine GitHub read, persisted in workerd/D1
+
+A live integration workflow reads this repository's public GitHub commit head through the shipped scheduler (not a fixture), writes a BASELINE to disposable local workerd/D1, and compares it with the official GitHub branch ref. [Live GitHub read CI SUCCESS](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442994) at source `dddbba531304c29efc6495983d1500173999b40a`. No remote Cloudflare provisioning or deployed Worker is implied. [Full evidence boundary](docs/LIVE_PROVIDER_ACCEPTANCE.md).
+
+## P1-A: native Android offline pilot
+
+Actual Kotlin/Compose source exists under [android/](android/). The app creates, persists, lists and removes up to 20 **offline public-repository monitor drafts**; it does not claim cloud tasks are active. It intentionally has **no INTERNET permission, server bearer token, model runtime or background service**. [Android acceptance](docs/ANDROID_ACCEPTANCE.md) documents the build, security gates and unverified on-device steps. The debug build is for development only and not a published signed release.
+
+The next product-critical step is **user-scoped authenticated synchronization**, not embedding the P0 owner token in a mobile client. A separate Cloudflare-account acceptance gate remains pending.
