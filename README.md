@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P0.2-B partial + P1-A experimental Android offline pilot.** Verified: public GitHub network GET through a local workerd/D1 test and debug APK compilation. Not verified: remote Cloudflare D1/Cron, 24/7 uptime, phone-off acceptance, real Android device, paid AI, production release. This is not a public multi-user service.
+> **Status: P1-B experimental Android GitHub Live Preview + P0.2-B partial cloud backend.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -51,7 +51,7 @@ See [operator runbook](docs/RUNBOOK.md). Wrangler configuration lives at `worker
 - [Progress and acceptance gates](docs/PROGRESS.md) · [Evidence](docs/EVIDENCE.md) · [Limitations](docs/LIMITATIONS.md) · [Budget and quotas](docs/COST_AND_QUOTA.md)
 - [Source of product decisions](docs/PROJECT_BASELINE.md)
 
-**Planned, not implemented:** authenticated Android-cloud sync, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, live cloud deployment, Android device RAM/battery benchmarks. The current Kotlin/Compose app is an **offline monitor-draft manager** with no INTERNET permission and no autonomous execution.
+**Planned, not implemented:** authenticated Android-cloud sync, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, live Cloudflare deployment and device RAM/battery benchmarks. The current Kotlin/Compose app adds **manual read-only GitHub previews over HTTPS**, but no cloud task activation or autonomous background execution.
 
 Author: Evan Naraya. Public source with no license grant at this stage; see [LICENSE_POLICY](docs/LICENSE_POLICY.md).
 
@@ -71,8 +71,27 @@ node --experimental-strip-types --test tests/cloudflare-local.test.mjs
 
 A live integration workflow reads this repository's public GitHub commit head through the shipped scheduler (not a fixture), writes a BASELINE to disposable local workerd/D1, and compares it with the official GitHub branch ref. [Live GitHub read CI SUCCESS](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42661442994) at source `dddbba531304c29efc6495983d1500173999b40a`. No remote Cloudflare provisioning or deployed Worker is implied. [Full evidence boundary](docs/LIVE_PROVIDER_ACCEPTANCE.md).
 
-## P1-A: native Android offline pilot
+## P1-A (historical): native Android offline pilot
 
-Actual Kotlin/Compose source exists under [android/](android/). The app creates, persists, lists and removes up to 20 **offline public-repository monitor drafts**; it does not claim cloud tasks are active. It intentionally has **no INTERNET permission, server bearer token, model runtime or background service**. [Android acceptance](docs/ANDROID_ACCEPTANCE.md) documents the build, security gates and unverified on-device steps. The debug build is for development only and not a published signed release.
+Actual Kotlin/Compose source exists under [android/](android/). The app creates, persists, lists and removes up to 20 **offline public-repository monitor drafts**; it does not claim cloud tasks are active. That historical build had **no INTERNET permission, server bearer token, model runtime or background service**. The P1-B build adds INTERNET for a single manually triggered public GitHub read while retaining the other restrictions. [Android acceptance](docs/ANDROID_ACCEPTANCE.md) documents the build, security gates and unverified on-device steps. The debug build is for development only and not a published signed release.
 
 The next product-critical step is **user-scoped authenticated synchronization**, not embedding the P0 owner token in a mobile client. A separate Cloudflare-account acceptance gate remains pending.
+
+## P1-B: manual GitHub Live Preview in Android
+
+The Kotlin/Compose app now offers **Check now** on each saved public repo. It uses the fixed `api.github.com` HTTPS endpoint without provider authentication, rejects redirects and malformed GitHub data, bounds body reads to **32 KiB**, runs I/O off the UI thread and saves each successful SHA/timestamp locally. Existing offline drafts remain readable across upgrades. Rate-limit/offline failures preserve the previous good snapshot. No scheduled polling on Android.
+
+Reproduce: `gradle --project-dir android :app:testDebugUnitTest :app:assembleDebug` with JDK17, Android SDK 37.0 and Gradle 9.4.1. [Mobile design ADR](docs/ADR/0003-android-public-github-preview.md) · [Android test protocol](docs/ANDROID_ACCEPTANCE.md) · [Android CI](.github/workflows/android.yml) · [Live mobile network-adapter CI](.github/workflows/android-provider-live.yml).
+
+**Security:** the APK requests `INTERNET` for manual public metadata checks, but has **no backend owner token**, no private-account credentials, no sensitive Android permissions, no AI model, and no autonomous Android background service. GitHub does observe the requester's IP/metadata. This build still does not operate while the phone is switched off.
+
+## P1-B source CI evidence (2026-11-10)
+
+Source commit `d90887a3d407d5178368ce197bb99e6e8c84545a` passed **all 5 workflows**:
+- [Backend offline tests + TypeScript](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086317): SUCCESS.
+- [Local Cloudflare workerd/D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086457): SUCCESS.
+- [Worker's official live GitHub GET](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086552): SUCCESS.
+- [Native Android debug APK + unit tests + manifest permission gate](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432): SUCCESS. APK SHA-256 `aefbceab40f1cf17c54a930cf682540d21f5d6766e0ea21a9562cdf6434d48ad`; [ephemeral artifact 13696608733](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432/artifacts/13696608733), expires 16 November 2026 UTC.
+- [Android GitHub adapter real network acceptance](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086200): SUCCESS; JUnit XML asserts **1 test executed, 0 skipped, 0 failed, 0 errors**.
+
+This is CI at source SHA, not yet the merge SHA. **No physical Android, Cloudflare remote, powered-off device, RAM/battery benchmark, OAuth login, or cloud sync verified.**

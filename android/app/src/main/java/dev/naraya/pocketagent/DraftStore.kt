@@ -1,43 +1,28 @@
 package dev.naraya.pocketagent
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.UUID
 
-/** Only synthetic/public repository draft metadata. No secrets, accounts or customer data. */
+/**
+ * Small, non-sensitive public repository draft cache. Nothing here authorizes
+ * remote Cloudflare actions or contains an account/access token.
+ */
 data class MonitorDraft(
     val id: String,
     val repository: String,
     val intervalMinutes: Int,
     val createdAt: Long,
+    val lastHeadSha: String? = null,
+    val lastCheckedAt: Long? = null,
 )
 
 class DraftStore(context: Context) {
+    // Preserve previous alpha's preference key through the V2 schema transition.
     private val prefs = context.getSharedPreferences("public_monitor_drafts_v1", Context.MODE_PRIVATE)
     private val key = "items"
+    private val shaRegex = Regex("^[a-f0-9]{40}$")
 
-    fun list(): List<MonitorDraft> {
-        return try {
-            val serialized = JSONArray(prefs.getString(key, "[]") ?: "[]")
-            val drafts = mutableListOf<MonitorDraft>()
-            for (i in 0 until minOf(serialized.length(), 20)) {
-                val item = serialized.getJSONObject(i)
-                val repo = RepoRules.normalize(item.getString("repository")) ?: continue
-                val interval = item.getInt("interval")
-                if (interval !in listOf(30, 60, 120, 240, 1440)) continue
-                drafts.add(MonitorDraft(
-                    id = item.getString("id"),
-                    repository = repo,
-                    intervalMinutes = interval,
-                    createdAt = item.getLong("created"),
-                ))
-            }
-            drafts
-        } catch (_: Exception) {
-            emptyList() // No corrupt persisted data is ever sent to a provider.
-        }
-    }
+    fun list(): List<MonitorDraft> = DraftCodec.decode(prefs.getString(key, "[]") ?: "[]")
 
     fun add(repository: String, intervalMinutes: Int): Boolean {
         val canonical = RepoRules.normalize(repository) ?: return false
@@ -47,19 +32,24 @@ class DraftStore(context: Context) {
         return save(listOf(MonitorDraft(UUID.randomUUID().toString(), canonical, intervalMinutes, System.currentTimeMillis())) + current)
     }
 
-    fun remove(id: String): Boolean = save(list().filterNot { it.id == id })
+    fun remove(id: String): Boolean {
+        val current = list()
+        if (current.none { it.id == id }) return false
+        return save(current.filterNot { it.id == id })
+    }
+
+    fun recordHead(id: String, sha: String, checkedAt: Long): Boolean {
+        if (!shaRegex.matches(sha) || checkedAt <= 0L) return false
+        val current = list()
+        val found = current.firstOrNull { it.id == id } ?: return false
+        if (found.lastCheckedAt != null && checkedAt < found.lastCheckedAt) return false
+        return save(current.map {
+            if (it.id == id) it.copy(lastHeadSha = sha, lastCheckedAt = checkedAt) else it
+        })
+    }
 
     private fun save(items: List<MonitorDraft>): Boolean {
-        val array = JSONArray()
-        items.take(20).forEach { item ->
-            array.put(JSONObject().apply {
-                put("id", item.id)
-                put("repository", item.repository)
-                put("interval", item.intervalMinutes)
-                put("created", item.createdAt)
-            })
-        }
-        // commit() is synchronous: do not claim persistence before confirmation.
-        return prefs.edit().putString(key, array.toString()).commit()
+        // commit() is synchronous and reports storage failure; payload <= 20 public drafts.
+        return prefs.edit().putString(key, DraftCodec.encode(items)).commit()
     }
 }

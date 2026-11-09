@@ -1,4 +1,21 @@
-# Evidence register | Stage P0.1
+# Evidence register | NARAYA Pocket Agent
+
+## Current milestone: 2026-11-10 P1-B
+
+| Gate | Status pending final CI | Interpretation |
+| --- | --- | --- |
+| Manual Android-to-public-GitHub read | CI_VERIFIED_JVM_LIVE | [Run 42668086200](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086200) SUCCESS on `d90887a3d407d5178368ce197bb99e6e8c84545a`; 1 executed, 0 skipped, 0 failure; NOT physical Android device |
+| Local snapshot after verified read | CI_VERIFIED_JVM | [Android CI 42668086432](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432) deterministic codec tests; older drafts preserved, individual corrupt records isolated. SharedPreferences hardware persistence NOT verified |
+| APK build and permissions | CI_VERIFIED | [Android CI 42668086432](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086432) SUCCESS, debug APK aefbceab40f1cf17c54a930cf682540d21f5d6766e0ea21a9562cdf6434d48ad; `aapt` found INTERNET and excluded tested sensitive permissions |
+| UI/background safety | SOURCE REVIEWED | Manual-only, coroutine IO; no continuous background polling, no local LLM, no owner bearer token |
+| Full cloud agent when phone off | NOT VERIFIED | Cloudflare remote Worker, D1, Cron and authenticated Android sync still absent |
+| Resource benchmark | NOT MEASURED | No device memory, thermal or battery data exists |
+
+**Evidence standard:** see PR and GitHub Actions links in final progress update. The earlier phase tables below are historical snapshots, not statements about today's full implementation.
+
+---
+
+## Historical evidence: Stage P0.1
 
 | Check | Current evidence class | Evidence / gap |
 | --- | --- | --- |

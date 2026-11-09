@@ -1,0 +1,52 @@
+name: Android GitHub adapter live-read verification
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-adapter-network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Install Android SDK Platform
+        run: sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+      - name: Run actual mobile-adapter network path on JVM
+        env:
+          NARAYA_ANDROID_LIVE_GITHUB: '1'
+        run: gradle --no-daemon --project-dir android :app:testDebugUnitTest --tests 'dev.naraya.pocketagent.GithubHeadLiveTest'
+      - name: Verify live test was executed and not silently skipped
+        run: |
+          python3 - <<'PY'
+          from xml.etree import ElementTree as ET
+          from pathlib import Path
+          p = Path("android/app/build/test-results/testDebugUnitTest/TEST-dev.naraya.pocketagent.GithubHeadLiveTest.xml")
+          root = ET.parse(p).getroot()
+          assert int(root.attrib.get("tests", 0)) == 1, root.attrib
+          assert all(int(root.attrib.get(k, 0)) == 0 for k in ("skipped", "failures", "errors")), root.attrib
+          print("NARAYA_ANDROID_LIVE_TEST_VERIFIED", root.attrib)
+          PY
+      - name: Guard against local credentials
+        run: |
+          test ! -f android/google-services.json
+          test ! -f android/app/google-services.json
+          test ! -f .env

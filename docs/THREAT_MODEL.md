@@ -16,3 +16,17 @@
 | Supply chain | Zero runtime dependencies for source unit tests, no automatic deploy | Wrangler installation and cloud pipeline not yet verified. |
 
 No professional penetration test, production security audit, or real user traffic has occurred. Do not use this pilot with customer data or embed bearer secrets into mobile builds.
+
+
+## P1-B Android public read-only preview (2026-11-10)
+
+| Threat / failure | Mitigation in code | Residual risk |
+| --- | --- | --- |
+| User-supplied URL/SSRF | Only validated `owner/repo` slugs; exact `https://api.github.com` host check, GET only, redirects disabled | External GitHub availability and content are outside app control |
+| Resource abuse / memory | Upstream response streamed with 32,768-byte cap; max 20 cached drafts; manual checks only | No actual device RAM/thermal/battery benchmark yet; per-read socket timeout is not total job deadline |
+| Corrupt cached metadata | Version-tolerant JSON decoder discards malformed entries individually; invalid/unpaired SHA timestamp not displayed as verified | SharedPreferences is not an encrypted storage provider and is not suited to credentials |
+| Misleading success | Strict SHA syntax and one-entry JSON schema; non-200 response maps to error; failed refresh preserves known good SHA | Snapshot is last observed data, may become stale immediately |
+| Permission creep | CI `aapt` inspects APK for INTERNET and rejects selected sensitive permission requests; no backend token | INTERNET is a broad Android permission, so static analysis/source review remains needed |
+| Provider quota | Each tap triggers at most one GitHub latest-head GET; 403/429 do not create a success record | GitHub unauthenticated quotas can be exhausted by other devices behind same IP |
+| Cloud secret theft | No `OWNER_API_TOKEN` or other privileged provider API key in mobile source or app config | Future authenticated sync must be verified server-side, not by placing a static secret in APK |
+| Phone switched off | No false promise of mobile background execution | Only future authorized deployed cloud jobs can continue while Android is physically off |

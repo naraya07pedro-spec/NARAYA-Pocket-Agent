@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No INTERNET permission: this early pilot is intentionally offline-only. -->
+    <!-- Narrow pilot: public read-only HTTPS requests to GitHub, with no backend token. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="false"
         android:label="NARAYA Pocket Agent"
