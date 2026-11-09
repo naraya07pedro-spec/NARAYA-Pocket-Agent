@@ -1,5 +1,11 @@
 # Limitations and non-claims
 
+## Current stage P1-B (2026-11-10)
+
+Android now has an experimental **manual public GitHub HTTPS preview**, with a debug APK and JVM tests. INTERNET permission is intentionally present for this single read-only feature. Snapshot storage remains local and not encrypted. No verified Android hardware test, actual RAM/thermal/battery measurement, multi-user authentication, cloud sync, device-off autonomy, production deployment or paid AI exists. The code does not embed the owner backend secret. Rate-limits, connectivity loss, and upstream changes can prevent a check; previous valid snapshot is retained. No third-party writes or automatic Android background work occur.
+
+## Historical stage descriptions (retained for audit history)
+
 - No Android APK, Google Sign-In, Firebase, FCM, local Room cache, device benchmark or actual powered-off-phone acceptance exists yet.
 - No Cloudflare account, D1 database, Worker route or Cron deployment was provisioned during this stage.
 - Tests run Node's built-in SQLite through a D1-like shim, not genuine Cloudflare D1 or platform Cron; remote semantics and CPU usage remain unverified.
