@@ -34,7 +34,7 @@ test('real GitHub public API -> shipped scheduler -> local workerd/D1 -> indepen
       headers: {authorization: 'Bearer ' + token, 'content-type': 'application/json'},
       body: JSON.stringify({repository: repo, intervalMinutes: 30}),
     }), env);
-    assert.equal(created.status, 201, await created.text().catch(() => ''));
+    assert.equal(created.status, 201);
     // Only public GETs from the shipped adapter: no writes, no credentials.
     const {id} = await created.json();
     const candidate = await env.DB.prepare('SELECT next_due_at FROM monitors WHERE id=?').bind(id).first();
