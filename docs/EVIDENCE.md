@@ -12,3 +12,20 @@
 | Design decisions | DOCUMENTED | `docs/ADR/0001-cloud-execution.md` |
 
 **Test isolation matters:** deterministic fake GitHub GET and Node SQLite are strong behavioral evidence, but do not establish live Cloudflare or owner-device acceptance. Update this ledger only after reading actual CI and committing a SHA-bound verification record.
+
+
+## P0.2-A CI verification | 9 November 2026
+
+| Check | Classification | Evidence |
+| --- | --- | --- |
+| Native-compatible D1 local binding | CI_VERIFIED_LOCAL | [Run 42655079982](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42655079982) **SUCCESS**, 2/2 workerd/D1 integration tests on `09f8a927830285e0cbf8f83c19193123c7d9fb19` |
+| Offline regression after hardening | CI_VERIFIED | [Run 42655079899](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42655079899) **SUCCESS**, 12/12 tests and TS typecheck on same SHA |
+| Owner fail-closed | CI_VERIFIED | Missing, malformed or absent OWNER_ID rejects API operations and scheduler processing |
+| Provider-body bound | CI_VERIFIED | Streaming limit 32768 bytes, malformed UTF-8 rejected, no fabricated observation |
+| Persistence after local runtime restart | CI_VERIFIED_LOCAL | Local D1 workerd is disposed and reopened with preserved state, baseline and subsequent change are verified |
+| Stale worker fencing | CI_VERIFIED_LOCAL | Concurrent scheduled fetch then pause; stale continuation cannot write an observation |
+| Real remote Cloudflare D1/Cron | NOT_VERIFIED | Requires authorized Cloudflare account provisioning and disposable deployment |
+| Real external GitHub GET from deployed Worker | NOT_VERIFIED | All current injected provider responses remain synthetic |
+| Android running/phone switched off | NOT_VERIFIED | No APK or owner-device acceptance yet |
+
+**Boundaries:** Local `getPlatformProxy` emulates Cloudflare bindings via `workerd`, not a remotely provisioned Cloudflare service. The test applies complete migration statements through D1.prepare rather than running remote Wrangler migrations. CI success does not certify external cloud availability or cost. Source commit tested is different from later documentation-only commits; review exact run SHA.
