@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-D opt-in bounded multi-user cloud scheduling added in PR #10 (local CI, not deployed), on top of P1-C scoped server sync and P1-B Android manual GitHub preview.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-D opt-in bounded multi-user cloud scheduling merged via PR #10 (local CI, not deployed), on top of P1-C scoped server sync and P1-B Android manual GitHub preview.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -31,7 +31,7 @@ Separate OIDC bearer-protected routes (not the old operator token):
 
 The server derives authority from a verified `issuer + subject` mapped to an internal UUID in `user_identities`; client-provided owner fields are rejected. Migration `0002` preserves legacy operator records. **All new user monitors are PAUSED**: user-owned Cron scheduling has not yet been implemented safely. The Android APK has no mobile OIDC flow, token or sync controls. The implementation is synthetic/local-CI-verified only, not a live Cloudflare deployment. Real OIDC selection, anti-abuse controls/JWKS key caching, device secure token handling and remote cost gates remain open.
 
-## P1-D experimental bounded scheduler, OFF by default
+## P1-D experimental bounded scheduler, OFF by default (merged PR #10)
 
 This branch adds `PATCH /v1/sync/monitors/{id}` with `{"status":"ACTIVE","expectedVersion":1}` (or `PAUSED`) requiring the signed user's OIDC bearer. `ACTIVE` is rejected unless the operator deliberately sets `MOBILE_SCHEDULING_ENABLED='true'`; the flag is **absent from deployed configuration**. A SQL-bound global limit of 9 active mobile monitors, 20 mapped identities, 3 total provider GETs per tick and one due monitor per owner per tick constrain the pilot. D1 migration `0003` records the rotating owner cursor; old operator-only behavior remains the default.
 
