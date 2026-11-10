@@ -21,7 +21,7 @@ P1-E Android supported signed-in draft upload and server-state reconciliation bu
 - **Android JVM deterministic security tests:** fixed-route allowlist; 409 error sanitization; invalid and cross-owner events; mismatched or forged status ACKs; per-monitor identity; retry/expiry failure, and no developer secret defaults. CI must require 13 executed (0 skipped, failures, errors). These are JVM tests with fake transport responses, not actual Android UI automation.
 - **Cloudflare local workerd/D1 integration:** genuine generated RS256 JWT fixtures and fixed JWKS; two distinct identities; default-off activation failure, foreign-user 404, ACTIVE with explicit gate, GitHub SHA baseline through `runScheduler`, owner-scoped event read, stale ACK rejection, and PAUSE. These are local workerd tests, not remote Cloudflare.
 - **No real Google OAuth credentials or Web Client ID** in the checked-in APK. Worker domain/remote D1 and Google issuer/audience verification on live tokens are not proven. No physical Android, live Cron, phone-off execution, RAM/battery measurements, or account billing verified. See issues #8, #5 and #2.
-- Fairness under genuinely concurrent remote Cron triggers, JWKS caching/rotation, and actual account quotas need further work. Existing bounded scheduler tests do not establish external availability or timing SLA.
+- Fairness under genuinely concurrent remote Cron triggers, **real** JWKS cache rotation under Cloudflare production, and actual account quotas need further work. P1-G [ADR-0008](0008-request-safe-oidc-jwks-cache.md) implements bounded public-key caching with source tests, but it does NOT establish external Google/Cloudflare caching success, availability, latency or timing SLA.
 
 ## Failure modes and instructions
 
