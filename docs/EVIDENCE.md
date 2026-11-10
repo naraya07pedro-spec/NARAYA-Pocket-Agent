@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-O | No D1 identity writes on signed-user reads, opt-in registration (10 November 2026; PR #21, local only)
+
+| Claim | Evidence class | Exact source verification |
+| --- | --- | --- |
+| A new signed user can GET an empty sync list without writing an identity; invalid routes/UUID/JSON cannot consume pilot identity slots | CI_VERIFIED_NODE_AND_LOCAL_WORKERD | [Node/preflight 42808252740](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252740), source `290101bf0163d79dc3341560c9d5b830149ea90b`, **78/78 PASS**; [real local workerd/D1 42808253042](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808253042) **11/11 PASS**; D1 fixture inspects identity count before and after first signed GET and invalid query |
+| First valid POST creates one identity; existing identity repeatedly GET/PATCH/POST without additional attempted `INSERT INTO user_identities` | CI_VERIFIED_NODE_SQL_INSTRUMENTATION | Same [Node/preflight 42808252740](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252740): wrapped D1 statement `run()` counts initial INSERT and subsequent read-only requests. **Not a measured Cloudflare D1 write billing trace** |
+| 20-account atomic cap, retry idempotency, OIDC auth precedence and SQL owner isolation preserved | CI_VERIFIED_NODE_AND_D1 | Same Node + workerd/D1 runs. Rewritten 20-user fixture performs explicit valid POST for each owner; 21st POST returns 429, read-only 21st GET remains empty 200. Concurrent same-draft POST persists one identity and monitor |
+| Source preflight mutation gate prevents reverting to pre-validation registration or creating an identity via first GET | CI_VERIFIED_OFFLINE_STATIC | [Node 42808252740](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252740), source safety PASS; owner registration body scoped separately from handler strings |
+| Public real GitHub read with isolated local D1 and Android build still work | CI_VERIFIED_PUBLIC_AND_LOCAL | [Live public GET/local D1 42808252718](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252718) SUCCESS, `remote_cloudflare:false`; [Android official adapter 42808252712](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252712) SUCCESS; [Android debug APK 42808252360](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42808252360) SUCCESS, **20/20 security JVM tests executed/zero failures/errors/skipped**, APK SHA256 `0097d668cef4a335ad7eebe9d9520f95d0498a739589cadbfb779205e7c3e7de` |
+| Initial syntax regression and then invalid historical test assertions | CI_FAILED_AND_CORRECTED | [Source 42807104949](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42807104949) + [local D1 42807104934](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42807104934) + [live read 42807105074](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42807105074) FAILED due malformed route-matcher string; later [source 42807723965](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42807723965) 76 PASS / 2 FAIL and [D1 42807724115](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42807724115) 9 PASS / 2 FAIL due previous assumption that read-only GET registers a user. Corrected source 5/5 SUCCESS above |
+| Real Cloudflare account writes/billing, Free CPU, signed Google Android and off-device remote Cron | **NOT_VERIFIED** | No remote account, Worker/D1 deployment, token from actual Google, physical Android power cycle or cloud usage/cost metrics. **Source avoided attempted INSERT**, not proven dollar savings |
+
+**Corrected code SHA `290101bf0163d79dc3341560c9d5b830149ea90b`** passed 5/5 workflows, but subsequent documentation edits need final exact-head CI again before merge. The returned empty GET is a deliberate non-registering behavior, not remote activation. See [ADR-0016](ADR/0016-read-only-mobile-identity-admission.md) and [PROGRESS](PROGRESS.md).
+
+---
+
 ## P1-N | Offline owner-supplied phone-OFF evidence structural gate (10 November 2026; PR #20 MERGED, source/local only)
 
 | Claim | Evidence class | Verified evidence / limitations |

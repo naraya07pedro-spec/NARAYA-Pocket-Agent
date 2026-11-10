@@ -85,6 +85,7 @@ const check=(id,passed)=>({id,status:passed?'PASS':'FAIL'});
 
 export function auditSource(s){
   const d=prodD1(s);
+  const identityAdmitSource=s.mobileSync.split('async function ownerFromVerifiedIdentity(')[1]?.split('function parseSyncInput')[0]??'';
   const checks=[
     check('global_cron_kill_switch',s.workerTypes.includes('SCHEDULER_ENABLED?: string') &&
       /env\.SCHEDULER_ENABLED !== 'true'/.test(s.workerIndex) &&
@@ -152,6 +153,18 @@ export function auditSource(s){
       s.offdeviceEvidenceGate.includes("requireRemote?2:0") &&
       s.offdeviceEvidenceGate.includes("owner_supplied_data_not_independently_authenticated") &&
       s.offdeviceEvidenceGate.includes("raw.byteLength>65_536")),
+    check('signed_user_admission_is_prevalidated_and_existing_users_read_only',
+      identityAdmitSource.includes('const existing = await env.DB.prepare') &&
+      identityAdmitSource.includes('if (existing) {') &&
+      s.mobileSync.includes('if (!registerOnCreate) return null') &&
+      s.mobileSync.includes('if (!ownerId) {') &&
+      s.mobileSync.includes('if (listing) return json({monitors:[]})') &&
+      s.mobileSync.includes('const createInput = creating ? parseSyncInput(await boundedJson(request)) : null') &&
+      s.mobileSync.includes('const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null') &&
+      s.mobileSync.indexOf('const createInput = creating ?') <
+        s.mobileSync.lastIndexOf('const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating)') &&
+      s.mobileSync.includes("if (reading && (!id || !UUID.test(id)))") &&
+      s.mobileSync.includes('const {issuer,subject} = await verifyOidcBearer(request, env)')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -166,7 +179,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-N',
+    stage:'P1-O',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -192,7 +205,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-N offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-O offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');

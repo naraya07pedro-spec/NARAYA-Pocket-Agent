@@ -59,8 +59,13 @@ test('A and B are isolated by SQL owner; tokens never grant operator API access'
     assert.equal((await request(env,'/v1/sync/observations?monitorId='+item.id,b)).status,404);
     assert.equal((await request(env,'/v1/sync/observations?monitorId='+item.id,a)).status,200);
     assert.equal((await request(env,'/v1/monitors',a)).status,401);
+    assert.equal(identities(env).length,1,'B did not register by reading an empty list or foreign monitor');
+    const bRegistered=await create(env,b,uuid(),'nodejs/node');
+    assert.equal(bRegistered.status,201);
     assert.equal(identities(env).length,2);
     assert.notEqual(identities(env)[0].id,identities(env)[1].id);
+    assert.equal((await(await request(env,'/v1/sync/monitors',a)).json()).monitors.length,1);
+    assert.equal((await(await request(env,'/v1/sync/monitors',b)).json()).monitors.length,1);
     assert.ok(!JSON.stringify(item).includes('owner_id'));
   } finally {globalThis.fetch=previous;env.DB.close();}
 });
@@ -309,10 +314,13 @@ test('bounded pilot identity creation rejects 21st identity, but existing accoun
     const first=await token('registered-0');
     for(let i=0;i<20;i++) {
       const t=i===0?first:await token('registered-'+i);
-      assert.equal((await request(env,'/v1/sync/monitors',t)).status,200);
+      assert.equal((await create(env,t,uuid())).status,201);
     }
     const beyond=await token('registered-20');
-    const rejected=await request(env,'/v1/sync/monitors',beyond);
+    const readOnly=await request(env,'/v1/sync/monitors',beyond);
+    assert.equal(readOnly.status,200,'capacity must not prevent a harmless read-only empty list');
+    assert.deepEqual(await readOnly.json(),{monitors:[]});
+    const rejected=await create(env,beyond,uuid());
     assert.equal(rejected.status,429);
     assert.deepEqual(await rejected.json(),{error:'pilot_identity_limit'});
     assert.equal(identities(env).length,20);
@@ -579,5 +587,99 @@ test('missing migration 0005 fails closed before mobile activation or operator p
     assert.equal(providerCalls,0,'missing sequence migration must not consume a GitHub provider request');
     const paused=await request(env,target,t,'PATCH',{status:'PAUSED',expectedVersion:1});
     assert.equal(paused.status,200,'owner can still safely PAUSE during migration outage');
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+
+test('P1-O existing signed identity never attempts D1 INSERT on repeated GET/PATCH or monitor upload',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  const originalDb=env.DB;
+  let identityInserts=0;
+  const wrap=(stmt,sql)=>({
+    bind(...values){return wrap(stmt.bind(...values),sql);},
+    async run(){
+      if(/\bINSERT INTO user_identities\b/i.test(sql)) identityInserts++;
+      return stmt.run();
+    },
+    first(){return stmt.first();},
+    all(){return stmt.all();}
+  });
+  env.DB={
+    connection: originalDb.connection,
+    prepare(sql){return wrap(originalDb.prepare(sql),sql);},
+    batch(stmts){return originalDb.batch(stmts);},
+    close(){originalDb.close();}
+  };
+  try {
+    const owner=await token('P1O-existing-owner');
+    const first=await request(env,'/v1/sync/monitors',owner);
+    assert.equal(first.status,200);
+    assert.deepEqual(await first.json(),{monitors:[]});
+    assert.equal(identityInserts,0,'a first read-only GET must not register or write an identity');
+    assert.equal(identities(env).length,0);
+    const created=await create(env,owner,uuid());
+    assert.equal(created.status,201);
+    assert.equal(identityInserts,1,'first explicit valid POST registers one identity');
+    const originalOwnerId=identities(env)[0].id;
+    const monitor=(await created.json()).monitor;
+    for(let i=0;i<12;i++){
+      const listing=await request(env,'/v1/sync/monitors',owner);
+      assert.equal(listing.status,200);
+      assert.equal((await listing.json()).monitors[0].id,monitor.id);
+      const history=await request(env,'/v1/sync/observations?monitorId='+monitor.id,owner);
+      assert.equal(history.status,200);
+    }
+    const pause=await request(env,'/v1/sync/monitors/'+monitor.id,owner,'PATCH',
+      {status:'PAUSED',expectedVersion:1});
+    assert.equal(pause.status,200);
+    const replay=await create(env,owner,monitor.clientDraftId);
+    assert.equal(replay.status,200);
+    assert.equal(identityInserts,1,'registered users must not retry INSERT for any sync route');
+    assert.equal(identities(env).length,1);
+    assert.equal(identities(env)[0].id,originalOwnerId);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('P1-O bad requests do not silently claim pilot identity slots even with valid OIDC',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try {
+    const signed=await token('P1O-malformed-first-visit');
+    const goodUuid=uuid();
+    assert.equal((await request(env,'/v1/sync/observations?monitorId=bad',signed)).status,400);
+    assert.equal((await request(env,'/v1/sync/monitors/'+goodUuid,signed)).status,404);
+    assert.equal((await request(env,'/v1/sync/monitors/'+goodUuid,signed,'PATCH',
+      {status:'ACTIVE',expectedVersion:'1'})).status,400);
+    assert.equal((await request(env,'/v1/sync/monitors',signed,'POST',
+      {clientDraftId:'not-uuid',repository:'python/cpython',intervalMinutes:30})).status,400);
+    assert.equal((await request(env,'/v1/sync/monitors',signed,'PATCH',
+      {status:'PAUSED',expectedVersion:1})).status,404);
+    const dashed='00000000-0000-0000-0000-000000000000';
+    assert.equal((await request(env,'/v1/sync/monitors/'+dashed,signed,'PATCH',
+      {status:'PAUSED',expectedVersion:1})).status,404);
+    assert.equal(identities(env).length,0,'invalid requests must not exhaust 20 user slots');
+    const ok=await request(env,'/v1/sync/monitors',signed);
+    assert.equal(ok.status,200);
+    assert.equal(identities(env).length,0,'valid first list is strictly read-only');
+    const again=await request(env,'/v1/sync/monitors',signed);
+    assert.equal(again.status,200);
+    assert.deepEqual(await again.json(),{monitors:[]});
+    assert.equal(identities(env).length,0);
+    const created=await create(env,signed,uuid());
+    assert.equal(created.status,201,'only explicit first POST onboards the user');
+    assert.equal(identities(env).length,1);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('P1-O invalid JWT does not get to body parsing, D1 identity lookup or onboarding',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const invalid=await token('P1O-bad-sig',{aud:'not-the-owner-approved-audience'});
+    const r=await request(env,'/v1/sync/monitors',invalid,'POST',
+      {clientDraftId:'bad',repository:'wrong-repo',intervalMinutes:-1});
+    assert.equal(r.status,401);
+    assert.equal(identities(env).length,0);
   }finally{globalThis.fetch=previous;env.DB.close();}
 });

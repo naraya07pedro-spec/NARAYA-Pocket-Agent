@@ -1,8 +1,14 @@
-# P1-N release readiness gate | Owner-approved remote pilot ONLY
+# P1-O release readiness gate | Owner-approved remote pilot ONLY
 
 Date checked: 10 November 2026. Code status: **offline preflight and global Cron kill-switch implemented; no remote deployment**.
 
 This is a **human-authorized release procedure**, not a script that creates cloud resources. GitHub Actions must not deploy Workers, create remote D1, apply remote migrations, change triggers, publish Android APKs or register Google OAuth projects. A source test passing is **not** approval to execute the commands described here.
+
+## P1-O signed identity admission and live D1-cost acceptance
+
+A previously unseen Google/OIDC account can now **refresh an empty signed-user monitor list without registering a durable D1 identity**. Valid unknown-account observation reads and PATCH requests return 404 without writing an identity. A new identity is created only as part of the first valid, explicit `POST /v1/sync/monitors` request, under the existing atomic 20-identity limit. At capacity, a 21st unknown user may read an empty list but may **not** create a monitor; the server returns 429 `pilot_identity_limit`. An existing registered user can still use the endpoint and is not retried through the identity INSERT path.
+
+This is a **code-level write-attempt reduction**, not a claim of reduced Cloudflare billing. During a future owner-approved pilot, inspect D1 account usage/quota and actual row read/write counters around the consented onboarding and repeat refreshes, without placing real tokens or account IDs in the repository. Verify that incorrect Google audience/issuer tokens are rejected before route parsing; a valid malformed request does not occupy a pilot identity slot. Retain signed owner isolation and capped D1 resource use. [ADR-0016](ADR/0016-read-only-mobile-identity-admission.md).
 
 ## P1-N owner-supplied phone-OFF evidence: offline sanity check is NOT remote acceptance
 

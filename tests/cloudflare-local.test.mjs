@@ -164,7 +164,7 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
     assert.equal((await(await worker.fetch(request(b),env)).json()).monitors.length,0);
     assert.equal((await worker.fetch(request(b,'GET','/v1/sync/observations?monitorId='+monitor.id),env)).status,404);
     const mapped=await env.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first();
-    assert.equal(mapped.n,2);
+    assert.equal(mapped.n,1,'signed foreign GET must not register an identity');
     await platform.dispose(); platform=null;
     platform=await setupPlatform(dir);
     const restarted={DB:platform.env.DB,...settings};
@@ -172,7 +172,7 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
     assert.equal(retry.status,200);
     assert.equal((await retry.json()).monitor.id,monitor.id);
     assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM monitors').first()).n,1);
-    assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,2);
+    assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
   } finally {
     globalThis.fetch=originalFetch;
     if(platform)await platform.dispose();
@@ -308,12 +308,26 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
       method,headers:{authorization:'Bearer '+t,...(body?{'content-type':'application/json'}:{})},
       body:body?JSON.stringify(body):undefined,
     });
+    // First signed-user list is read-only and must NOT consume a D1 user slot.
+    const unknown=await worker.fetch(req(b,'/v1/sync/monitors'),env);
+    assert.equal(unknown.status,200);
+    assert.deepEqual(await unknown.json(),{monitors:[]});
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
+    const invalid=await worker.fetch(req(b,
+      '/v1/sync/observations?monitorId=not-a-valid-uuid'),env);
+    assert.equal(invalid.status,400);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
     const draft=crypto.randomUUID();
     const create=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
       clientDraftId:draft,repository:'python/cpython',intervalMinutes:30,
     }),env);
     assert.equal(create.status,201);
     const first=(await create.json()).monitor;
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
+    for(let repeat=0;repeat<5;repeat++){
+      assert.equal((await worker.fetch(req(a,'/v1/sync/monitors'),env)).status,200);
+    }
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
     assert.equal(first.status,'PAUSED');
     assert.equal(first.clientDraftId,draft);
     const path='/v1/sync/monitors/'+first.id;
@@ -428,7 +442,7 @@ test('Local workerd/D1: public JWKS cache reuses keys across two separately owne
     assert.equal(b.status,200);
     assert.deepEqual(await a.json(),{monitors:[]});
     assert.deepEqual(await b.json(),{monitors:[]});
-    assert.equal((await DB.prepare('SELECT COUNT(DISTINCT id) AS n FROM user_identities').first()).n,2);
+    assert.equal((await DB.prepare('SELECT COUNT(DISTINCT id) AS n FROM user_identities').first()).n,0,'read-only signed JWT probes must not register identities');
     assert.equal(jwksCalls,1,'same configured public key can serve both independently signed users');
     assert.equal(opens,2,'Cache API discovered on each request, no shared Promise');
     assert.equal(cacheStore.size,1);

@@ -35,14 +35,29 @@ function syncView(row: MobileMonitor, env?: Env) {
   };
 }
 
-async function ownerFromVerifiedIdentity(request: Request, env: Env): Promise<string> {
-  const { issuer, subject } = await verifyOidcBearer(request, env);
+async function ownerFromVerifiedIdentity(
+  issuer: string, subject: string, env: Env, registerOnCreate: boolean,
+): Promise<string | null> {
+  // Existing signed-in users are read-only: do not attempt INSERT/COUNT on
+  // every GET/PATCH/POST. First-time registration still uses ONE atomic,
+  // bounded D1 INSERT, retaining the issuer+subject uniqueness guarantee.
+  const existing = await env.DB.prepare(`SELECT id FROM user_identities WHERE issuer=? AND subject=?`)
+    .bind(issuer, subject).first<Identity>();
+  if (existing) {
+    if (!UUID.test(existing.id)) throw new Error('identity_mapping_invalid');
+    return existing.id;
+  }
+  // Viewing an empty cloud list or probing another monitor is not account
+  // registration. Only an explicitly requested, valid first POST can consume
+  // one of the 20 durable mobile pilot identity slots.
+  if (!registerOnCreate) return null;
   const candidate = crypto.randomUUID();
   const now = Date.now();
   await env.DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at)
     SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM user_identities) < 20
     ON CONFLICT(issuer,subject) DO NOTHING`)
     .bind(candidate, issuer, subject, now).run();
+  // Under concurrent first requests the winning identity mapping is stable.
   const found = await env.DB.prepare(`SELECT id FROM user_identities WHERE issuer=? AND subject=?`)
     .bind(issuer, subject).first<Identity>();
   if (!found) throw new IdentityCapacityError();
@@ -67,8 +82,9 @@ async function fingerprint(owner: string, repo: string, intervalMinutes: number)
   return [...new Uint8Array(hash)].map(n => n.toString(16).padStart(2,'0')).join('');
 }
 
-async function createSyncMonitor(request: Request, env: Env, ownerId: string): Promise<Response> {
-  const body = parseSyncInput(await boundedJson(request));
+async function createSyncMonitor(
+  body: ReturnType<typeof parseSyncInput>, env: Env, ownerId: string,
+): Promise<Response> {
   const digest = await fingerprint(body.owner, body.repo, body.intervalMinutes);
   const now = Date.now(), id = crypto.randomUUID();
   // Single D1 SQL statement enforces the quota at insert time, avoiding a TOCTOU count-then-write.
@@ -120,9 +136,7 @@ async function listSyncMonitors(env: Env, ownerId: string): Promise<Response> {
   return json({monitors:result.results.map(row => syncView(row,env))});
 }
 
-async function listSyncObservations(request: Request, env: Env, ownerId: string): Promise<Response> {
-  const id = new URL(request.url).searchParams.get('monitorId');
-  if (!id || !UUID.test(id)) return json({error:'invalid_monitor_id'},400);
+async function listSyncObservations(env: Env, ownerId: string, id: string): Promise<Response> {
   const monitor = await env.DB.prepare(`SELECT id FROM monitors
     WHERE owner_id=? AND id=? AND client_draft_id IS NOT NULL`)
     .bind(ownerId,id).first();
@@ -159,9 +173,10 @@ async function schedulerBudgetReady(env: Env): Promise<boolean> {
   }
 }
 
-async function updateSyncStatus(request: Request, env: Env, ownerId: string, id: string): Promise<Response> {
-  if (!UUID.test(id)) return json({error:'not_found'},404);
-  const {status,expectedVersion} = parseStatusInput(await boundedJson(request));
+async function updateSyncStatus(
+  env: Env, ownerId: string, id: string, input: ReturnType<typeof parseStatusInput>,
+): Promise<Response> {
+  const {status,expectedVersion} = input;
   if (status === 'ACTIVE' && !mobileSchedulerConfigured(env))
     return json({error:'scheduler_disabled'},409);
   if (status === 'ACTIVE' && !await schedulerBudgetReady(env))
@@ -188,11 +203,32 @@ async function updateSyncStatus(request: Request, env: Env, ownerId: string, id:
 }
 
 export async function mobileSync(request: Request, env: Env, path: string): Promise<Response> {
-  const ownerId = await ownerFromVerifiedIdentity(request, env);
-  if (path === '/v1/sync/monitors' && request.method === 'GET') return listSyncMonitors(env,ownerId);
-  if (path === '/v1/sync/monitors' && request.method === 'POST') return createSyncMonitor(request,env,ownerId);
-  if (path === '/v1/sync/observations' && request.method === 'GET') return listSyncObservations(request,env,ownerId);
-  const changed = new RegExp('^/v1/sync/monitors/([0-9a-f-]{36})$','i').exec(path);
-  if (changed && request.method === 'PATCH') return updateSyncStatus(request,env,ownerId,changed[1]);
-  return json({error:'not_found'},404);
+  // Authentication is always first. But unknown routes, invalid IDs and bad
+  // bodies do NOT consume one of the 20 pilot identity registrations.
+  const {issuer,subject} = await verifyOidcBearer(request, env);
+  const listing = path === '/v1/sync/monitors' && request.method === 'GET';
+  const creating = path === '/v1/sync/monitors' && request.method === 'POST';
+  const reading = path === '/v1/sync/observations' && request.method === 'GET';
+  const monitorPrefix = '/v1/sync/monitors/';
+  const changed = path.startsWith(monitorPrefix) &&
+    path.length === monitorPrefix.length + 36 ? path.slice(monitorPrefix.length) : null;
+  const patching = changed !== null && request.method === 'PATCH';
+  if (!listing && !creating && !reading && !patching)
+    return json({error:'not_found'},404);
+
+  const id = reading ? new URL(request.url).searchParams.get('monitorId') : null;
+  if (reading && (!id || !UUID.test(id))) return json({error:'invalid_monitor_id'},400);
+  if (patching && !UUID.test(changed!)) return json({error:'not_found'},404);
+  const createInput = creating ? parseSyncInput(await boundedJson(request)) : null;
+  const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null;
+
+  const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating);
+  if (!ownerId) {
+    if (listing) return json({monitors:[]});
+    return json({error:'not_found'},404);
+  }
+  if (listing) return listSyncMonitors(env,ownerId);
+  if (creating) return createSyncMonitor(createInput!,env,ownerId);
+  if (reading) return listSyncObservations(env,ownerId,id!);
+  return updateSyncStatus(env,ownerId,changed!,statusInput!);
 }

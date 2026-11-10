@@ -1,4 +1,10 @@
-# Android acceptance matrix | P1-N offline acceptance evidence gate; real phone and remote Cron still unverified
+# Android acceptance matrix | P1-O read-only identity onboarding; physical device and remote Cron still unverified
+
+## P1-O signed-user first-read behavior (backend CI, not real OAuth)
+
+On an actual signed Android app, the first `GET /v1/sync/monitors` for a newly authenticated user should return **an empty list without creating an identity**; invalid monitor IDs, unknown routes or malformed JSON must not exhaust the limited 20-user quota. The user enters the durable pilot only after a **valid explicit POST** to upload one local public-repository draft. All further signed GET/PATCH/POST operations for that identity should use an indexed lookup and not attempt repeat identity INSERTs. These are code and **local workerd/D1 tests** only, with synthetic RSA-signed JWTs. No Google-issued physical-device token or real account row-read/write usage was observed. [ADR-0016](ADR/0016-read-only-mobile-identity-admission.md).
+
+---
 
 ## P1-N physical phone-OFF acceptance remains a separate, independent milestone
 
