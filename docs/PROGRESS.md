@@ -1,5 +1,31 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-F Android cloud monitor controls and observation evidence (merged PR #12; not remotely deployed)
+
+**Merged:** [PR #12](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/12) as `4028d783bd332470e198a6fd0607c2562b0ca726`. Final tested PR HEAD `9bfb371520592ee5afa3297873a9a4b08a8d4c52`.
+
+**New implementation:**
+- Compose adds explicit **Request cloud activation / Pause cloud monitor**, plus **Read server observations**. It acts only on server-confirmed owner-scoped monitor rows. Responses must confirm the expected UUID, `status`, monotonically incremented `version` and `schedulerEligible`. A 401 clears all session/cloud UI data. Conflict, provider errors or offline states do **not** invent success or wipe local drafts and verified SHA.
+- Android fixed-HTTPS-origin adapter now supports narrowly allowlisted `PATCH /v1/sync/monitors/{UUID}` and `GET /v1/sync/observations?monitorId={UUID}` in addition to existing explicit GET/POST. Response parsing validates monitor UUID, observation UUID, `BASELINE`/`CHANGE`, previous/head 40-char hex SHA, positive ordered timestamps, and max 50 observations. Only first five are shown.
+- Client reads up to **2 KiB** of HTTP 409 error data and maps only `scheduler_disabled`, `stale_version`, `active_monitor_limit` to finite typed errors without echoing untrusted provider response or bearer. Other conflict details remain generic.
+- No new backend endpoint was needed; existing signed-user D1/status/observation contracts were exercised through a **new real local workerd/D1 integrated test**: two RSA-signed users, foreign status/observations 404, scheduler flag OFF rejection, flag ON ACTIVE ACK, simulated official GitHub response, persisted baseline, PAUSE, and zero further claims after pause.
+- The Android default APK still intentionally has **no real Google Web OAuth Client ID and no Worker origin**. `MOBILE_SCHEDULING_ENABLED` stays OFF by default. New controls **cannot** prove real remote cloud execution or physically powered-off-phone autonomy.
+
+**Exact final source evidence at PR HEAD `9bfb371520592ee5afa3297873a9a4b08a8d4c52` (5/5 workflows SUCCESS):**
+- [Android debug APK and JVM run 42765189002](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765189002): **13/13 `CloudSyncClientTest` executed; 0 skipped, failed or errored**. Final APK SHA-256 `095d69e1f8edd11fe3e56cec33730c9871980ab8ddecb5705c52b46e0729ab8a`.
+- [Cloudflare workerd/D1 local run 42765188864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188864): **6/6 PASS** including full signed-owner control + observation contract.
+- [Backend Node tests + TypeScript 42765189297](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765189297): **33/33 PASS**, typecheck successful.
+- [Real read-only GitHub Worker GET 42765188869](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188869): SUCCESS.
+- [Real read-only Android GitHub JVM adapter 42765188843](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188843): SUCCESS.
+
+**Failed checkpoint preserved:** intermediate commit `7c9bd63a18c6719b58af60f90be31f7fb811e6c9` failed [Android APK CI 42764978876](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42764978876) and [Android adapter CI 42764978636](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42764978636) because a new Kotlin test function name started with `409`, an invalid identifier. Renamed test on `9bfb371...`; all five CI workflows passed afterward. No known source failures are hidden.
+
+**Evidence classification:** CI_VERIFIED_LOCAL / CI_VERIFIED_SYNTHETIC_SIGNED_JWT, not real Google identity or remotely deployed Cloudflare D1/Cron. Real mobile sign-in, real cloud sync, free-tier account counters, mobile RAM/battery, JWKS rotation/cache, concurrent remote Cron fairness and powered-off-device experiment remain **NOT_VERIFIED**. GitHub merge SHA is confirmed, but independent CI success on the merged `main` SHA and subsequent ledger-only commits is **not claimed**.
+
+**Next gate:** verify and authorize genuine OAuth + trusted Worker domain, obtain real device sign-in, validate per-owner GET/POST/PATCH/observations over deployed D1, then perform actual remote Cron + physically-off phone acceptance only after explicit user authorization/cost gates. See [ADR-0007](ADR/0007-android-cloud-control-observation-evidence.md), [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8), [Issue #5](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/5), and [Issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2).
+
+---
+
 ## 2026-11-10 | P1-E Android opt-in Google identity + manual cloud sync (PR #11 merged; not deployed)
 
 **Implemented on Android source:**
