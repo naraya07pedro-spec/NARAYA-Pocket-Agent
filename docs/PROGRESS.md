@@ -1,5 +1,23 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-T prevent suppressed billing evidence and undetected paid rate plans (PR #26, source/local)
+
+**Why:** audit against the [official Cloudflare subscription API](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/) found that P1-S's Billing Read inspector checked only a positive top-level `price` or `state:Paid`. `price` is optional; the provider also returns `rate_plan.id` and `AwaitingPayment`. Therefore a `Provisioned` subscription with a known non-free rate plan and absent price could be incorrectly reported as no positive paid-state signal. Separately, an earlier validated positive billing history amount was **erased from the summary** when a later history page failed. **Both findings are source-level risks, not real charges or live Cloudflare incidents.**
+
+**P1-T changes:**
+- Subscription risk detector checks known non-free rate plan IDs, `Paid`, `AwaitingPayment`, positive price, externally managed or contract status. Unknown/incomplete subscription metadata stays `SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN`, not silently cleared; malformed prices and plan types fail closed.
+- History positive-charge signal now remains `YES_HISTORICAL_ONLY` even if later GET returns 403, malformed JSON metadata, or a conflicting total. Count retains **validated earlier history records only**, never unverified records or raw invoice values.
+- History `amount` and `amount_to_pay` are accepted as finite numbers only when present; malformed numeric strings fail closed rather than becoming zero-cost evidence.
+- **10 additional adversarial mock tests**, bringing total Node test suite to **124** on the code checkpoint; unchanged safety invariant `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`, `current_free_tier_proven:false`, `future_zero_extra_cost_proven:false`.
+- **No account access** or Cloudflare billing API credentials connected; no deployed Worker, remote D1, SQL migration, Cron activation, OAuth, paid action or phone-OFF acceptance. [ADR-0021](ADR/0021-monotonic-billing-evidence-and-subscription-risk.md).
+
+**CODE checkpoint `300b149ee58ff5d563b81cc6ad13f82c157b28`**, **5/5 workflows SUCCESS**: [Node source 42841509751](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509751) **124/124 PASS**; [local Cloudflare workerd/D1 42841509713](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509713) **11/11 PASS**; [public GitHub GET on local D1 42841509838](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509838) SUCCESS; [Android native adapter 42841509460](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509460) SUCCESS; [Android APK 42841509775](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509775) SUCCESS with **20/20 security JVM tests**, debug APK SHA-256 `1161ca7c7c5c6b7bac3db2cb4cbbe0524c3c610cd0d916aee7dbffae45180349`. This checkpoint predates final documentation HEAD and merge, so must be tested separately.
+
+**Next actual gate:** owner-only read-only Cloudflare inventory and Billing Read account check, independent official dashboard subscription, Workers Free CPU and D1 rows/billing review. Exact production cost, migrations 0001–0005, real Google OAuth, Cron logs and physically OFF phone still **NOT_VERIFIED**. No permission for deployment or new costs. [PR #26](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/26) · [EVIDENCE](EVIDENCE.md) · [Owner runbook](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
+
 ## 2026-11-10 | P1-S owner-only Billing Read inspection (PR #25 MERGED; remote remains BLOCKED)
 
 **Problem:** P1-R's owner-triggered GET-only Cloudflare inventory can report Worker/D1/Cron metadata, but cannot tell whether the intended real account has paid subscriptions or historic billing activity. This is a real acceptance blocker for the project's **no unapproved extra cloud cost** requirement. Account-specific Free-tier usage and CPU were never inspected.

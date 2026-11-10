@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-T | Monotonic billing history evidence + non-free rate plan detection | 10 November 2026
+
+| Claim | Evidence class | Exact evidence / limitations |
+| --- | --- | --- |
+| Official subscription model includes optional top-level price, rate_plan.id, state `AwaitingPayment` and `Paid` | OFFICIAL_API_CONTRACT | [Cloudflare List Subscriptions](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/) verified 10 Nov 2026. Fields do not prove actual user's subscription |
+| P1-S source had potential false-negative: non-free plan without price/state Paid was not flagged | SOURCE_AUDIT_NOT_LIVE_INCIDENT | Prior `subscriptionSignal` checked only `row.price>0` or `row.state==='Paid'`; now checks non-free rate plans, due states, contract/external management and invalid type protection |
+| P1-S source erased already observed positive historic amount on later failing page | SOURCE_AUDIT_NOT_LIVE_INCIDENT | Prior `catch` reset positive flag and scanned count. P1-T preserves validated positive and count while marking history `UNAVAILABLE`/`INVALID_RESPONSE` |
+| 10 new mocked-fetch adversarial tests, GET-only, redacted metadata and unchanged safety invariants | CI_VERIFIED_MOCKED_FETCH | [Code checkpoint source run 42841509751](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509751) at `300b149ee58ff5d563b81cc6ad13f82c157b28`, **124/124 Node**, TypeScript, source preflight PASS. No Cloudflare real account called |
+| Local Cloudflare workerd/D1, public GitHub real GET and Android retained | CI_VERIFIED_LOCAL_AND_PUBLIC_GITHUB | At the same code checkpoint: [local workerd/D1 42841509713](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509713) **11/11**, [real public GitHub GET/local D1 42841509838](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509838) SUCCESS, [Android adapter 42841509460](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509460) SUCCESS, [debug APK 42841509775](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42841509775) **20/20 JVM security**, SHA256 `1161ca7c7c5c6b7bac3db2cb4cbbe0524c3c610cd0d916aee7dbffae45180349`. **5/5 code checkpoint**; final docs HEAD must be tested separately |
+| Actual owner account subscriptions/bills, Workers CPU/Free quotas, D1 billable rows, Google OAuth on phone, Cron with physical phone OFF | **NOT_VERIFIED** | No Cloudflare account connector/token, no remote authenticated billing or D1, no deployment/active Cron, no owner provider write or billing activity. `remote_acceptance:BLOCKED` unchanged |
+
+**Scope and caveat:** P1-T reports *potential* financial obligations, not invoices or real spending. An earlier positive historical amount is not an unpaid or ongoing charge. See [ADR-0021](ADR/0021-monotonic-billing-evidence-and-subscription-risk.md), [PROGRESS](PROGRESS.md), and [PR #26](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/26).
+
+---
+
+
 ## P1-S | Owner-run Cloudflare Billing Read metadata inspection (2026-11-10)
 
 | Claim | Evidence class | Source and limit |
