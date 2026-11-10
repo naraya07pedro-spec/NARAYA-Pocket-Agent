@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-K | Android truthful cloud status and typed scheduler error (10 November 2026; PR #17)
+## P1-K | Android truthful cloud status and typed scheduler error (10 November 2026; PR #17 merged; no remote deployment)
 
 | Claim | Evidence class | Inspectable proof |
 | --- | --- | --- |
@@ -12,6 +12,8 @@
 | Real deployed Cloudflare Worker/D1/Cron, Google-issued phone token, phone physically OFF while Cron persists events, account free-tier CPU/billing | **NOT_VERIFIED** | No live Cloudflare account resource, OAuth credential, remote D1 migration, phone hardware or running remote Worker accessed. Source safety PASS is separate from remote readiness BLOCKED |
 
 **Corrected code SHA `cc7c526965db60099b35326eadce4ccce8e69e8e`: 5/5 workflows SUCCESS.** Documentation-only commits and final PR-head SHA may differ and must be checked before merge. No automatic deploy or external mutating action is present. The Android `scheduled` field is a server assertion in this pilot and currently always `false`; even future `scheduled:true` would not be independent proof of a physical phone-OFF demonstration.
+
+**FINAL 5/5 verified PR HEAD:** source `948f9433c0b4bfbbb1607652ded56d1a29a3573f`, [backend/preflight 42792128133](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42792128133) **59/59 PASS + source PASS / remote BLOCKED**, [Cloudflare local workerd/D1 42792127760](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42792127760) **10/10 PASS**, [public GitHub live GET using local D1 42792127791](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42792127791) SUCCESS, [Android network adapter 42792127940](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42792127940) SUCCESS, [Android debug APK 42792127704](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42792127704) SUCCESS, **18/18 JVM security tests, zero skipped/failures/errors**, SHA256 `88280fecc19eaf53b6531fb7b217768c722f97e03bcdd6b0f36cf13eff83653d`. [PR #17](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/17) merged as `56620dd3b3b87f2d4b2a4193406c14df3038a2e6`. No CI proof is inferred for the separate merge SHA or any docs-only commit on `main`. This milestone has no actual Android hardware or remote Cloudflare execution evidence.
 
 **Cross-contract limitations:** the Kotlin verifier assumes the current backend always includes both scheduling flags. Older server versions without these flags are intentionally rejected, rather than silently treating missing eligibility as “running.” The UI describes the **last successful snapshot**; a subsequent cloud kill-switch can occur after that response. Versioned PATCH reconciles only its confirmed target; it cannot prove global Cron was scheduled remotely. See [ADR-0012](ADR/0012-android-cloud-truth-and-fail-closed-recovery.md), [ANDROID_ACCEPTANCE](ANDROID_ACCEPTANCE.md), [PROGRESS](PROGRESS.md).
 
