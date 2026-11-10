@@ -41,7 +41,12 @@ test('valid cryptographic identity and separate read-only endpoint; no owner cre
   const value = await verifyOidcBearer(request(token),settings,keys(),fixedTime);
   assert.deepEqual(value,{issuer:settings.OIDC_ISSUER,subject:goodPayload.sub});
   const livePayload = {...goodPayload,iat:Math.floor(Date.now()/1000)-20,exp:Math.floor(Date.now()/1000)+1800};
-  const response = await worker.fetch(request(await sign(livePayload)),{...settings, OWNER_API_TOKEN:undefined, OWNER_ID:undefined, DB:undefined});
+  const originalFetch = globalThis.fetch;
+  let response;
+  try {
+    globalThis.fetch = keys(); // Worker uses global fetch; no request goes to real JWKS host.
+    response = await worker.fetch(request(await sign(livePayload)),{...settings, OWNER_API_TOKEN:undefined, OWNER_ID:undefined, DB:undefined});
+  } finally { globalThis.fetch = originalFetch; }
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{authenticated:true,capabilities:{monitorSync:false}});
   assert.equal(response.headers.get('Cache-Control'),'no-store');
