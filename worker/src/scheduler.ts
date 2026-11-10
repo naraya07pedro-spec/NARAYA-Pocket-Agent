@@ -78,6 +78,9 @@ export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLik
   const owner = ownerId(env.OWNER_ID); // Fail closed if operator context is misconfigured.
   if (!Number.isSafeInteger(now) || now < 0) throw new Error('scheduler_clock_invalid');
   const windowStart = Math.floor(now / DISPATCH_WINDOW_MS) * DISPATCH_WINDOW_MS;
+  // Fail before a lease reservation or external GitHub GET if a release
+  // skipped additive migration 0005. Local and cloud use the same D1 schema.
+  await env.DB.prepare('SELECT event_sequence FROM observations LIMIT 1').all();
   const mobileEnabled = env.MOBILE_SCHEDULING_ENABLED === 'true';
   let results: Monitor[];
   if (mobileEnabled) {
