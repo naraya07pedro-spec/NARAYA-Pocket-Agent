@@ -1,4 +1,12 @@
-# Android acceptance matrix | P1-O read-only identity onboarding; physical device and remote Cron still unverified
+# Android acceptance matrix | P1-P atomic first-monitor admission; physical phone and remote Cron unverified
+
+## P1-P failed first monitor submission must be replay-safe
+
+When the owner submits the **first** cloud monitor draft on a real signed Android device, the backend must create the identity and PAUSED monitor as one transaction. A failing DB operation must **not** consume an identity slot without a monitor. If a request fails after the backend has already committed, the app must retry using **the same `clientDraftId`**, and must not display a new monitor until server-confirmed. This dual scenario is currently tested by Node injection and local Cloudflare workerd/D1, **not** by a physical phone, real Google token or deployed Cloudflare D1.
+
+The manual pilot must verify retry after network loss, server failure and app restart, and check server owner isolation. Current CI does not measure device performance or actual phone-OFF Cron. [ADR-0017](ADR/0017-atomic-first-monitor-onboarding.md).
+
+---
 
 ## P1-O signed-user first-read behavior (backend CI, not real OAuth)
 
