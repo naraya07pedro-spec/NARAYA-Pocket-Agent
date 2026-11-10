@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-I global default-OFF Cron permission and offline release preflight in PR #15, building on P1-H D1 budget, P1-G bounded JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-I global default-OFF Cron permission and offline release preflight merged via PR #15 (53/53 backend, 10/10 local D1, 5/5 final PR-head CI), building on P1-H D1 budget, P1-G bounded JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-I default-OFF Cron and offline release gate (PR #15; not deployed)
+## P1-I default-OFF Cron and offline release gate (PR #15 merged; not deployed)
 
 The Worker `scheduled()` entrypoint now **returns before any D1 or GitHub request unless `SCHEDULER_ENABLED === 'true'`**. The existing `MOBILE_SCHEDULING_ENABLED` gate is independent. Therefore merely deploying the Worker with a Cron definition would not activate operator or mobile provider checks. An explicit opt-in is required after owner approval.
 
