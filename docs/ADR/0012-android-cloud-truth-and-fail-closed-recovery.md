@@ -1,7 +1,7 @@
 # ADR-0012 | Android cloud status must distinguish stored ACTIVE from eligible or executed
 
 Date: 2026-11-10
-Status: P1-K implementation in PR #17. Source/local CI in progress; no deployment or physical device acceptance.
+Status: MERGED via PR #17 as `56620dd3b3b87f2d4b2a4193406c14df3038a2e6`. Exact final PR HEAD `948f9433c0b4bfbbb1607652ded56d1a29a3573f` passed 5/5 CI (59/59 source, 10/10 local D1, 18/18 Android JVM security). No deployment or physical device acceptance.
 
 ## Source-verified discrepancy
 
