@@ -1,5 +1,27 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-I default-OFF Cron, offline release preflight and owner-only pilot template (PR #15; not deployed)
+
+**Problem and security correction:** The P1-H mobile scheduler gate did not disable the **legacy operator-only** scheduled handler. A Worker deployed with a Cron trigger and an existing ACTIVE operator monitor could attempt GitHub reads even though mobile scheduling was OFF. In addition, `worker/wrangler.jsonc` deliberately has `workers_dev:false`, no routes and no real D1 UUID: source CI was never evidence of an Android-accessible remote Worker.
+
+**Implemented:**
+- Worker `scheduled()` now returns immediately without D1/provider calls unless `SCHEDULER_ENABLED === 'true'`, a new global opt-in independent of `MOBILE_SCHEDULING_ENABLED === 'true'`. A disabled invocation emits only `{"event":"scheduled_disabled"}` with no owner, token, repo or provider data. Configured Cron triggers can still consume Cloudflare invocation quotas even when this handler does no work.
+- `scripts/release-preflight.mjs` performs an entirely **offline** source audit before every `npm test`: production route remains absent, exact default-off gates, fixed 15-minute Cron declaration, additive migrations 0001–0004, fake local D1 fixture, nonsecret Wrangler variables, Android blank OAuth Web Client ID/Worker origin, and lack of automatic Cloudflare-deployment GitHub workflow. Fail-closed invalid source; structured `--json` result.
+- `npm run preflight:require-remote` intentionally returns status code **2**: `source_safety: PASS` does **not** equal `remote_readiness: BLOCKED`. Account billing/quota, real Google OAuth, actual remote Worker/D1, 10ms Cron CPU budget and physically-off device cannot be verified offline.
+- `worker/wrangler.pilot.example.jsonc` is deliberately **not directly deployable**: placeholder Worker name and invalid D1 ID, `workers_dev:true`, **zero Cron triggers**, and both scheduler permissions `false`. New .gitignore rules exclude an owner-specific copied config and private D1 exports.
+- `docs/REMOTE_PILOT_READINESS.md` provides owner approval, Cloudflare read-only quota checks, backup, ordered 0001–0004 migrations, trusted Google OAuth/HTTPS, controlled Cron enable and rollback gates. No deploy script, provider write, account sign-in, secret or hosted endpoint was created.
+- `docs/LIMITATIONS.md` and runbook updated to distinguish historical P1-B statements from current P1-E/P1-I source capability.
+
+**First complete tested source SHA `63a625128a9729aa4dbec85344af92a22935b1b5`: 5/5 CI SUCCESS**
+- [Offline backend and preflight 42780576969](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576969): **53/53 tests PASS**, TypeScript gate, explicit `P1-I offline source checks: PASS` and `Remote deployment status: BLOCKED`. Source adversarial tests include strict Cron ON/OFF, source-mutant preflight, template safety and CLI exit code 2.
+- [Local real Cloudflare workerd/D1 42780576610](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576610): **10/10 PASS**, including new active operator monitor under default-OFF Cron no D1 claim, no quota reservation, no GitHub request.
+- [Live public GitHub Worker adapter + local D1 42780576662](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576662), [Android public provider adapter 42780576882](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576882), [Android debug APK 42780576952](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576952): SUCCESS; 13 Android security tests executed, 0 skipped/failures/errors. Debug APK SHA256 `1c4124226f23b1d6a770336fa6bcbfbfee8cd083db3fccc9f622d03704c465f8`.
+- A later README/runbook/ADR follow-up SHA `aa940280557d6c8ab270d9b26d657dc0204608b3` also passed 5/5 workflows, but **final PR-head CI must be independently checked after this ledger commit**. Do not equate these CI runs with a different SHA.
+
+**What is NOT VERIFIED:** any real Cloudflare deployment/route/D1/Cron, current Free quota or provider account balance, actual 10ms Cron CPU, public Google OAuth issuer/audience/JWKS and genuine on-device ID token, actual Android RAM/battery, or task continuing while the phone is physically switched off. `SCHEDULER_ENABLED` and mobile flag remain OFF by default. No external cloud provisioning, migrations, paid services, or provider writes were done. See [ADR-0010](ADR/0010-default-off-cron-release-gate.md), [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md), [EVIDENCE](EVIDENCE.md), [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8) and [Issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2).
+
+---
+
 ## 2026-11-10 | P1-H shared D1 Cron dispatch budget (PR #14 merged; not deployed)
 
 **Problem demonstrated:** the previous three-GitHub-GET cap was per scheduler invocation, so two overlapping Cron invocations could independently make up to six requests. The `last_owner_id` cursor improved approximate fairness, not distributed quota enforcement.
