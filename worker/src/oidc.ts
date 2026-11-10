@@ -18,6 +18,10 @@ type Fetcher = typeof fetch;
 type JsonObject = Record<string, unknown>;
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 const RSA_SHA256 = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const;
+// Google OIDC issuer-key binding, verified against Google's Discovery metadata.
+// A caller/operator must never turn a Google issuer into trust in another JWKS host.
+const GOOGLE_ISSUER = 'https://accounts.google.com';
+const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs';
 
 // A Cache API adapter is injected by tests or read from the Worker runtime per
 // request. Never put a request's Promise, bearer token or identity in module scope.
@@ -97,6 +101,10 @@ function config(settings: OidcSettings): {
           url.port || url.search) throw new AuthUnavailable();
     }
     if (issuerUrl.toString().replace(/\/$/, '') !== issuer.replace(/\/$/, '') || keysUrl.toString() !== jwks) throw new AuthUnavailable();
+    // Trust the signer as well as the signature. A JWT can claim Google `iss`
+    // while carrying a perfectly valid signature from an attacker's JWKS.
+    // Only the Google-published JWKS endpoint can authenticate Google `sub`.
+    if (issuer === GOOGLE_ISSUER && jwks !== GOOGLE_JWKS) throw new AuthUnavailable();
   } catch { throw new AuthUnavailable(); }
   return { issuer, audience, jwks, authorizedPresenters };
 }
