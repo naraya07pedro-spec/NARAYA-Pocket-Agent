@@ -22,7 +22,7 @@ npm test
 npm run typecheck
 ```
 
-`npm run preflight` is entirely offline: checks checked-in Wrangler configs, inactive global/mobile Cron flags, migrations 0001–0004, fake local D1 binding, public OAuth/Worker config disabled in Android by default, absence of accidentally automated deploy workflows and public secret variables. It **intentionally** prints two separate statuses:
+`npm run preflight` is entirely offline: checks checked-in Wrangler configs, inactive global/mobile Cron flags, migrations 0001–0005, fake local D1 binding, public OAuth/Worker config disabled in Android by default, absence of accidentally automated deploy workflows and public secret variables. It **intentionally** prints two separate statuses:
 
 - `source_safety: PASS` when the checked-in source passes static safety gates.
 - `remote_readiness: BLOCKED` until owner/account/provider/device proof is independently obtained. Even a future route/UUID in source **does not** certify account usage, OAuth correctness, real Cloudflare CPU time or phone-off acceptance.
@@ -81,7 +81,7 @@ Production source `worker/wrangler.jsonc` intentionally remains inaccessible as 
 
 ### Gate C: migration, backup, dry-run (these are NOT approved or executed)
 
-An owner-approved remote D1 setup must apply **0001→0002→0003→0004**, preserving existing monitors/owners and P1-H budget row. For an existing database, securely export a backup before migrations and verify that it can be recovered. Official commands are documented here: <https://developers.cloudflare.com/workers/wrangler/commands/d1/>.
+An owner-approved remote D1 setup must apply **0001→0002→0003→0004→0005**, preserving existing monitors/owners, P1-H budget row and P1-M durable observation sequence. Migration 0005 must be backed up and cost-reviewed before applying. For an existing database, securely export a backup before migrations and verify that it can be recovered. Official commands are documented here: <https://developers.cloudflare.com/workers/wrangler/commands/d1/>.
 
 ```sh
 # READ-ONLY remote inspection (after owner authenticates):
