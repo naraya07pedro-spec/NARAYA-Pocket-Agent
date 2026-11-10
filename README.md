@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-I global default-OFF Cron permission and offline release preflight merged via PR #15 (53/53 backend, 10/10 local D1, 5/5 final PR-head CI), building on P1-H D1 budget, P1-G bounded JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-J dual-scheduler activation protection and D1 readiness check in PR #16 (source and local CI verified; no remote deployment), after P1-I global default-OFF Cron and release preflight, P1-H shared D1 quota, P1-G JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,12 @@
 - Automated Node/SQLite, real **local** Cloudflare workerd/D1, JVM Android, Android debug APK and public GitHub GET verification on GitHub Actions. Exact current test counts, SHAs and environment distinctions are in [EVIDENCE](docs/EVIDENCE.md), rather than historical figures.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-J signed-user activation requires both Cron permissions and live schema (PR #16, CI only)
+
+The backend previously permitted `PATCH ACTIVE` when the mobile flag was ON even if the **global Cron kill-switch was OFF**. This was misleading: the Android UI could receive 200 ACTIVE even though the Worker would not schedule a provider GET. A new shared predicate requires **literal `SCHEDULER_ENABLED='true'` AND `MOBILE_SCHEDULING_ENABLED='true'`**, plus a valid operator context. `schedulerEligible` becomes false immediately when either flag is OFF. **The owner can still PAUSE a monitor even if Cron is disabled**, and historical ACTIVE records are not silently erased.
+
+The server also refuses activation when required **D1 scheduler budget migration 0004** and its control row are absent, returning `503 scheduler_storage_unavailable` without modifying monitor status. `GET /v1/me` now truthfully reports that the backend has an implemented `monitorSync` contract (`true`) and whether mobile activation flags are configured. **Neither response guarantees remotely running Cron or actual Google sign-in.** A signed two-user test now exercises the real Worker `scheduled()` callback through local D1, not just its internal helper. See [ADR-0011](docs/ADR/0011-dual-scheduler-authorization.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
 
 ## P1-I default-OFF Cron and offline release gate (PR #15 merged; not deployed)
 
