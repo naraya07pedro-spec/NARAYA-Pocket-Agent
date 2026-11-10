@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-J | Dual activation permission and D1 budget readiness (10 November 2026, PR #16 source)
+
+| Claim | Evidence class | Exact proof / limitations |
+| --- | --- | --- |
+| New mobile ACTIVE requires both operator global Cron permission and mobile permission; user sees `schedulerEligible:false` when global Cron OFF; safe PAUSE remains available | CI_VERIFIED_NODE_SYNTHETIC | [Node/source CI 42787134336](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134336), SHA `01da4689a6f0a2f01025f93fb5c6d2fa51c19ddc`, **58/58 PASS + TypeScript**. Tests include RSA-signed fixture requests, global kill switch and old ACTIVE monitor |
+| Missing `scheduler_control` row or migration prevents HTTP 200 ACTIVE; backend returns 503 `scheduler_storage_unavailable` with no status/version mutation | CI_VERIFIED_SQLITE_D1_LIKE | Same Node CI 42787134336, tests drop table/delete row; pause still succeeds when budget row missing |
+| Two signed identities through actual HTTP Worker and **exported `worker.scheduled()`** handler produce one persisted GitHub baseline and owner-scoped observation; owner can PAUSE | CI_VERIFIED_LOCAL_WORKERD_D1 | [Cloudflare local D1 CI 42787134473](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134473): **10/10 PASS**, generated RSA fixture tokens and **stubbed** GitHub provider response; NOT real Google OAuth and NOT remote Cron |
+| Source preflight catches accidental removal of dual gate, truthful eligibility response or mandatory D1 budget schema guard | CI_VERIFIED_STATIC_MUTATION | Source 42787134336: offline preflight **PASS**, `remote_readiness: BLOCKED`; simulated code removal causes test failure |
+| Existing read-only public GitHub provider and Android build regressions | CI_VERIFIED_PROVIDER_AND_JVM | [Public GitHub read using local D1 42787134321](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134321) SUCCESS; [Android adapter 42787134331](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134331) SUCCESS; [Android APK 42787134313](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134313) SUCCESS with **13/13 security tests actually run**, no skips/failures/errors and SHA256 `00b57f74917034d0688b244ec0148623903d76730f91a79f35e4db286871eac5` |
+| Live Google-signed Android identity, deployed trusted Worker, remote D1 and Cron, Free CPU/billing, true phone-off observations | NOT_VERIFIED | No owner-approved Cloudflare deploy, remote migration, live Google ID token, hardware test or account metrics. A configuration-eligible ACTIVE response is never proof of execution |
+
+**First full source gate:** exact SHA `01da4689a6f0a2f01025f93fb5c6d2fa51c19ddc`, **5/5 CI SUCCESS**. Follow-up documentation commits need separate final-head CI before merge. The operator global Cron kill-switch remains default OFF; the mobile gate remains separately OFF. All current evidence is source/CI/local D1 and the project is **remote BLOCKED**.
+
+**Threat model nuance:** "dual permission plus D1 control row present" is necessary for backend activation but not sufficient to prove that the actual deployed Worker has a Cron trigger, public route, genuine OAuth or healthy Cloudflare Free CPU budget. The `/v1/me` capability field `monitorSync:true` describes the existing API, not a live deployment. See [ADR-0011](ADR/0011-dual-scheduler-authorization.md), [PROGRESS](PROGRESS.md), [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md).
+
+---
+
 ## P1-I: Cron global OFF and no-network release preflight (10 November 2026; PR #15 merged, not deployed)
 
 | Gate / claim | Evidence class | Exact source, result and limitations |
