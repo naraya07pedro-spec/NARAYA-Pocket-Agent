@@ -1,5 +1,26 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-Q read-only Cloudflare account inventory and safety gate (PR #23)
+
+**Purpose:** reduce the real Cloudflare acceptance blocker without adding unapproved cloud state. Previous P1-P source/local D1 tests do not prove account billing, remote deployment, Google OAuth or a physically OFF Android.
+
+**Implemented:**
+- New **offline-by-default** `scripts/cloudflare-readonly-inspect.mjs`; only an owner-supplied `--inspect-live` flag, environment-provided account ID and least-privilege token can issue API requests, and those calls are constrained to fixed Cloudflare GET metadata paths. No D1 SQL, POST/PUT/PATCH/DELETE, migrations, deploys or Cron activation.
+- Reports only target Worker/D1 existence, D1 size if provided, Cron schedule count if readable and partial/inconclusive inventory markers. No raw account identifiers, tokens, D1 UUIDs, API payloads or error messages appear. All outputs default `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`.
+- Seven adversarial mocked-fetch Node tests for GET-only calls, strict endpoint/host, output sanitization, 403/malformed responses, unexpected token/account input, incomplete pagination, invalid database UUID. Updated `npm test`, owner-only PowerShell instructions in `REMOTE_PILOT_READINESS.md`, [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md), [EVIDENCE](EVIDENCE.md).
+- Official Cloudflare Workers/D1 Free limits verified from docs on **10 Nov 2026**. Published limits are **not** live account quota, invoice, CPU usage or safe deploy authorization.
+
+**Code checkpoint `2e431a5d0aeca95993d714feab7d7feebc474fce`: all 5/5 PR workflows SUCCESS.**
+[Backend/source 42823140152](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140152) **89/89 Node** and TypeScript PASS; [real local D1 42823140172](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140172) **11/11**; [public GitHub read/local D1 42823140149](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140149) SUCCESS; [Android native adapter 42823140201](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140201) SUCCESS; [Android APK/security 42823140120](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140120) SUCCESS **20/20 JVM, no fail/error/skip**, debug APK SHA256 `b41d3403eb6073c130bc44ebe2f81c29b1e0cac54e95b538006c2e048023e4fb`.
+
+**Evidence limits:** the above five workflows cover exactly the code SHA, not subsequent documentation SHAs or a deployment. No Cloudflare API token or authenticated account, real Google Android sign-in, remote D1, remote Cron, paid resource, provider write or real OFF phone was used. P1-Q remains a preparation step, not remote acceptance.
+
+**Next gate:** actual owner-approved **read-only** Cloudflare plan/billing/usage and metadata inventory (not done), then separate approval for private backup and migrations 0001–0005, inert Worker, OAuth on device and later bounded Cron while Android physically OFF.
+
+[PR #23](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/23) · [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md) · [Remote readiness](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+---
+
 ## 2026-11-10 | P1-P atomic first-monitor identity admission and no orphan pilot slots (PR #22 MERGED, source/local only)
 
 **Concrete source finding:** P1-O registered a new authenticated identity with a D1 INSERT **before** inserting its first PAUSED monitor in a separate DB operation. If the second operation errored or silently inserted zero rows, a newly registered identity could remain stranded without any monitor, permanently occupying one of the **20** pilot identity slots. This is a documented source-level failure scenario, **not evidence of a real remote Cloudflare incident**.
