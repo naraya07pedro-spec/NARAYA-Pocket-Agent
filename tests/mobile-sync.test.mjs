@@ -309,10 +309,13 @@ test('bounded pilot identity creation rejects 21st identity, but existing accoun
     const first=await token('registered-0');
     for(let i=0;i<20;i++) {
       const t=i===0?first:await token('registered-'+i);
-      assert.equal((await request(env,'/v1/sync/monitors',t)).status,200);
+      assert.equal((await create(env,t,uuid())).status,201);
     }
     const beyond=await token('registered-20');
-    const rejected=await request(env,'/v1/sync/monitors',beyond);
+    const readOnly=await request(env,'/v1/sync/monitors',beyond);
+    assert.equal(readOnly.status,200,'capacity must not prevent a harmless read-only empty list');
+    assert.deepEqual(await readOnly.json(),{monitors:[]});
+    const rejected=await create(env,beyond,uuid());
     assert.equal(rejected.status,429);
     assert.deepEqual(await rejected.json(),{error:'pilot_identity_limit'});
     assert.equal(identities(env).length,20);
@@ -607,10 +610,13 @@ test('P1-O existing signed identity never attempts D1 INSERT on repeated GET/PAT
     const owner=await token('P1O-existing-owner');
     const first=await request(env,'/v1/sync/monitors',owner);
     assert.equal(first.status,200);
-    assert.equal(identityInserts,1,'first owner registration is one bounded insert');
-    const originalOwnerId=identities(env)[0].id;
+    assert.deepEqual(await first.json(),{monitors:[]});
+    assert.equal(identityInserts,0,'a first read-only GET must not register or write an identity');
+    assert.equal(identities(env).length,0);
     const created=await create(env,owner,uuid());
     assert.equal(created.status,201);
+    assert.equal(identityInserts,1,'first explicit valid POST registers one identity');
+    const originalOwnerId=identities(env)[0].id;
     const monitor=(await created.json()).monitor;
     for(let i=0;i<12;i++){
       const listing=await request(env,'/v1/sync/monitors',owner);
@@ -650,9 +656,13 @@ test('P1-O bad requests do not silently claim pilot identity slots even with val
     assert.equal(identities(env).length,0,'invalid requests must not exhaust 20 user slots');
     const ok=await request(env,'/v1/sync/monitors',signed);
     assert.equal(ok.status,200);
-    assert.equal(identities(env).length,1,'valid first list registers exactly one owner');
+    assert.equal(identities(env).length,0,'valid first list is strictly read-only');
     const again=await request(env,'/v1/sync/monitors',signed);
     assert.equal(again.status,200);
+    assert.deepEqual(await again.json(),{monitors:[]});
+    assert.equal(identities(env).length,0);
+    const created=await create(env,signed,uuid());
+    assert.equal(created.status,201,'only explicit first POST onboards the user');
     assert.equal(identities(env).length,1);
   }finally{globalThis.fetch=previous;env.DB.close();}
 });
