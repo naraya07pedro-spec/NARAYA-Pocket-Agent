@@ -1,7 +1,7 @@
 # ADR-0013 | Cross-runtime observation history integrity
 
 Date: 10 November 2026
-Status: Implemented in PR #18. Exact final PR-head CI and merge require verification. No remote Cloudflare deployment.
+Status: MERGED via PR #18 as `a9303f8635c271180f3764c52fb64b7b082ab7c5`. Exact final PR-head SHA `68763a31860bdd831606037644f478b384996c33` passed 5/5 CI (62/62 backend/preflight, 10/10 local D1, 20/20 Android security JVM). Not deployed remotely.
 
 ## Source audit: individually valid events can still form an impossible history
 
