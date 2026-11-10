@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-R | D1 result_info pagination truth and bounded Cloudflare GET reads (10 Nov 2026)
+
+| Claim | Evidence classification | Exact evidence and limits |
+| --- | --- | --- |
+| Source-level P1-Q may falsely claim a short D1 first page complete while `result_info.total_count` exceeds that page | CONTRACT_AND_SOURCE_AUDIT | [Official D1 list contract](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/) documents `total_count`, `page`, `per_page`, `count`; P1-Q previously checked `total_pages` or page length. No live Cloudflare incident proven |
+| Multi-page D1 account inventory no longer treats missing target as absent unless all declared results are retrieved and consistent; bounded 10 pages | CI_VERIFIED_MOCKED_FETCH | [Corrected Node/source 42829389113](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389113) **100/100 PASS** at code SHA `b84437385dffb91b4f1f8d3b7dcda41c19f82216`; adversarial fixtures include `total_count>first-page rows`, actual page-2 target, inconsistent totals, wrong page number, duplicate UUID, unreadable page, 10-page cap |
+| Untrusted API body cannot bypass bounded fixed-host GET or force unbounded response-memory allocation | CI_VERIFIED_MOCKED_FETCH | Same source run 42829389113; tests cover 262,144-byte read-time stream cap, invalid UUID, redacted provider errors and redirect. No live security penetration test |
+| Worker script and Cron shapes are handled conservatively; database size is correlated to target UUID/name | API_CONTRACT_AND_OFFLINE_CI | [Worker scripts SinglePage](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/list/), [Cron schedules](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/schedules/methods/get/), [D1 detail](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/get/). Mocked GET suites only |
+| Initial new regression fixture produced an incorrect second-page response and failed CI | CI_FAILED_AND_REPAIRED | Initial [source 42829222639](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829222639) **99/100 PASS, 1 FAIL**: `url.includes('page=1')` also matched `per_page=100`. Fixed test to strict `URL.searchParams.get('page')` and reran |
+| Local backend/Cloudflare workerd, public GitHub GET, Android adapter and security APK unaffected | CI_VERIFIED_LOCAL_ONLY | Exact corrected CODE SHA `b84437385dffb91b4f1f8d3b7dcda41c19f82216`: [Node 42829389113](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389113) **100/100**, [workerd/D1 42829389170](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389170) **11/11**, [real public GitHub/local D1 42829389108](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389108) SUCCESS, [Android adapter 42829389279](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389279) SUCCESS, [Android APK 42829389235](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389235) **20/20 security JVM**, all **5/5 SUCCESS**. Debug APK SHA-256 `af048f7c6a3e973a77179a2e9edb4b3afcd40357af5d53b4f6f4a8ec9bbbdc49` |
+| Real Cloudflare account inspection, billing, Free CPU/quotas, remote migration/Cron, Google OAuth real Android, phone fully OFF and post-boot app read | **NOT_VERIFIED** | No actual Cloudflare/Google credential used or live inspector run. No remote writes, deployment, fees or device proof. P1-R is *preparation*, not live acceptance |
+
+**Evidence pointer:** [ADR-0019](ADR/0019-d1-account-inventory-pagination-and-bounded-fetch.md). The 5/5 code checkpoint above predates documentation-final PR HEAD; DO NOT infer status for the later HEAD, merge SHA or docs-only `main` without a separate check.
+
+---
+
+
 ## P1-Q | Explicit Cloudflare GET-only account inventory (10 November 2026; source CI VERIFIED)
 
 | Claim | Evidence class | Exact source and limits |
