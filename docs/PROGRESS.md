@@ -1,6 +1,6 @@
 # Progress ledger | NARAYA Pocket Agent
 
-## 2026-11-10 | P1-Q read-only Cloudflare account inventory and safety gate (PR #23)
+## 2026-11-10 | P1-Q read-only Cloudflare account inventory and safety gate (PR #23 MERGED)
 
 **Purpose:** reduce the real Cloudflare acceptance blocker without adding unapproved cloud state. Previous P1-P source/local D1 tests do not prove account billing, remote deployment, Google OAuth or a physically OFF Android.
 
@@ -13,7 +13,9 @@
 **Code checkpoint `2e431a5d0aeca95993d714feab7d7feebc474fce`: all 5/5 PR workflows SUCCESS.**
 [Backend/source 42823140152](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140152) **89/89 Node** and TypeScript PASS; [real local D1 42823140172](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140172) **11/11**; [public GitHub read/local D1 42823140149](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140149) SUCCESS; [Android native adapter 42823140201](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140201) SUCCESS; [Android APK/security 42823140120](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140120) SUCCESS **20/20 JVM, no fail/error/skip**, debug APK SHA256 `b41d3403eb6073c130bc44ebe2f81c29b1e0cac54e95b538006c2e048023e4fb`.
 
-**Evidence limits:** the above five workflows cover exactly the code SHA, not subsequent documentation SHAs or a deployment. No Cloudflare API token or authenticated account, real Google Android sign-in, remote D1, remote Cron, paid resource, provider write or real OFF phone was used. P1-Q remains a preparation step, not remote acceptance.
+**FINAL PR #23 MERGED:** GitHub merge commit `4a697afb1e03c18b43ba971862b336df77882d00`, exact final tested PR-head `b390d2b9848d3f52d758ed940f7cb726497cc25a` passed **5/5 workflows**: [Node 89/89](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823854570), [local D1 11/11](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823854955), [public GitHub/local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823854559), [Android adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823854580), [Android debug APK/JVM 20/20](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823854582). **Final debug APK SHA256** `8e0bdc84b738a2aaf41aca6a40ec62f89f4c781631b4fed45da4d4e5da21a581`. Source code checkpoint earlier in the section was separately 5/5 green. 
+
+**Evidence limits:** the above tests verify the named PR SHAs, not the merge commit or any subsequent docs-only main update. No Cloudflare API token or authenticated account, real Google Android sign-in, remote D1, remote Cron, paid resource, provider write or real OFF phone was used. P1-Q remains a preparation step, not remote acceptance.
 
 **Next gate:** actual owner-approved **read-only** Cloudflare plan/billing/usage and metadata inventory (not done), then separate approval for private backup and migrations 0001–0005, inert Worker, OAuth on device and later bounded Cron while Android physically OFF.
 
