@@ -123,3 +123,129 @@ test('rejects stale untrusted key, unsupported key class, or invalid signature',
   const wrong={...await crypto.subtle.exportKey('jwk',other.publicKey),kid:jwk.kid};
   await assert.rejects(verifyOidcBearer(request(token),settings,keys({keys:[wrong]}),fixedTime),AuthRejected);
 });
+
+
+test('public JWKS max-age caches keys but re-verifies JWT signature for every request',async()=>{
+  const valid=await sign();
+  let requests=0;
+  const fetcher=async(url,opts)=>{
+    assert.equal(url,settings.OIDC_JWKS_URL);
+    assert.equal(opts.redirect,'error');
+    requests++;
+    return new Response(JSON.stringify({keys:[jwk]}),{
+      headers:{'Cache-Control':'public, max-age=120'},
+    });
+  };
+  const first=await verifyOidcBearer(request(valid),settings,fetcher,fixedTime);
+  const second=await verifyOidcBearer(request(valid),settings,fetcher,fixedTime+60_000);
+  assert.deepEqual(first,second);
+  assert.equal(requests,1,'public JWKS reused within provider TTL');
+  const [head,body,signature]=valid.split('.');
+  const forged=head+'.'+b64(JSON.stringify({...goodPayload,sub:'impostor'}))+'.'+signature;
+  await assert.rejects(verifyOidcBearer(request(forged),settings,fetcher,fixedTime+60_000),AuthRejected);
+  assert.equal(requests,1,'forged JWT rejected with cached public key');
+  await verifyOidcBearer(request(valid),settings,fetcher,fixedTime+121_000);
+  assert.equal(requests,2,'expired JWKS fetched anew');
+});
+
+test('concurrent JWKS miss coalesces upstream fetch without sharing authorization',async()=>{
+  let requests=0;
+  const fetcher=async()=>{
+    requests++;
+    await new Promise(resolve=>setTimeout(resolve,5));
+    return new Response(JSON.stringify({keys:[jwk]}),{
+      headers:{'Cache-Control':'public, max-age=300'},
+    });
+  };
+  const good=await sign();
+  const [h,p,s]=good.split('.');
+  const bad=h+'.'+b64(JSON.stringify({...goodPayload,sub:'wrong-subject'}))+'.'+s;
+  const outcomes=await Promise.all([
+    ...Array.from({length:12},()=>verifyOidcBearer(request(good),settings,fetcher,fixedTime)),
+    verifyOidcBearer(request(bad),settings,fetcher,fixedTime)
+      .then(()=> 'accepted',error=>error instanceof AuthRejected?'rejected':'unexpected'),
+  ]);
+  assert.equal(requests,1);
+  assert.deepEqual(outcomes.slice(0,12).map(result=>result.subject),Array(12).fill(goodPayload.sub));
+  assert.equal(outcomes[12],'rejected');
+});
+
+test('no-store, private, zero max-age, malformed and missing headers never cache',async()=>{
+  const valid=await sign();
+  for(const header of [
+    undefined,'private, max-age=600','no-store, public, max-age=600',
+    'public, max-age=0','public, max-age=999, max-age=1',
+    'public, max-age=not-a-number','max-age=30',
+  ]){
+    let requests=0;
+    const fetcher=async()=>{
+      requests++;
+      return new Response(JSON.stringify({keys:[jwk]}),{
+        headers:header?{'Cache-Control':header}:{},
+      });
+    };
+    await verifyOidcBearer(request(valid),settings,fetcher,fixedTime);
+    await verifyOidcBearer(request(valid),settings,fetcher,fixedTime+1000);
+    assert.equal(requests,2,'cache disabled for '+String(header));
+  }
+});
+
+test('provider failure after JWKS expiry never falls back to stale cached keys',async()=>{
+  const valid=await sign();
+  let requests=0,online=true;
+  const fetcher=async()=>{
+    requests++;
+    if(!online)throw new Error('offline-provider');
+    return new Response(JSON.stringify({keys:[jwk]}),{
+      headers:{'Cache-Control':'public, max-age=1'},
+    });
+  };
+  await verifyOidcBearer(request(valid),settings,fetcher,fixedTime);
+  online=false;
+  await verifyOidcBearer(request(valid),settings,fetcher,fixedTime+900);
+  assert.equal(requests,1);
+  await assert.rejects(verifyOidcBearer(request(valid),settings,fetcher,fixedTime+1000),AuthUnavailable);
+  assert.equal(requests,2);
+  await assert.rejects(verifyOidcBearer(request(valid),settings,fetcher,fixedTime+1100),AuthUnavailable);
+  assert.equal(requests,3,'failure is not a permanent cached authorization');
+});
+
+test('rotated provider keys become usable only after bounded cache expiry',async()=>{
+  const valid=await sign();
+  const other=await crypto.subtle.generateKey({
+    name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+    publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+  },true,['sign','verify']);
+  const stale={...await crypto.subtle.exportKey('jwk',other.publicKey),kid:jwk.kid,use:'sig',alg:'RS256'};
+  let currentKey=stale,requests=0;
+  const fetcher=async()=>{
+    requests++;
+    return new Response(JSON.stringify({keys:[currentKey]}),{
+      headers:{'Cache-Control':'public, max-age=2'},
+    });
+  };
+  await assert.rejects(verifyOidcBearer(request(valid),settings,fetcher,fixedTime),AuthRejected);
+  currentKey=jwk;
+  await assert.rejects(verifyOidcBearer(request(valid),settings,fetcher,fixedTime+1000),AuthRejected);
+  assert.equal(requests,1);
+  await verifyOidcBearer(request(valid),settings,fetcher,fixedTime+2001);
+  assert.equal(requests,2);
+});
+
+test('JWKS TTL is capped at five minutes and different fetchers have isolated keys',async()=>{
+  const valid=await sign();
+  let callsA=0,callsB=0;
+  const fetchA=async()=>{callsA++;return new Response(JSON.stringify({keys:[jwk]}),{
+    headers:{'Cache-Control':'public, max-age=31536000'},
+  });};
+  const fetchB=async()=>{callsB++;return new Response(JSON.stringify({keys:[]}),{
+    headers:{'Cache-Control':'public, max-age=31536000'},
+  });};
+  await verifyOidcBearer(request(valid),settings,fetchA,fixedTime);
+  await verifyOidcBearer(request(valid),settings,fetchA,fixedTime+299_000);
+  assert.equal(callsA,1);
+  await assert.rejects(verifyOidcBearer(request(valid),settings,fetchB,fixedTime+299_000),AuthRejected);
+  assert.equal(callsB,1,'different fetcher cannot inherit cached trust');
+  await verifyOidcBearer(request(valid),settings,fetchA,fixedTime+301_000);
+  assert.equal(callsA,2,'cache cannot exceed five minutes');
+});
