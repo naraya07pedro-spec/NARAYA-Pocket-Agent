@@ -27,34 +27,10 @@ The actual account must be reviewed separately for plan, billing, CPU, D1 daily 
 ---
 
 
-## P1-Q: Account inventory read-only preparation (NO DEPLOYMENT)
+## P1-Q (historical): original inventory tool, superseded by P1-R pagination validation
 
-**Purpose:** The owner's next meaningful evidence is real Cloudflare account-specific Worker/D1/Cron inventory and plan/billing review. P1-Q implements a narrowly scoped GET-only metadata inspector; it is NOT a deployment script or license to activate Cron. External actions require explicit owner authorization and a trusted local machine.
+P1-Q introduced offline-by-default, owner-operated read-only Cloudflare inventory via strict GET calls. P1-R corrects its D1 pagination and response-byte-bounding behavior. **Use the single P1-R PowerShell procedure above instead of any older commands.** P1-Q was merged at [PR #23](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/23). No P1-Q or P1-R source run was a live Cloudflare account inspection; real billing/CPU/Free tier and phone-OFF acceptance remain unverified.
 
-Safe offline default, no network:
-
-```powershell
-node scripts/cloudflare-readonly-inspect.mjs
-npm test
-```
-
-Optional **owner-triggered** read-only API metadata inspection, only after reviewing the source and creating a **least-privilege read-only Cloudflare token** (Workers Scripts Read/Metadata Read-Only and D1 Read). These are PowerShell examples for the owner's private terminal, **not** commands to copy into GitHub Actions or a public issue:
-
-```powershell
-$env:CF_READONLY_ACCOUNT_ID = Read-Host 'Cloudflare Account ID'
-$privateToken = Read-Host 'Cloudflare API token (read-only)' -AsSecureString
-$env:CF_READONLY_API_TOKEN = [System.Net.NetworkCredential]::new('', $privateToken).Password
-node scripts/cloudflare-readonly-inspect.mjs --inspect-live
-Remove-Item Env:CF_READONLY_API_TOKEN
-Remove-Item Env:CF_READONLY_ACCOUNT_ID
-Remove-Variable privateToken
-```
-
-Never paste an API token, Cloudflare Account ID, or unredacted API responses into chat, GitHub, CI or logs. The script summarizes only target Worker/D1 presence, D1 file size if returned and Cron schedule count; insufficient permissions or pagination show `UNAVAILABLE`/`PARTIAL_FIRST_PAGE`. `inventory_complete:true` means only that **these targeted API inventories were retrieved successfully**, not full account or runtime readiness. A successful GET does not verify invoice, plan, daily row use, CPU, migrations, Google OAuth, safety of the real route or physical phone OFF.
-
-Public rules checked on 10 Nov 2026: Workers Free **10 ms CPU per Cron**, **50 subrequests/request**, **5 Cron triggers/account**; D1 Free **5M rows read/day**, **100K rows written/day**, **10 databases/account**, **500 MB/database**, **5 GB storage/account**. D1 daily read/write limits are enforced as of 1 Sep 2026. Confirm current values and **actual account** plan/usage in the Cloudflare dashboard separately. Never interpret these public allowances as measured free capacity. <https://developers.cloudflare.com/workers/platform/limits/> · <https://developers.cloudflare.com/d1/platform/limits/> · <https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/>.
-
-This is the first read-only evidence gate before a **separate written owner authorization** for backup, migration 0001–0005, inert Worker deployment and later Cron activation. Inspector output always retains `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, and `safe_to_activate_scheduler:false`. See [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md).
 
 ---
 
