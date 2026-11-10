@@ -224,3 +224,109 @@ test('upstream response is bounded while streaming and malformed UTF-8 cannot cr
     assert.equal(observations(env).length,0);
   } finally {env.DB.close();}
 });
+
+
+function seedSixActiveMobileOwners(env) {
+  const repos=['python/cpython','nodejs/node','microsoft/vscode',
+    'cloudflare/workers-sdk','denoland/deno','rust-lang/rust'];
+  const now=Date.now();
+  for(let i=0;i<repos.length;i++){
+    const owner=crypto.randomUUID(),id=crypto.randomUUID();
+    env.DB.connection.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+      .run(owner,'https://identity.example.invalid','concurrent-'+i,now);
+    const [repoOwner,repoName]=repos[i].split('/');
+    env.DB.connection.prepare(
+      "INSERT INTO monitors(id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at,client_draft_id,sync_request_digest) "+
+      "VALUES(?,?,?,?,'ACTIVE',30,?,?,?,?,?)"
+    ).run(id,owner,repoOwner,repoName,now,now,now,crypto.randomUUID(),'fixture-hash');
+  }
+}
+
+test('D1-global dispatch budget caps overlapping Cron invocations and rotates to next 15m UTC window', {timeout:30000}, async()=>{
+  const env=make();env.MOBILE_SCHEDULING_ENABLED='true';
+  try {
+    seedSixActiveMobileOwners(env);
+    const when=Math.ceil(Date.now()/900_000)*900_000+1000;
+    let calls=0,started,release;
+    const entered=new Promise(r=>started=r);
+    const gate=new Promise(r=>release=r);
+    const fake=async(url,options)=>{
+      assert.equal(options.method,'GET');
+      assert.equal(new URL(url).host,'api.github.com');
+      calls++;
+      if(calls===1){started();await gate;}
+      return new Response(JSON.stringify([{sha:A}]),{status:200});
+    };
+    const first=runScheduler(env,when,fake);
+    try {
+      await entered;
+      const overlapping=await runScheduler({...env},when,fake);
+      assert.equal(overlapping.claimed,2,'second invocation gets only remaining two reservations');
+      assert.equal(calls,3,'at most three total upstream attempts across invocations');
+      const budget=env.DB.connection.prepare(
+        'SELECT budget_window_start,budget_claims FROM scheduler_control WHERE id=1').get();
+      assert.equal(budget.budget_window_start,Math.floor(when/900_000)*900_000);
+      assert.equal(budget.budget_claims,3);
+    } finally {release?.();}
+    const firstResult=await first;
+    assert.equal(firstResult.claimed,1);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,3);
+    const exhausted=await runScheduler(env,when,fake);
+    assert.equal(exhausted.claimed,0);
+    assert.equal(calls,3);
+    const next=await runScheduler(env,when+900_000,fake);
+    assert.equal(next.claimed,3,'new fixed UTC quarter-hour replenishes the three slots');
+    assert.equal(calls,6);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,6);
+    const later=env.DB.connection.prepare(
+      'SELECT budget_window_start,budget_claims FROM scheduler_control WHERE id=1').get();
+    assert.equal(later.budget_window_start,Math.floor((when+900_000)/900_000)*900_000);
+    assert.equal(later.budget_claims,3);
+    // Simulated backward/replayed tick is not permitted to reset a newer quota.
+    env.DB.connection.prepare('UPDATE monitors SET next_due_at=?').run(when-1);
+    const rewound=await runScheduler(env,when,fake);
+    assert.equal(rewound.claimed,0);
+    assert.equal(calls,6);
+    assert.equal(env.DB.connection.prepare('SELECT budget_window_start FROM scheduler_control WHERE id=1').get().budget_window_start,
+      later.budget_window_start);
+  } finally {env.DB.close();}
+});
+
+test('unclaimed overlapping lease refunds quota without a GitHub request',async()=>{
+  const env=make();
+  try {
+    await insert(env);
+    const when=monitorRow(env).next_due_at,db=env.DB;
+    let calls=0;
+    const injected={...env,DB:{
+      prepare(sql){
+        if(sql.startsWith('UPDATE monitors SET lease_token=')){
+          return {bind:()=>({run:async()=>({meta:{changes:0}})})};
+        }
+        return db.prepare(sql);
+      },
+      batch(stmts){return db.batch(stmts)},
+    }};
+    const report=await runScheduler(injected,when,async()=>{calls++;throw Error('must not fetch')});
+    assert.equal(report.claimed,0);
+    assert.equal(report.skipped,1);
+    assert.equal(calls,0);
+    assert.equal(env.DB.connection.prepare('SELECT budget_claims FROM scheduler_control WHERE id=1').get().budget_claims,0);
+    assert.equal(monitorRow(env).lease_token,null);
+  } finally {env.DB.close();}
+});
+
+test('missing budget migration or invalid clock fails closed before any provider I/O',async()=>{
+  const env=make();
+  try {
+    await insert(env);
+    const when=monitorRow(env).next_due_at;
+    let requests=0;
+    const fake=async()=>{requests++;return new Response(JSON.stringify([{sha:A}]))};
+    await assert.rejects(runScheduler(env,-1,fake),/scheduler_clock_invalid/);
+    env.DB.connection.exec('DROP TABLE scheduler_control');
+    await assert.rejects(runScheduler(env,when,fake));
+    assert.equal(requests,0);
+    assert.equal(monitorRow(env).lease_token,null);
+  } finally {env.DB.close();}
+});
