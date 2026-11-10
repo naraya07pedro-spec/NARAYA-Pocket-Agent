@@ -47,7 +47,7 @@ function config(settings: OidcSettings): { issuer: string; audience: string; jwk
       if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.hash ||
           url.port || url.search) throw new AuthUnavailable();
     }
-    if (issuerUrl.toString() !== issuer || keysUrl.toString() !== jwks) throw new AuthUnavailable();
+    if (issuerUrl.toString().replace(/\/$/, '') !== issuer.replace(/\\/$/, '') || keysUrl.toString() !== jwks) throw new AuthUnavailable();
   } catch { throw new AuthUnavailable(); }
   return { issuer, audience, jwks };
 }
@@ -59,7 +59,7 @@ async function boundedJwks(url: string, fetcher: Fetcher): Promise<JsonObject> {
   } catch { throw new AuthUnavailable(); }
   if (!response.ok || !response.body) throw new AuthUnavailable();
   const length = Number(response.headers.get('content-length') ?? 0);
-  if (!Number.isFinite(length) || length > 65536) throw new AuthUnavailable();
+  if (!Number.isFinite(length) || length < 0 || length > 65536) throw new AuthUnavailable();
   const reader = response.body.getReader();
   const parts: Uint8Array[] = [];
   let total = 0;
