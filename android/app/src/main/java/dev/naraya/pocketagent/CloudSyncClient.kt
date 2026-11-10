@@ -149,7 +149,8 @@ internal class CloudSyncClient(
                         val monitor = parseMonitor(data.getJSONObject("monitor"))
                             ?: return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
                         val created = data.getBoolean("created")
-                        if ((response.status == 201) != created)
+                        if ((response.status == 201) != created ||
+                            (created && monitor.status != "PAUSED"))
                             return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
                         SyncResult.Uploaded(monitor, created)
                     } else {
