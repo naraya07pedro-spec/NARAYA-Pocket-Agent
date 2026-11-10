@@ -9,7 +9,7 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
   // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
