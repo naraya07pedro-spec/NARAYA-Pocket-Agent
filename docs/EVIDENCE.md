@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-D: bounded multi-user scheduler (10 November 2026, pre-merge source)
+## P1-D: bounded multi-user scheduler (10 November 2026, merged PR #10, not deployed)
 
 | Gate | Evidence class | Source SHA and exact verification |
 | --- | --- | --- |
@@ -11,6 +11,8 @@
 | Real remote Cloudflare Cron / phone switched off | NOT_VERIFIED | No remote deployment, no device-off task IDs / timestamps, no billing validation |
 | Android real OAuth + synced cloud monitor | NOT_IMPLEMENTED | Existing APK has manual public GitHub preview only; no mobile bearer token |
 | Fairness under concurrent remote Worker ticks | NOT_VERIFIED | Lease fencing is tested; exact cursor order under overlapping remote Cron still an open risk |
+
+**Final PR-head gate:** all **5/5 GitHub Actions workflows SUCCESS** on `fa8471459ed7608fd6bf3f45d13cca74006851b5`: [source 42755625591](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755625591), [local D1 42755625446](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755625446), [live GitHub 42755625823](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755625823), [Android adapter 42755625621](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755625621), [Android APK 42755625491](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755625491). [PR #10](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/10) merged as `2368b27c18d0f6c07c2e61377c12ad6331b1c36b`. **Main-merge SHA run and subsequent ledger-only commits are not independently verified**. No remote D1, billable API or phone-off tests were performed.
 
 **Initial failure preserved:** [first PR-head source run 42755148731](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755148731) failed due to malformed route TypeScript syntax; corrected with complete route replacement. Do not equate syntactic failure with a passed scheduler test. Source proof above is after the fix. For full technical limitations, see [ADR-0005](ADR/0005-bounded-fair-mobile-scheduler.md).
 
