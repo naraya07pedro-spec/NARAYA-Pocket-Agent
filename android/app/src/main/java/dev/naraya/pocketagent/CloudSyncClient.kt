@@ -114,7 +114,8 @@ internal class CloudSyncClient(
             if (!uuidPattern.matches(value)) null else UUID.fromString(value).toString()
         } catch (_: Exception) { null }
 
-        private fun parseMonitor(obj: JSONObject): CloudMonitor? = try {
+        private fun parseMonitor(obj: JSONObject): CloudMonitor? {
+            return try {
             val id = uuid(obj.getString("id")) ?: return null
             val clientDraftId = uuid(obj.getString("clientDraftId")) ?: return null
             val repo = RepoRules.normalize(obj.getString("repository")) ?: return null
@@ -130,7 +131,8 @@ internal class CloudSyncClient(
                 null else obj.getLong("lastCheckedAt")
             if (checkedAt != null && checkedAt <= 0L) return null
             CloudMonitor(id, clientDraftId, repo, interval, status, version, head, checkedAt)
-        } catch (_: Exception) { null }
+            } catch (_: Exception) { null }
+        }
     }
 
     private fun request(token: String?, method: String, body: String?): SyncResult {
