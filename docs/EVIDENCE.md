@@ -1,5 +1,23 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-F: Android monitor-control and owner-observation evidence (10 November 2026, PR #12 merged)
+
+| Gate | Evidence class | Exact evidence / limitation |
+| --- | --- | --- |
+| Explicit version-ACK Android ACTIVE/PAUSED and bounded owner observation reads | CI_VERIFIED_ANDROID_JVM_SYNTHETIC | [Android APK/JVM run 42765189002](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765189002), source `9bfb371520592ee5afa3297873a9a4b08a8d4c52`; **13 executed, 0 skipped/failures/errors** `CloudSyncClientTest`; debug APK SHA256 `095d69e1f8edd11fe3e56cec33730c9871980ab8ddecb5705c52b46e0729ab8a` |
+| Signed owner vs foreign owner, OFF→ON server gate, valid ACK, baseline read and PAUSED fence | CI_VERIFIED_LOCAL_WORKERD | [D1 workerd run 42765188864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188864); **6/6 PASS**, synthetic real RSA-signed JWT fixtures, local DB. It does not prove actual Google login, remote D1, or real Cloudflare Cron |
+| Backend regression, validation, TypeScript | CI_VERIFIED_OFFLINE | [Source run 42765189297](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765189297): **33/33 PASS**, typecheck at same PR HEAD |
+| Existing real public GitHub provider tests | CI_VERIFIED_READ_ONLY_PROVIDER | [Worker GET 42765188869](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188869), [Android JVM adapter 42765188843](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188843): SUCCESS; not a remotely scheduled task |
+| Mobile OAuth sign-in, deployed remote Worker, D1/Cron, provider quotas, actual phone-off task, RAM/battery | NOT_VERIFIED | No Google production ID token or signed-in device, deployed server, account billing proof, or powered-off-phone experiment. No real provider writes or paid API |
+
+**Final HEAD / merge:** all **5/5** PR-head CI SUCCESS on `9bfb371520592ee5afa3297873a9a4b08a8d4c52`. [PR #12](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/12) merged as `4028d783bd332470e198a6fd0607c2562b0ca726`. The merge SHA is confirmed by GitHub but **main-merge CI and documentation-only follow-up SHAs are not independently verified** by these PR-triggered runs.
+
+**Failure preserved:** intermediate source SHA `7c9bd63a18c6719b58af60f90be31f7fb811e6c9` failed [Android build 42764978876](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42764978876) and [Android adapter 42764978636](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42764978636) because a Kotlin test function was named starting with `409`. Corrected function identifier, not a bypass of test execution. Rerun has exact test count above.
+
+**Budget:** source gates cap three external GitHub GET attempts per scheduled tick when feature-gated mobile mode is enabled; real Cloudflare allowance and account charges have not been inspected. Enabling remote Cron remains prohibited without explicit approval. No cloud job is currently claimed to be running. For rationale see [ADR-0007](ADR/0007-android-cloud-control-observation-evidence.md).
+
+---
+
 ## P1-E Android Google sign-in + manual cloud adapter (10 November 2026; PR #11 merged, not deployed)
 
 | Gate | Result | Exact environment/source |
