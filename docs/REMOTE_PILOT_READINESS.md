@@ -1,4 +1,4 @@
-# P1-T release readiness gate | Owner-approved remote pilot ONLY
+# P1-V release readiness gate | Owner-approved remote pilot ONLY
 
 ## P1-V | Google-issued Android token must have correct Web audience and authorized presenter
 
