@@ -36,33 +36,14 @@ function syncView(row: MobileMonitor, env?: Env) {
 }
 
 async function ownerFromVerifiedIdentity(
-  issuer: string, subject: string, env: Env, registerOnCreate: boolean,
+  issuer: string, subject: string, env: Env,
 ): Promise<string | null> {
-  // Existing signed-in users are read-only: do not attempt INSERT/COUNT on
-  // every GET/PATCH/POST. First-time registration still uses ONE atomic,
-  // bounded D1 INSERT, retaining the issuer+subject uniqueness guarantee.
+  // A signed user's read or retry does not mutate the identity registry.
+  // The only onboarding write is bundled atomically with a first monitor.
   const existing = await env.DB.prepare(`SELECT id FROM user_identities WHERE issuer=? AND subject=?`)
     .bind(issuer, subject).first<Identity>();
-  if (existing) {
-    if (!UUID.test(existing.id)) throw new Error('identity_mapping_invalid');
-    return existing.id;
-  }
-  // Viewing an empty cloud list or probing another monitor is not account
-  // registration. Only an explicitly requested, valid first POST can consume
-  // one of the 20 durable mobile pilot identity slots.
-  if (!registerOnCreate) return null;
-  const candidate = crypto.randomUUID();
-  const now = Date.now();
-  await env.DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at)
-    SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM user_identities) < 20
-    ON CONFLICT(issuer,subject) DO NOTHING`)
-    .bind(candidate, issuer, subject, now).run();
-  // Under concurrent first requests the winning identity mapping is stable.
-  const found = await env.DB.prepare(`SELECT id FROM user_identities WHERE issuer=? AND subject=?`)
-    .bind(issuer, subject).first<Identity>();
-  if (!found) throw new IdentityCapacityError();
-  if (!UUID.test(found.id)) throw new Error('identity_mapping_invalid');
-  return found.id;
+  if (existing && !UUID.test(existing.id)) throw new Error('identity_mapping_invalid');
+  return existing?.id ?? null;
 }
 
 function parseSyncInput(body: unknown): { clientDraftId: string; owner: string; repo: string; intervalMinutes: number } {
@@ -84,13 +65,14 @@ async function fingerprint(owner: string, repo: string, intervalMinutes: number)
 
 async function createSyncMonitor(
   body: ReturnType<typeof parseSyncInput>, env: Env, ownerId: string,
+  prewritten?: {digest: string; changes: number},
 ): Promise<Response> {
-  const digest = await fingerprint(body.owner, body.repo, body.intervalMinutes);
+  const digest = prewritten?.digest ?? await fingerprint(body.owner, body.repo, body.intervalMinutes);
   const now = Date.now(), id = crypto.randomUUID();
   // Single D1 SQL statement enforces the quota at insert time, avoiding a TOCTOU count-then-write.
   // Unique(owner_id,client_draft_id) guarantees retry cannot create a second monitor.
   try {
-    const result = await env.DB.prepare(`INSERT OR IGNORE INTO monitors(
+    const result = prewritten ? {meta:{changes:prewritten.changes}} : await env.DB.prepare(`INSERT OR IGNORE INTO monitors(
       id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at,
       client_draft_id,sync_request_digest
     ) SELECT ?,?,?,?,'PAUSED',?,?,?,?,?,?
@@ -125,6 +107,48 @@ async function createSyncMonitor(
     }
     throw error;
   }
+}
+
+/**
+ * The FIRST monitor is an atomic unit with its identity mapping. A D1 batch
+ * rolls back the registration if any statement throws. If monitor insertion
+ * merely returns zero changes (INSERT OR IGNORE), the third statement deletes
+ * ONLY the candidate identity if it owns zero monitors, in the same transaction.
+ * A concurrent first POST cannot delete a different winner's identity.
+ */
+async function createFirstSyncMonitor(
+  body: ReturnType<typeof parseSyncInput>, env: Env, issuer: string, subject: string,
+): Promise<Response> {
+  const candidate=crypto.randomUUID(),monitorId=crypto.randomUUID(),now=Date.now();
+  const digest=await fingerprint(body.owner,body.repo,body.intervalMinutes);
+  const [identityWrite,monitorWrite,rollbackUnused] = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at)
+      SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM user_identities) < 20
+      ON CONFLICT(issuer,subject) DO NOTHING`)
+      .bind(candidate,issuer,subject,now),
+    env.DB.prepare(`INSERT OR IGNORE INTO monitors(
+      id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at,
+      client_draft_id,sync_request_digest
+    ) SELECT ?,identity.id,?,?,'PAUSED',?,?,?,?,?,? FROM user_identities identity
+      WHERE identity.issuer=? AND identity.subject=?
+      AND (SELECT COUNT(*) FROM monitors WHERE owner_id=identity.id)<3`)
+      .bind(monitorId,body.owner,body.repo,body.intervalMinutes,now,now,now,
+        body.clientDraftId,digest,issuer,subject),
+    env.DB.prepare(`DELETE FROM user_identities
+      WHERE id=? AND issuer=? AND subject=?
+        AND NOT EXISTS (SELECT 1 FROM monitors WHERE owner_id=?)`)
+      .bind(candidate,issuer,subject,candidate),
+  ]);
+  const ownerId=await ownerFromVerifiedIdentity(issuer,subject,env);
+  if (rollbackUnused.meta.changes===1) {
+    // Do not claim an onboarded identity when its first monitor wasn't saved.
+    throw new Error('first_monitor_not_persisted');
+  }
+  if (!ownerId) {
+    if (identityWrite.meta.changes===0) throw new IdentityCapacityError();
+    throw new Error('first_monitor_identity_missing');
+  }
+  return createSyncMonitor(body,env,ownerId,{digest,changes:monitorWrite.meta.changes});
 }
 
 async function listSyncMonitors(env: Env, ownerId: string): Promise<Response> {
@@ -222,9 +246,10 @@ export async function mobileSync(request: Request, env: Env, path: string): Prom
   const createInput = creating ? parseSyncInput(await boundedJson(request)) : null;
   const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null;
 
-  const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating);
+  const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env);
   if (!ownerId) {
     if (listing) return json({monitors:[]});
+    if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject);
     return json({error:'not_found'},404);
   }
   if (listing) return listSyncMonitors(env,ownerId);
