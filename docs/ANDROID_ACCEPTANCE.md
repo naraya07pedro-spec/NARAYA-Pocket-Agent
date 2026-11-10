@@ -1,4 +1,16 @@
-# Android acceptance matrix | P1-J dual activation guard; physical device and remote Cloudflare still unverified
+# Android acceptance matrix | P1-K honest cloud scheduler status; physical device and remote Cloudflare still unverified
+
+## P1-K Android cloud-state safety contract (source verified, physical device NOT TESTED)
+
+**Current Android response behavior:** `CloudSyncClient` strictly requires server Booleans `schedulerEligible` and `scheduled`. PAUSED cannot claim eligibility/execution; ACTIVE can be a stored status while Cron is ineligible under a global kill-switch. Both local-draft cloud mapping and server-monitor listing now say **eligibility in the last successful snapshot**, not simply "ACTIVE means running." `scheduled:false` is a conservative server report; remote execution and a phone physically OFF remain unverified. Status changes advance only a matching row with exactly the next version and always clear any unverified scheduled state.
+
+**Recovery:** a server HTTP **503 scheduler_storage_unavailable** yields a bounded, typed failure and an operator-actionable message to verify D1 migrations **0001–0004**; unknown/oversized error JSON cannot echo an upstream token. Valid server monitor interval **45 minutes** is now read correctly, while local draft presets remain intentionally limited. Old servers without mandatory flags will fail closed, not silently claim execution.
+
+**CI evidence before final docs:** [Android debug build 42791519376](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519376), source `cc7c526965db60099b35326eadce4ccce8e69e8e`, **18/18 CloudSyncClient JVM security tests executed (0 failures/errors/skips)**, APK SHA256 `8a3bca16a885d8016d76ae305ee6acb09cb1575e6271f37191ffff0eaa212bdc`; [Node+preflight 42791519409](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519409) 59/59, [local workerd/D1 42791519518](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519518) 10/10; all 5/5 CI on that SHA. [ADR-0012](ADR/0012-android-cloud-truth-and-fail-closed-recovery.md).
+
+**Still missing:** signed-in real Google account, deployed Cloudflare Worker/D1/Cron with account Free CPU/billing inspection, actual Android performance and physically switching OFF the phone while remote Cron checks GitHub and persists an observation. Debug APK has blank Worker origin and Google Web Client ID. No remote execution claim.
+
+---
 
 ## P1-J signed-owner ACTIVE acceptance (source tested, real provider NOT VERIFIED)
 
