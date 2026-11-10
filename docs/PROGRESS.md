@@ -1,5 +1,31 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-C first implementation slice: server-side cryptographic identity verification
+
+**Implemented on PR #7 development branch (not merged to main):**
+- `worker/src/oidc.ts`: fail-closed, bounded RS256 JWT verification against operator-configured HTTPS JWKS. Exact issuer, audience, subject, iat, exp, optional nbf/azp, kid, key selection and WebCrypto signature verification; 3-second bounded JWKS fetch, no redirects, 64 KiB body limit. The token never selects the JWKS host.
+- `GET /v1/me`: distinct read-only identity probe; returns `authenticated: true` and `monitorSync: false` only after verification. No operator bearer accepted as mobile identity. No new D1 writes, third-party sends or app token storage.
+- 7 adversarial OIDC test cases with generated RSA keys and synthetic token/JWKS fixtures, plus existing 12 backend tests, included in `npm test`.
+- Existing pilot owner-token endpoints and scheduler remain unchanged. User-scoped SQL, Android authenticated sync and remote Cloudflare are NOT implemented.
+
+**Source proof:** [source CI run 42747877456](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42747877456) at source SHA `af55967f6d6370861dc1b02367a7c53883f08219`: **19/19 passing tests, TypeScript typecheck SUCCESS, no credential-file gate SUCCESS**. The test harness initially failed 1 test on prior SHA `24c83e393424f6582daa16dae1ea545929432272` because the synthetic JWKS hostname was not stubbed in the Worker endpoint test (returned expected 503 for unreachable provider); corrected by mocking global fetch in the test only, not by weakening verification. Subsequent source CI passed.
+
+**Status separation:** IMPLEMENTED = backend verifier and probe. TESTED = deterministic synthetic crypto and CI. LIVE_VERIFIED = none for real OIDC/mobile sign-in, cloud sync, remote D1/Cron or physical Android. **Next gate:** owner-scoped authorization and D1 isolation tests, followed by idempotent sync. Provider selection, real Android OIDC integration, and deployment need separate evidence and approval. JWKS caching, provider rotation strategy and identity subject-to-user mapping need design/verification before release. Final PR HEAD SHA after documentation edits must be CI checked separately.
+
+---
+
+## 2026-11-10 | Continuation checkpoint | P1-B verified, P1-C contract prepared
+
+**Read-only verification performed:** default-branch latest merged commit is `e1e0dd7034d85500d3e7ab4474b7bc853a8ef7d1` (PR #6). Existing issue #5 records five successful CI workflows on exact merged SHA, and Android APK SHA-256 `2f7ba572db031705cf9cca4373fa6d66a6f365283487a2a9a1a960cda83aa137` ([Android run 42669136705](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42669136705)). The earlier source SHA `d90887a3...` is not the final merge SHA.
+
+**This continuation's deliverable:** [ADR-0004](ADR/0004-secure-android-cloud-sync.md), a proposed implementation contract for OIDC verification, SQL-level user isolation, idempotent draft sync, fail-closed authentication and replay/IDOR test gates. **Documentation/design only, not code implementation or cloud authorization.**
+
+**Implemented:** existing P1-B backend and Android source on main. **Tested:** prior CI per issue #5. **Live-verified:** official public GitHub GET in CI, not remote Cloudflare and not physical device. **Blocked:** deployed remote D1/Cron and powered-off-device proof pending explicit owner authorization; physical Android benchmark unavailable. **Next evidence gate:** code and automated tests for verified-user identity plus cross-user isolation, then idempotent sync; independent issue #2 for real Cloudflare/phone-off acceptance.
+
+**Decisions preserved:** Android-first; personal then business; no embedded operator token; no unapproved external writes or deployment; zero additional spend target. No claims of actual OAuth integration, synchronized monitor, device runtime, remote task completion, or user validation.
+
+---
+
 ## 2026-11-10 | P1-B: Android manual live-provider preview and durable local snapshots
 
 **Implementation committed to feature branch:** Kotlin `GithubHeadClient` with fixed official GitHub HTTPS GET and redirects disabled; bounded 32 KiB response, UTF-8/SHA validation, error classification; background-thread execution via coroutines; Compose UI manual Check now action; locally saved successful commit SHA/timestamp; backwards-compatible `DraftCodec` retaining P1-A drafts and ignoring individual corrupt records. Android version 0.2.0-alpha adds only INTERNET permission, no backend operator token.
