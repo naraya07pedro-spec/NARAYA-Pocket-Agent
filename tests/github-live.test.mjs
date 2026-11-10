@@ -9,16 +9,20 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const inputSql = readFileSync(new URL('../worker/migrations/0001_initial.sql', import.meta.url), 'utf8');
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql'];
+const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 const owner = 'live-provider-readonly-test';
 const token = 'synthetic-local-owner-test-only-very-long';
 const repo = 'naraya07pedro-spec/NARAYA-Pocket-Agent';
 
 async function migration(db) {
-  // D1 exec accepts single-line SQL, not the whole multiline migration verbatim.
-  const clean = inputSql.split('\n').filter(x => !x.trimStart().startsWith('--')).join('\n');
-  for (const sql of clean.split(';').map(x => x.trim()).filter(Boolean)) {
-    await db.prepare(sql).run();
+  // Apply the complete additive chain. A live-read fixture with only the initial
+  // schema silently understates the actual scheduler's migration requirements.
+  for (const content of migrationSql) {
+    const clean = content.split('\n').filter(x => !x.trimStart().startsWith('--')).join('\n');
+    for (const sql of clean.split(';').map(x => x.trim()).filter(Boolean)) {
+      await db.prepare(sql).run();
+    }
   }
 }
 
