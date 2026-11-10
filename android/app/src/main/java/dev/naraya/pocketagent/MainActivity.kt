@@ -312,10 +312,10 @@ private fun MonitorDraftScreen(
                                 onClick = {
                                     if (store.remove(draft.id)) {
                                         drafts = store.list()
-                                        notice = "Repository removed from this phone"
+                                        notice = "Local draft removed ONLY. Any separate cloud monitor remains unchanged; sign in and refresh cloud state."
                                     } else notice = "Could not save removal"
                                 }
-                            ) { Text("Remove") }
+                            ) { Text("Remove local only") }
                         }
                     }
                 }
