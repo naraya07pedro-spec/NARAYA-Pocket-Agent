@@ -1,5 +1,19 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-Q | Explicit Cloudflare GET-only account inventory (10 November 2026; exact PR-head CI PENDING)
+
+| Claim | Classification | Current evidence boundary |
+| --- | --- | --- |
+| Inspector implements explicit live opt-in, allowlisted GET Cloudflare metadata endpoints, no API write method or arbitrary target | IMPLEMENTED_SOURCE; TEST_PENDING | [Inspector source](../scripts/cloudflare-readonly-inspect.mjs), [test suite](../tests/cloudflare-readonly-inspect.test.mjs); check Node CI on **exact final PR HEAD** before raising classification |
+| Private owner account IDs/tokens/D1 UUIDs absent from structured report, malformed responses fail closed, pagination incompleteness is not passed as complete | IMPLEMENTED_SOURCE; TEST_PENDING | Offline mocked-fetch tests added; not actual Cloudflare API integration or external penetration test |
+| Current account plan, billing state, daily D1 usage, Free CPU, runtime Cron status/CPU, remote migration 0001–0005, physical Android phone-OFF | **NOT_VERIFIED** | No owner's Cloudflare account connected; no live read-only inspector run, deployment, or new provider cost. Even a successful GET report explicitly remains BLOCKED |
+| Official Free quotas as of 10 Nov 2026 | WEB_DOCUMENTED_NOT_ACCOUNT_VERIFIED | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 September 2026 Free enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/) |
+
+Keep P1-P [5/5 CI](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/22) historical; do **not** attribute it to P1-Q branch or postmerge main. [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md).
+
+---
+
+
 ## P1-P | Atomic first identity+monitor D1 batch and orphan prevention (10 November 2026; PR #22 MERGED, local only)
 
 | Claim | Evidence classification | Exact source and limits |
