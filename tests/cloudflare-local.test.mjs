@@ -356,3 +356,73 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+test('Local workerd/D1: public JWKS cache reuses keys across two separately owned signed-user requests', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-jwks-cache-'));
+  let platform;
+  const oldFetch=globalThis.fetch;
+  const oldCaches=Object.getOwnPropertyDescriptor(globalThis,'caches');
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const RSA={name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'};
+    const pair=await crypto.subtle.generateKey(RSA,true,['sign','verify']);
+    const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'cached-local-key',alg:'RS256',use:'sig'};
+    const iss='https://google.example.invalid',aud='pocket-agent-test',jwks='https://keys.example.invalid/jwks';
+    const enc=obj=>Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const signed=async sub=>{
+      const now=Math.floor(Date.now()/1000);
+      const text=enc({alg:'RS256',kid:'cached-local-key'})+'.'+enc({iss,aud,sub,iat:now-30,exp:now+1200});
+      const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(text));
+      return text+'.'+Buffer.from(sig).toString('base64url');
+    };
+    let jwksCalls=0,opens=0;
+    globalThis.fetch=async (url,opts)=>{
+      assert.equal(url,jwks);
+      assert.equal(opts.method,'GET');
+      assert.equal(opts.redirect,'error');
+      jwksCalls++;
+      return new Response(JSON.stringify({keys:[key]}),{
+        headers:{'Cache-Control':'public, max-age=300'},
+      });
+    };
+    const cacheStore=new Map();
+    Object.defineProperty(globalThis,'caches',{
+      configurable:true,
+      value:{async open(namespace){
+        opens++;
+        assert.equal(namespace,'naraya-pocket-agent-public-jwks-v1');
+        return {
+          async match(request){return cacheStore.get(request.url)?.clone()},
+          async put(request,response){cacheStore.set(request.url,response.clone())},
+        };
+      }},
+    });
+    const env={DB,OIDC_ISSUER:iss,OIDC_AUDIENCE:aud,OIDC_JWKS_URL:jwks};
+    const tokenA=await signed('google-a'),tokenB=await signed('google-b');
+    const get=token=>worker.fetch(new Request(base+'/v1/sync/monitors',{
+      headers:{authorization:'Bearer '+token},
+    }),env);
+    const a=await get(tokenA),b=await get(tokenB);
+    assert.equal(a.status,200);
+    assert.equal(b.status,200);
+    assert.deepEqual(await a.json(),{monitors:[]});
+    assert.deepEqual(await b.json(),{monitors:[]});
+    assert.equal((await DB.prepare('SELECT COUNT(DISTINCT id) AS n FROM user_identities').first()).n,2);
+    assert.equal(jwksCalls,1,'same configured public key can serve both independently signed users');
+    assert.equal(opens,2,'Cache API discovered on each request, no shared Promise');
+    assert.equal(cacheStore.size,1);
+    const raw=await cacheStore.get(jwks).clone().text();
+    assert.ok(!raw.includes('google-a'));
+    assert.ok(!raw.includes('google-b'));
+    assert.ok(!raw.includes('Bearer'));
+  } finally {
+    globalThis.fetch=oldFetch;
+    if(oldCaches)Object.defineProperty(globalThis,'caches',oldCaches);
+    else delete globalThis.caches;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});

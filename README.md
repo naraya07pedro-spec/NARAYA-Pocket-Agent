@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-F Android explicit owner-scoped pause/activate controls and server observation history merged in PR #12 (13 Android security tests + 6 local D1 tests verified), building on P1-E Google sign-in/manual sync and P1-D bounded scheduler. Default Android APK has no OAuth client ID or Worker origin, and mobile server scheduling stays OFF; there is no deployed remote cloud agent.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-G bounded public OIDC JWKS Cache API added via PR #13 (local security/CI verification, no remote deployment), on top of P1-F Android monitor controls, P1-E explicit Google sign-in code and P1-D bounded scheduler. Default Android APK has no Google OAuth client ID or Worker origin and server mobile scheduling stays OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,10 @@
 - 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-G OIDC JWKS reliability and cost guard (PR #13, source-verified)
+
+The server-side RS256 verifier now optionally reuses **public signing-key JWKS** through a dedicated Cloudflare `caches.open('naraya-pocket-agent-public-jwks-v1')` namespace. The provider must explicitly allow public max-age caching; TTL is at most five minutes, data is bounded, tokens and user identity are never cached, and **every** token still receives a separate cryptographic verification. Expired keys + provider outage fail closed, never use stale identity data. Cache unavailable => use a fresh provider read, with no presumption of fewer remote requests. An initial unsafe cross-request Promise design was abandoned during red-team review. See [ADR-0008](docs/ADR/0008-request-safe-oidc-jwks-cache.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md). **No Google-issued token or Cloudflare remote hit rate has been tested**.
 
 ## P1-F Android monitor controls (merged PR #12, source CI only)
 

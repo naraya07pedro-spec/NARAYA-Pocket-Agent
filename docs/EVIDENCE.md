@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-G: request-safe public JWKS Cache API (10 November 2026, source CI)
+
+| Claim | Evidence classification | Exact SHA and proof |
+| --- | --- | --- |
+| Public JWKS Cache API named namespace, bounded TTL ≤300sec, no user data / auth outcomes cached, RSA signature checked for each token, fail-closed expired keys | CI_VERIFIED_SYNTHETIC | [Backend source CI 42770060702](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060702), SHA `5bdad79e2821f0cb7418e0d1e2b09e542a26e4e0`, **40/40 tests PASS**, TypeScript typecheck. Seven added adversarial verifier cases use mock cache and signed test JWTs |
+| Cloudflare local D1 + two subject isolation with key reuse | CI_VERIFIED_LOCAL_WORKERD | [Cloudflare workerd/D1 CI 42770060770](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060770), same SHA, **7/7 PASS**. Cache API namespace injected locally, real D1 binding, test RSA keys; NOT Google production keys or Cloudflare remote caching |
+| Read-only GitHub provider / Android regressions | CI_VERIFIED | [Worker provider read 42770060997](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060997), [Android adapter 42770061012](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770061012), [Android APK 42770060723](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060723), SUCCESS on same SHA |
+| Real Google OIDC production issuer/audience/cache headers, Cloudflare remote Cache API efficiency, phone-off Cron, account quotas and actual spend | NOT_VERIFIED | No live OAuth account or token, deployed Cloudflare Worker/cache/cron/D1, physical device, account billing data or latency measurements used |
+
+**Red-team design history:** first candidate `ea5af66ff404c038f72899c3d8d88f8b676c439e` used a module-global WeakMap/in-flight JWKS fetch Promise. After checking Cloudflare current best practices for reused isolates, it was **abandoned and replaced** with a per-request discovery of a dedicated Cache API namespace. No cross-request single-flight guarantee remains. Do not claim the first candidate is running.
+
+**Source references:** Google OIDC documentation https://developers.google.com/identity/openid-connect/openid-connect, Cloudflare request-scoped state https://developers.cloudflare.com/workers/best-practices/workers-best-practices/, Cloudflare Cache API https://developers.cloudflare.com/workers/runtime-apis/cache/. See [ADR-0008](ADR/0008-request-safe-oidc-jwks-cache.md).
+
+**Important:** the above workflows are tied to **source SHA `5bdad79e2821f0cb7418e0d1e2b09e542a26e4e0`**. Documentation follow-up commits and merged `main` have separate SHAs and must not inherit a fabricated claim of independent CI. JWKS cache is opportunistic; the code does not promise production hit rates or free-tier account costs. `MOBILE_SCHEDULING_ENABLED` remains OFF by default.
+
+---
+
 ## P1-F: Android monitor-control and owner-observation evidence (10 November 2026, PR #12 merged)
 
 | Gate | Evidence class | Exact evidence / limitation |
