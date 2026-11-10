@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-C scoped user monitor sync (source CI)
+
+| Gate | Class | Concrete proof and limits |
+| --- | --- | --- |
+| Server-owned identity mapping | CI_VERIFIED_SYNTHETIC | Signed RS256 test identities map to opaque UUID in D1, not client owner fields; no real OIDC provider verified |
+| Owner-isolated monitors and observations | CI_VERIFIED_LOCAL | 28/28 tests [offline CI 42750701827](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701827); cross-account list/observation access denied |
+| Idempotent create and quota | CI_VERIFIED_LOCAL | Same draft ID/content replays to same server monitor ID, changed payload conflicts; owner-specific cap 3 checked in atomic SQL statement |
+| Real Cloudflare-compatible local D1 | CI_VERIFIED_LOCAL_WORKERD | 4/4 [workerd/D1 CI 42750701808](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701808); migration upgrade preserves operator row, replay works across runtime restart |
+| Regression on preexisting GitHub and Android | CI_VERIFIED | [Worker live GET 42750701796](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701796), [Android adapter 42750702269](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750702269), [Android build 42750701661](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701661) all SUCCESS |
+| Actual Android identity + client sync | NOT_IMPLEMENTED | No mobile OIDC login, token lifecycle or cloud-monitor screen; backend API only |
+| Multi-user scheduled execution | NOT_IMPLEMENTED | Mobile monitors created PAUSED, legacy scheduler scoped to OWNER_ID |
+| Remote Cloudflare D1/Cron + phone off | NOT_VERIFIED | No deployed resource or device-off test. See issue #2 |
+
+All above CI links refer to **source SHA `633ccda10beda76d864a1ee9cd1303e284bf8268`**. No cloud resource provisioning, live OIDC token, external writes or free-tier accounting was performed. Review final HEAD and merged main separately.
+
+---
+
 ## 2026-11-10 P1-C identity boundary: source proof only
 
 | Gate | Classification | Evidence and limitation |
