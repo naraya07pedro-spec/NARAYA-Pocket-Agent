@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-L | Shared observation contract and bounded SHA-chain validation (10 November 2026, PR #18; source/local only)
+
+| Claim | Evidence class | Exact verified proof |
+| --- | --- | --- |
+| Android rejects impossible multi-event SHA chains, duplicate BASELINE, no-op CHANGE and invalid baseline time; accepts 50-row truncated history and avoids inferring order from tied timestamps | CI_VERIFIED_ANDROID_JVM | [Android debug/JVM 42794662385](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662385), source `8e1c90df378a2848b511031317bcc097de395a51`: **20/20 CloudSyncClientTest PASS**, zero failures/errors/skips; debug APK SHA256 `2a4cb7f5522d5f14920792c4b5f3d1a31c9971548ad65138eabc7d4ddb26ea38` |
+| Exact same synthetic observation JSON file can be serialized by owner-scoped Worker HTTP API and parsed by Android JVM, while different signed user gets 404 | CI_VERIFIED_CROSS_RUNTIME_CONTRACT_LOCAL_DB | [Node/preflight 42794662760](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662760): **62/62 PASS**, including direct Worker owner-scoped GET on seeded local SQLite/D1-like data from `android/app/src/test/resources/mobile-observations-v1.json`. Android consumes the exact file in its JVM test. **Seeded data, not a Cron observation** |
+| Actual local scheduler can produce BASELINE → CHANGE → CHANGE with correct SHA predecessor links for signed owner | CI_VERIFIED_SYNTHETIC_SCHEDULER | Same [Node 42794662760](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662760): three `runScheduler` calls, synthetic `a/b/c` GitHub responses, separated quota windows, resulting owner-scoped HTTP GET. Does **not** prove remote Cloudflare Cron |
+| Existing real local Cloudflare D1 binding and official public read-only GitHub GET still pass | CI_VERIFIED_LOCAL_WORKERD_D1_AND_PROVIDER | [workerd/D1 42794663050](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794663050) **10/10**, [public real GitHub read / local D1 42794662545](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662545) SUCCESS, [Android provider 42794662593](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662593) SUCCESS |
+| Real Google OAuth token, cloud-side D1/Cron with powered-OFF phone, billed/Free CPU evidence | NOT_VERIFIED | No remote Worker, actual Cloudflare D1 migration, real Google identity, physical Android, signed-in app, real Cron task, usage/account read or fee was involved |
+
+**First source gate:** exact SHA `8e1c90df378a2848b511031317bcc097de395a51` **5/5 workflows SUCCESS**. Later documentation commits require a new final exact-head verification. Source preflight reports `source_safety: PASS`, `remote_readiness: BLOCKED`. The shared JSON is a **nonsecret synthetic contract fixture** and not an event exported from the actual Cloudflare service.
+
+**Important limitation:** when multiple returned events share an `observed_at` millisecond, ordering by event UUID is not causal. Kotlin intentionally skips cross-event SHA linkage in that case, so this milestone **cannot guarantee** that every tied-time history is internally consistent; individual event validity is still checked. This trade-off is documented in [ADR-0013](ADR/0013-observation-history-cross-runtime-contract.md). A 50-event limit can exclude the original baseline, which is therefore not required on every page.
+
+---
+
 ## P1-K | Android truthful cloud status and typed scheduler error (10 November 2026; PR #17 merged; no remote deployment)
 
 | Claim | Evidence class | Inspectable proof |
