@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-S | Owner-run Cloudflare Billing Read metadata inspection (2026-11-10)
+
+| Claim | Evidence class | Source and limit |
+| --- | --- | --- |
+| Cloudflare account subscription list and billing history support owner-only API GET with **Billing Read** permission | OFFICIAL_PROVIDER_API_DOCUMENTED | [Subscriptions list API](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/), [billing history API](https://developers.cloudflare.com/api/resources/billing/subresources/history/methods/list/). Authentication/permission **has not been tested** against a real owner's account |
+| New inspector offline-by-default, explicit owner-provided scoped token, fixed-host GET, reject redirects, bounded response bytes, sanitized status fields | OFFLINE_SOURCE_AND_MOCKED_FETCH_TESTS | [Inspector](../scripts/cloudflare-billing-readonly.mjs) and [tests](../tests/cloudflare-billing-readonly.test.mjs), 14 new mock tests; original P1-R D1 inventory script unchanged |
+| Billing history with `result_info.total_count` requires complete 20-item page sequence, bounded at 5 pages; no zero-bill assertion from partial pages | OFFLINE_MOCKED_FETCH_TESTS | Tests cover short first page, second-page positive amount, contradictory page/total/count, missing metadata, 5-page stop, provider 403. API response formats are mocked, not actually retrieved |
+| Empty subscription/historic results cannot certify Free plan, current charges, or future Rp0 | CONSERVATIVE_ENGINEERING_INVARIANT | `current_free_tier_proven:false`, `future_zero_extra_cost_proven:false`, `account_plan:NOT_VERIFIED`, `account_billing:NOT_VERIFIED`, `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false` remain fixed in all outcomes |
+| Account-specific D1 billable rows, Worker CPU, current/estimated balance, invoice settlement, Google OAuth and actual phone OFF | **NOT_VERIFIED** | No account token, billing API, payment record, remote Cloudflare D1/Cron or Android phone inspected. [Cloudflare D1 analytics](https://developers.cloudflare.com/d1/observability/metrics-analytics/) distinguishes raw query counts from rows read/written and warns analytics is not comprehensive for failed requests |
+| Final SHA CI and merged PR | **PENDING_FINAL_HEAD_VERIFICATION** | Do not infer 5/5 from earlier commits. Inspect five workflows for the exact PR HEAD and separately for main after merge |
+
+See [ADR-0020](ADR/0020-owner-cloudflare-billing-readonly-preflight.md), [PROGRESS](PROGRESS.md), [owner runbook](REMOTE_PILOT_READINESS.md), [PR #25](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/25). GitHub CI is source/local evidence, not authenticated Cloudflare billing evidence.
+
+---
+
+
 ## P1-R | D1 result_info pagination truth and bounded Cloudflare GET reads (10 Nov 2026)
 
 | Claim | Evidence classification | Exact evidence and limits |
