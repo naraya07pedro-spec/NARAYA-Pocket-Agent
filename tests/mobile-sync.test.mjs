@@ -538,7 +538,7 @@ test('migration 0005 durably backfills preexisting observation insertion order w
     db.exec(readFileSync(new URL('../worker/migrations/0005_observation_event_sequence.sql',import.meta.url),'utf8'));
     let after=db.prepare('SELECT id,event_type,head_sha,observed_at,event_sequence FROM observations ORDER BY event_sequence').all();
     assert.deepEqual(after.map(x=>x.event_sequence),[1,2]);
-    assert.deepEqual(after.map(({event_sequence,...rest})=>rest),before);
+    assert.deepEqual(after.map(({event_sequence,...rest})=>rest),before.map(row=>({...row})));
     // Explicitly copied sequence is stable across a local VACUUM.
     db.exec('VACUUM');
     after=db.prepare('SELECT id,event_sequence FROM observations ORDER BY event_sequence').all();
