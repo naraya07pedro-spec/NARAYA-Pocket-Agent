@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,18);
+  assert.equal(result.checks.length,19);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -250,5 +250,21 @@ test('P1-P static guard refuses splitting identity registration from its first m
   for(const mutate of bad){
     const snap=clone();mutate(snap);
     assert.ok(failures(audit(snap)).includes('first_monitor_identity_and_monitor_are_one_d1_transaction'));
+  }
+});
+
+test('P1-V preflight blocks removal of explicit Android presenter or Google canonical identity guards',()=>{
+  const tamper=[
+    x=>{x.oidcSource=x.oidcSource.replace('!authorizedPresenters.has(payload.azp)','false');},
+    x=>{x.oidcSource=x.oidcSource.replace('payload.aud !== audience','false');},
+    x=>{x.oidcSource=x.oidcSource.replace(
+      "issuer === 'https://accounts.google.com' && payload.iss === 'accounts.google.com'","false");},
+    x=>{x.oidcSource=x.oidcSource.replace(
+      'const valid = await crypto.subtle.verify(','const valid = await Promise.resolve(');},
+    x=>{x.workerTypes=x.workerTypes.replace('OIDC_AUTHORIZED_PRESENTERS?: string','OIDC_ANY_TOKEN?: string');},
+  ];
+  for(const mutate of tamper){
+    const snap=clone();mutate(snap);
+    assert.ok(failures(audit(snap)).includes('oidc_google_presenter_explicit_and_issuer_canonical'));
   }
 });

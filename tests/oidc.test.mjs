@@ -328,3 +328,123 @@ test('Worker runtime discovers dedicated named JWKS cache per request without gl
     else delete globalThis.caches;
   }
 });
+
+
+const GOOGLE_ISSUER='https://accounts.google.com';
+const GOOGLE_LEGACY_ISSUER='accounts.google.com';
+const GOOGLE_WEB_CLIENT='1234567890-serverweb.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT='1234567890-androidapp.apps.googleusercontent.com';
+const OTHER_ANDROID_CLIENT='1234567890-untrusted.apps.googleusercontent.com';
+const googleSettings={
+  ...settings,OIDC_ISSUER:GOOGLE_ISSUER,OIDC_AUDIENCE:GOOGLE_WEB_CLIENT,
+  OIDC_AUTHORIZED_PRESENTERS:GOOGLE_ANDROID_CLIENT,
+};
+function googleClaims(issuer=GOOGLE_ISSUER){
+  return {...goodPayload,iss:issuer,aud:GOOGLE_WEB_CLIENT,azp:GOOGLE_ANDROID_CLIENT};
+}
+
+test('P1-V: configured Android presenter differs from server aud but authentic RSA Google-issuer token is accepted',async()=>{
+  const signed=await sign(googleClaims());
+  const result=await verifyOidcBearer(request(signed),googleSettings,keys(),fixedTime);
+  assert.deepEqual(result,{issuer:GOOGLE_ISSUER,subject:goodPayload.sub});
+  const signedLegacy=await sign(googleClaims(GOOGLE_LEGACY_ISSUER));
+  const normalized=await verifyOidcBearer(request(signedLegacy),googleSettings,keys(),fixedTime);
+  assert.deepEqual(normalized,result,'issuer aliases must map to the same durable identity');
+});
+
+test('P1-V: Android azp is NOT implicitly trusted without explicit operator allowlist',async()=>{
+  const input=await sign(googleClaims());
+  let calls=0;
+  await assert.rejects(verifyOidcBearer(request(input),{
+    ...googleSettings,OIDC_AUTHORIZED_PRESENTERS:undefined,
+  },async()=>{calls++;throw Error('never fetch unauthorized presenter')},fixedTime),AuthRejected);
+  assert.equal(calls,0);
+});
+
+test('P1-V: malicious presenter remains rejected even when a legitimate Android ID is allowlisted',async()=>{
+  let calls=0;
+  const token=await sign({...googleClaims(),azp:OTHER_ANDROID_CLIENT});
+  await assert.rejects(verifyOidcBearer(request(token),googleSettings,
+    async()=>{calls++;throw Error('must not fetch unauthorized client')},fixedTime),AuthRejected);
+  assert.equal(calls,0);
+});
+
+test('P1-V: authorized Android presenter never bypasses the backend audience or expiry',async()=>{
+  let calls=0;
+  const denied=[
+    {...googleClaims(),aud:OTHER_ANDROID_CLIENT},
+    {...googleClaims(),aud:[GOOGLE_WEB_CLIENT,OTHER_ANDROID_CLIENT]},
+    {...googleClaims(),exp:current-1},
+    {...googleClaims(),iat:current+120},
+    {...googleClaims(),iss:'https://evil.invalid'},
+  ];
+  for(const payload of denied){
+    const token=await sign(payload);
+    await assert.rejects(verifyOidcBearer(request(token),googleSettings,
+      async()=>{calls++;throw Error('untrusted claims reached JWKS')},fixedTime),AuthRejected);
+  }
+  assert.equal(calls,0);
+});
+
+test('P1-V: malformed or overly permissive presenter allowlist is a server configuration error',async()=>{
+  const signed=await sign(googleClaims());
+  const configs=[
+    ',',GOOGLE_ANDROID_CLIENT+',',','+GOOGLE_ANDROID_CLIENT,
+    GOOGLE_ANDROID_CLIENT+','+GOOGLE_ANDROID_CLIENT,
+    GOOGLE_WEB_CLIENT,
+    '*',
+    'malicious client', 'https://wrong.invalid',
+    GOOGLE_ANDROID_CLIENT+', '+OTHER_ANDROID_CLIENT,
+    [GOOGLE_ANDROID_CLIENT,OTHER_ANDROID_CLIENT,'third-client','fourth-client'].join(','),
+    'x'.repeat(601),
+    '\n'+GOOGLE_ANDROID_CLIENT,
+  ];
+  for(const value of configs){
+    let calls=0;
+    await assert.rejects(verifyOidcBearer(request(signed),{
+      ...googleSettings,OIDC_AUTHORIZED_PRESENTERS:value,
+    },async()=>{calls++;throw Error('unexpected network')},fixedTime),AuthUnavailable);
+    assert.equal(calls,0,JSON.stringify(value));
+  }
+});
+
+test('P1-V: Google issuer alias never becomes a generic OIDC wildcard',async()=>{
+  const signed=await sign({...goodPayload,iss:'accounts.example.invalid'});
+  let calls=0;
+  await assert.rejects(verifyOidcBearer(request(signed),settings,
+    async()=>{calls++;throw Error('unexpected fetch')},fixedTime),AuthRejected);
+  assert.equal(calls,0);
+});
+
+test('P1-V: even allowlisted Google Android presenter requires real signature verification',async()=>{
+  const good=await sign(googleClaims());
+  const [header,,signature]=good.split('.');
+  const forged=header+'.'+b64(JSON.stringify({...googleClaims(),sub:'attacker'}))+'.'+signature;
+  await assert.rejects(verifyOidcBearer(request(forged),googleSettings,keys(),fixedTime),AuthRejected);
+});
+
+test('P1-V: audience-only and self-presented Google tokens preserve default compatible behavior',async()=>{
+  for(const payload of [
+    {...goodPayload,iss:GOOGLE_ISSUER,aud:GOOGLE_WEB_CLIENT},
+    {...goodPayload,iss:GOOGLE_ISSUER,aud:GOOGLE_WEB_CLIENT,azp:GOOGLE_WEB_CLIENT},
+  ]){
+    const signed=await sign(payload);
+    const result=await verifyOidcBearer(request(signed),{
+      ...googleSettings,OIDC_AUTHORIZED_PRESENTERS:undefined,
+    },keys(),fixedTime);
+    assert.deepEqual(result,{issuer:GOOGLE_ISSUER,subject:goodPayload.sub});
+  }
+});
+
+test('P1-V: Worker read-only /v1/me accepts synthetic canonical Google ID token under explicit presenter policy',async()=>{
+  const token=await sign({
+    ...googleClaims(),iat:Math.floor(Date.now()/1000)-20,exp:Math.floor(Date.now()/1000)+900,
+  });
+  const old=globalThis.fetch;
+  try{
+    globalThis.fetch=keys();
+    const response=await worker.fetch(request(token),googleSettings);
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).authenticated,true);
+  }finally{globalThis.fetch=old}
+});

@@ -16,6 +16,7 @@ export interface Env {
   OIDC_ISSUER?: string;
   OIDC_AUDIENCE?: string;
   OIDC_JWKS_URL?: string;
+  OIDC_AUTHORIZED_PRESENTERS?: string;
   MOBILE_SCHEDULING_ENABLED?: string;
   SCHEDULER_ENABLED?: string;
 }

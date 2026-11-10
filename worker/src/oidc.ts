@@ -9,6 +9,9 @@ export interface OidcSettings {
   OIDC_ISSUER?: string;
   OIDC_AUDIENCE?: string;
   OIDC_JWKS_URL?: string;
+  // Optional comma-delimited allowlist of additional OAuth clients authorized
+  // to present a token with the exact configured backend audience.
+  OIDC_AUTHORIZED_PRESENTERS?: string;
 }
 
 type Fetcher = typeof fetch;
@@ -68,9 +71,25 @@ function claims(segment: string, maximum: number): JsonObject {
   } catch { throw new AuthRejected(); }
 }
 
-function config(settings: OidcSettings): { issuer: string; audience: string; jwks: string } {
+function config(settings: OidcSettings): {
+  issuer: string; audience: string; jwks: string; authorizedPresenters: ReadonlySet<string>
+} {
   const issuer = settings.OIDC_ISSUER, audience = settings.OIDC_AUDIENCE, jwks = settings.OIDC_JWKS_URL;
+  // Preserve generic OIDC audience support (some client IDs are URIs).
+  // The new restricted syntax applies ONLY to additional authorized parties.
   if (!issuer || !audience || !jwks || issuer.length > 200 || audience.length > 200) throw new AuthUnavailable();
+  const configured = settings.OIDC_AUTHORIZED_PRESENTERS;
+  if (configured !== undefined &&
+      (typeof configured !== 'string' || configured.length > 600)) throw new AuthUnavailable();
+  const values = configured ? configured.split(',') : [];
+  // Never accept wildcard, duplicate, whitespace, empty entry, or unbounded
+  // presenters. Explicit operator-approved clients ONLY. An empty config keeps
+  // the prior fail-closed azp == aud behavior by default.
+  if (values.length > 3 ||
+      values.some(value=>!value || value===audience ||
+        !/^[A-Za-z0-9._:-]{1,200}$/.test(value)) ||
+      new Set(values).size !== values.length) throw new AuthUnavailable();
+  const authorizedPresenters: ReadonlySet<string> = new Set([audience,...values]);
   try {
     const issuerUrl = new URL(issuer), keysUrl = new URL(jwks);
     for (const url of [issuerUrl, keysUrl]) {
@@ -79,7 +98,7 @@ function config(settings: OidcSettings): { issuer: string; audience: string; jwk
     }
     if (issuerUrl.toString().replace(/\/$/, '') !== issuer.replace(/\/$/, '') || keysUrl.toString() !== jwks) throw new AuthUnavailable();
   } catch { throw new AuthUnavailable(); }
-  return { issuer, audience, jwks };
+  return { issuer, audience, jwks, authorizedPresenters };
 }
 
 async function boundedJwks(url: string, fetcher: Fetcher): Promise<{ keys: JsonObject; bytes: Uint8Array; maxAgeMs: number }> {
@@ -199,15 +218,21 @@ export async function verifyOidcBearer(
       header.jku !== undefined || header.jwk !== undefined || header.x5u !== undefined ||
       header.crit !== undefined) throw new AuthRejected();
 
-  const { issuer, audience, jwks } = config(settings);
+  const { issuer, audience, jwks, authorizedPresenters } = config(settings);
   const now = Math.floor(nowMs / 1000);
-  if (payload.iss !== issuer || payload.aud !== audience ||
+  // Google documents exactly these two issuer spellings. For a configured
+  // canonical Google issuer only, normalize the legacy spelling to the SAME
+  // D1 issuer+sub identity. Never alias arbitrary third-party OIDC issuers.
+  const issuerMatches = payload.iss === issuer ||
+    (issuer === 'https://accounts.google.com' && payload.iss === 'accounts.google.com');
+  if (!issuerMatches || payload.aud !== audience ||
       typeof payload.sub !== 'string' || !payload.sub.trim() || payload.sub.length > 255 ||
       typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp) || payload.exp <= now ||
       typeof payload.iat !== 'number' || !Number.isSafeInteger(payload.iat) || payload.iat > now + 60 ||
       payload.exp <= payload.iat || payload.exp - payload.iat > 86400 ||
       (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || !Number.isSafeInteger(payload.nbf) || payload.nbf > now + 60)) ||
-      (payload.azp !== undefined && payload.azp !== audience)) throw new AuthRejected();
+      (payload.azp !== undefined &&
+        (typeof payload.azp !== 'string' || !authorizedPresenters.has(payload.azp)))) throw new AuthRejected();
 
   const jwkSet = await getPublicJwks(jwks, fetcher, nowMs, cache ?? await defaultJwksCache());
   const candidates = (jwkSet.keys as unknown[]).filter((key): key is JsonObject =>

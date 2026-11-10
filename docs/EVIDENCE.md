@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-V | Google Android `azp` vs backend `aud`; canonical issuer (10 November 2026)
+
+| Claim | Evidence class | Basis and boundary |
+| --- | --- | --- |
+| Google ID token `azp` (authorized OAuth presenter) can differ from backend `aud` (intended audience); `iss` may be canonical or legacy | **OFFICIAL_PROVIDER_DOCUMENTATION** | [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [token reference](https://developers.google.com/identity/openid-connect/reference), [Android/backend verification](https://developers.google.com/identity/sign-in/android/backend-auth). Contract information, not any current owner's real token |
+| Previous OIDC source could falsely reject authentic Android-issued tokens when `azp!==aud` | **SOURCE_CODE_AUDIT / POTENTIAL BUG** | Prior `worker/src/oidc.ts` used `payload.azp !== audience` and `payload.iss !== issuer`. No owner Google ID token / real-device failure observed |
+| New `OIDC_AUTHORIZED_PRESENTERS` is explicit, at most 3, no wildcard; no presenter extension by default | **CODE / SYNTHETIC RSA TESTS** | `worker/src/oidc.ts`, `worker/src/types.ts`, `tests/oidc.test.mjs`; verify exact SHA Node CI when completed. Unknown presenter and wrong `aud` rejected before upstream GET |
+| Google issuer legacy alias maps to same persistent D1 identity after restart | **LOCAL REAL WORKERD/D1 WITH SYNTHETIC SIGNED JWT** | `tests/cloudflare-local.test.mjs` verifies same `issuer+sub` monitor/identity after process restart. It does **not** use a real Google issuer key or Cloudflare account |
+| Offline preflight prevents obvious OIDC audience/presenter/signature regressions | **OFFLINE SOURCE TEST** | `scripts/release-preflight.mjs`, `tests/release-preflight.test.mjs`; static guard is not proof of live Google compatibility |
+| Google Console registered OAuth app ID, Android package SHA-1/SHA-256, real on-device ID token, real Worker JWKS/OIDC login, phone-OFF test, actual cloud costs | **NOT_VERIFIED** | No Google Console or Cloudflare account authenticated; no physical device, deployment, migration, Cron activation or incurred fees |
+| Final PR and post-merge `main` CI | **PENDING_VERIFICATION** | Require exact CI run IDs for final code+documentation SHA; do not copy previous checkpoint evidence or claim real-device acceptance |
+
+Conservative status: `remote_acceptance:BLOCKED`; `safe_to_deploy:false`; `safe_to_activate_scheduler:false`. [ADR-0023](ADR/0023-google-oidc-authorized-presenters.md) · [PR #28](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/28) · [owner runbook](REMOTE_PILOT_READINESS.md).
+
+---
+
+
 ## P1-U | Exact Cron log ID -> D1 observation identity (10 November 2026)
 
 | Claim | Evidence class | Exact evidence and limitations |

@@ -125,18 +125,22 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
   const dir=mkdtempSync(join(tmpdir(),'naraya-d1-mobile-'));
   let platform;
   const originalFetch=globalThis.fetch;
-  const issuer='https://login.example.invalid';
-  const settings={OIDC_ISSUER:issuer,OIDC_AUDIENCE:'pocket-agent-mobile-test',OIDC_JWKS_URL:'https://keys.example.invalid/jwks'};
+  const issuer='https://accounts.google.com';
+  const googleAndroidClient='1234567890-approvedandroid.apps.googleusercontent.com';
+  const settings={OIDC_ISSUER:issuer,OIDC_AUDIENCE:'1234567890-backendweb.apps.googleusercontent.com',
+    OIDC_JWKS_URL:'https://keys.example.invalid/jwks',
+    OIDC_AUTHORIZED_PRESENTERS:googleAndroidClient};
   const pair=await crypto.subtle.generateKey({
     name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
     publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
   },true,['sign','verify']);
   const jwk={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'fixture-key',use:'sig',alg:'RS256'};
   const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
-  const jwt=async subject=>{
+  const jwt=async(subject,claimedIssuer=issuer,azp=undefined)=>{
     const now=Math.floor(Date.now()/1000);
     const input=encode({alg:'RS256',kid:'fixture-key',typ:'JWT'})+'.'+
-      encode({iss:issuer,aud:settings.OIDC_AUDIENCE,sub:subject,iat:now-30,exp:now+1200});
+      encode({iss:claimedIssuer,aud:settings.OIDC_AUDIENCE,sub:subject,
+        ...(azp?{azp}:{}),iat:now-30,exp:now+1200});
     const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(input));
     return input+'.'+Buffer.from(signature).toString('base64url');
   };
@@ -154,6 +158,9 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
       return new Response(JSON.stringify({keys:[jwk]}),{status:200});
     };
     const a=await jwt('test-A'),b=await jwt('test-B');
+    // Google permits a legacy issuer spelling and different authorized Android
+    // presenter. Both MUST map to the same canonical owner after a restart.
+    const androidLegacy=await jwt('test-A','accounts.google.com',googleAndroidClient);
     const body={clientDraftId:id,repository:'python/cpython',intervalMinutes:30};
     const env={DB:platform.env.DB,...settings};
     const first=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),env);
@@ -168,9 +175,13 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
     await platform.dispose(); platform=null;
     platform=await setupPlatform(dir);
     const restarted={DB:platform.env.DB,...settings};
-    const retry=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),restarted);
+    const retry=await worker.fetch(request(androidLegacy,'POST','/v1/sync/monitors',body),restarted);
     assert.equal(retry.status,200);
     assert.equal((await retry.json()).monitor.id,monitor.id);
+    const reread=await worker.fetch(request(androidLegacy),restarted);
+    assert.equal(reread.status,200);
+    assert.equal((await reread.json()).monitors[0].id,monitor.id,
+      'legacy Google issuer and approved Android azp must reuse existing D1 identity');
     assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM monitors').first()).n,1);
     assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
   } finally {

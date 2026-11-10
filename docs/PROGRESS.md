@@ -1,5 +1,22 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-V Google Android ID-token cross-client OIDC compatibility and identity invariants (PR #28)
+
+**Source-level finding (confirmed against official Google docs):** prior `verifyOidcBearer` required `azp===aud`, and matched the `iss` claim to exactly one configured value. Google documents `azp` as authorized OAuth presenter (which can differ from server `aud`), and both `https://accounts.google.com` and `accounts.google.com` issuer forms. The older implementation could reject authentic Android-to-Worker Google ID tokens. This does **not** establish any real-device failure.
+
+**P1-V changes:**
+- Add optional `OIDC_AUTHORIZED_PRESENTERS` (maximum 3 explicitly allowlisted additional OAuth client IDs; strict syntax, no wildcard/whitespace/duplicate, default **no extra clients**). Wrong `azp` rejected; backend `aud`, RSA signature, `kid`, claims/expiry/JWKS checks stay mandatory.
+- Accept the Google legacy issuer only when **canonical Google issuer configured**. Always return the configured canonical issuer for D1 owner identity to prevent duplicate identities from issuer spelling changes. Other OIDC issuers remain strict.
+- Add **9 RSA-backed adversarial Node tests**, extend **actual local Cloudflare workerd/D1** restart/identity test with Google legacy issuer and allowed Android presenter, and add offline preflight source safety regression gate.
+- No app OAuth client IDs, actual Google tokens, remote Workers/D1/Cron, account billing, Google Console, deployments, migrations or device power-off testing. No new service/cloud usage. Real sign-in still **BLOCKED/NOT_VERIFIED**.
+
+**Proof requested:** verify exact final PR HEAD five CI workflows and Node/local-D1/JVM counts, then merge only when successful. After merge independently verify final `main` SHA. Source-green is not live Google sign-in proof.
+
+**Next owner-only gate:** inspect actual Google Console Web client ID vs Android OAuth client ID, package/signing SHA and permitted issuer, and inspect a **real issued** token locally without disclosing it. Check signed `/v1/me` on separately owner-approved deployed HTTPS Worker, then PAUSED monitor registration and offdevice pilot only after Cloudflare billing/CPU/Free quota and separate activation permissions. See [ADR-0023](ADR/0023-google-oidc-authorized-presenters.md), [EVIDENCE](EVIDENCE.md), [runbook](REMOTE_PILOT_READINESS.md), [PR #28](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/28).
+
+---
+
+
 ## 2026-11-10 | P1-U exact scheduled-Cron log -> persisted D1 observation ID (PR #27 MERGED; remote still BLOCKED)
 
 **Finding:** prior Worker `scheduled_tick` log had only aggregate counts. The P1-N owner evidence gate matched Cron and D1 observations by timestamps within 60 seconds, which cannot distinguish coincidental Cron executions from the one that wrote the specific row. This is a **source/evidence linkage weakness**, **not** a demonstrated live Cloudflare failure.

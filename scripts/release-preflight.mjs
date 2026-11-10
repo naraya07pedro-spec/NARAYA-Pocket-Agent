@@ -41,6 +41,7 @@ export function readSourceSnapshot(base=root){
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
     mobileSync:text(base,'worker/src/mobile-sync.ts'),
+    oidcSource:text(base,'worker/src/oidc.ts'),
     workerTypes:text(base,'worker/src/types.ts'),
     androidGradle:text(base,'android/app/build.gradle.kts'),
     androidCloudClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/CloudSyncClient.kt'),
@@ -176,6 +177,15 @@ export function auditSource(s){
       s.mobileSync.includes("throw new Error('onboarding_batch_metadata_unavailable')") &&
       s.mobileSync.includes('if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject)')),
 
+    check('oidc_google_presenter_explicit_and_issuer_canonical',
+      s.oidcSource.includes('OIDC_AUTHORIZED_PRESENTERS?: string') &&
+      s.oidcSource.includes("issuer === 'https://accounts.google.com' && payload.iss === 'accounts.google.com'") &&
+      s.oidcSource.includes('const authorizedPresenters: ReadonlySet<string> = new Set([audience,...values])') &&
+      s.oidcSource.includes("payload.aud !== audience") &&
+      s.oidcSource.includes("!authorizedPresenters.has(payload.azp)") &&
+      s.oidcSource.includes("const valid = await crypto.subtle.verify(") &&
+      s.oidcSource.includes("return { issuer, subject: payload.sub as string }") &&
+      s.workerTypes.includes('OIDC_AUTHORIZED_PRESENTERS?: string')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
