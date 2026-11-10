@@ -361,6 +361,31 @@ internal class CloudSyncClient(
         }
     }
 
+    /**
+     * Validate internal coherence of a bounded, newest-first history.
+     * This is NOT proof that a remote Cron actually ran or that timestamps
+     * originated outside the server. The 50-row page can omit old BASELINEs.
+     *
+     * Distinct timestamps give a total order, so every newer CHANGE must
+     * reference the immediately older event's head. When timestamps tie,
+     * server ordering breaks ties by random UUID; do not reject valid history
+     * by inventing a chronological ordering from those UUIDs.
+     */
+    private fun coherentObservationHistory(rows: List<CloudObservation>): Boolean {
+        if (rows.count { it.type == "BASELINE" } > 1) return false
+        if (rows.any { it.type == "CHANGE" && it.previousSha == it.headSha }) return false
+        val baseline = rows.firstOrNull { it.type == "BASELINE" }
+        if (baseline != null && rows.any { it.observedAt < baseline.observedAt }) return false
+        if (rows.map { it.observedAt }.toSet().size == rows.size) {
+            for (index in 0 until rows.size - 1) {
+                val newer = rows[index]
+                val older = rows[index + 1]
+                if (newer.type != "CHANGE" || newer.previousSha != older.headSha) return false
+            }
+        }
+        return true
+    }
+
     /** Observations are remote evidence, never synthesized from a local clock or cache. */
     fun observations(token: String?, monitorId: String): SyncResult {
         val id = uuid(monitorId) ?: return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
@@ -395,6 +420,8 @@ internal class CloudSyncClient(
                 seen.add(eventId)
                 output.add(CloudObservation(eventId, id, type, previous, sha, observedAt))
             }
+            if (!coherentObservationHistory(output))
+                return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
             SyncResult.Observed(id, output)
         } catch (_: Exception) {
             SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
