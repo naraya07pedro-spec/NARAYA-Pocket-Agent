@@ -7,10 +7,12 @@
     "node": ">=22.16.0 <23"
   },
   "scripts": {
-    "test": "node scripts/release-preflight.mjs && node --experimental-strip-types --test tests/pocket.test.mjs tests/oidc.test.mjs tests/mobile-sync.test.mjs tests/release-preflight.test.mjs tests/offdevice-evidence.test.mjs",
+    "test": "node scripts/release-preflight.mjs && node --experimental-strip-types --test tests/pocket.test.mjs tests/oidc.test.mjs tests/mobile-sync.test.mjs tests/release-preflight.test.mjs tests/offdevice-evidence.test.mjs tests/cloudflare-readonly-inspect.test.mjs",
     "typecheck": "tsc --noEmit -p worker/tsconfig.json",
     "preflight": "node scripts/release-preflight.mjs",
     "preflight:json": "node scripts/release-preflight.mjs --json",
-    "preflight:require-remote": "node scripts/release-preflight.mjs --require-remote"
+    "preflight:require-remote": "node scripts/release-preflight.mjs --require-remote",
+    "cloudflare:inspect-offline": "node scripts/cloudflare-readonly-inspect.mjs",
+    "cloudflare:inspect-live": "node scripts/cloudflare-readonly-inspect.mjs --inspect-live"
   }
 }
