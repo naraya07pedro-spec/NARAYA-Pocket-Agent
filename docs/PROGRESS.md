@@ -1,5 +1,23 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-E Android opt-in Google identity + manual cloud sync (PR #11; not deployed)
+
+**Implemented on Android source:**
+- Credential Manager explicit Google sign-in with ephemeral ID token in RAM; no token, client secret or operator bearer in resources or SharedPreferences. Actual Google provider configuration is intentionally absent from default build.
+- BuildConfig public Web OAuth Client ID and trusted HTTPS Worker origin are sourced only from explicit Gradle properties. Both default empty; cloud controls disabled in checked-in CI APK.
+- Bounded fixed-origin HTTP adapter: one manual POST using the existing draft UUID, `GET /v1/sync/monitors` on explicit refresh, no redirects, 4 KiB upload, 16 KiB response, typed 401/409/429/offline failures, no automatic Android polling.
+- Compose shows cloud state only from validated server replies; local SHA/history preserved after errors. Logout clears token and displayed server state. Local delete explicitly says it does **not** delete the cloud monitor.
+- Google Credential Manager 1.6.0 / googleid 1.1.1; googleid 1.2.1 was incompatible with the repository's Kotlin compiler metadata. Version fixed without bypassing metadata validation.
+
+**CI verified**: [Android APK + JVM 42760135711](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135711) SUCCESS and [Android public GitHub adapter 42760135615](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135615) SUCCESS on source SHA `fbde24642ee96b8e4d8a78a33d89d49431526e0d`; source backend, local D1 and live GitHub CI also SUCCESS (see EVIDENCE). Debug APK SHA-256 `c4959e4d469e5c6eebd89ceb1c1d8ff7af0abd91052237bd9f60d1aca130e3d8` on the same SHA. This proves build and synthetic tests, not real Google login. A stricter 7-test XML execution gate, no-cloud-config test and UX wording update are in subsequent branch commits; they need exact-head CI before being claimed as passed.
+
+**Failure evidence**: [Android initial build 42759905864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905864) and [live adapter build 42759905986](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905986) failed on `cbc107b5c730ddc097f2e5efd8b8e3f0397985b5` because `googleid:1.2.1` used Kotlin metadata 2.4.0 and the compiler expected 2.2.0. The code did not bypass type safety; dependency was pinned to 1.1.1 and successful runs verified after the correction.
+
+**NOT_VERIFIED/NOT_IMPLEMENTED**: real Google OAuth registration and signed-in mobile session, deployed Worker/D1/Cron, actual Android→Cloudflare sync, device-off scheduled monitor acceptance, physical Android RAM/battery, account-level free-tier quota, JWKS caching/rotation, Android cloud monitor start/stop control. No deployments, paid APIs or provider writes performed. Backend already has owner isolation, replay protection and feature-flagged scheduler, but it has not been deployed. See [ADR-0006](ADR/0006-android-google-identity-manual-sync.md) and issues #8/#2/#5.
+
+---
+
+
 ## 2026-11-10 | P1-D server-side bounded multi-user scheduler (PR #10 merged, not deployed)
 
 **Merged:** [PR #10](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/10) to `main`, merge SHA `2368b27c18d0f6c07c2e61377c12ad6331b1c36b`. Feature gate remains OFF by default.
