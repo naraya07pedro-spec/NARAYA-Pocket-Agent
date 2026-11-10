@@ -9,7 +9,7 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 const owner = 'live-provider-readonly-test';
 const token = 'synthetic-local-owner-test-only-very-long';
@@ -45,8 +45,9 @@ test('real GitHub public API -> shipped scheduler -> local workerd/D1 -> indepen
     const report = await runScheduler(env, candidate.next_due_at);
     assert.equal(report.completed, 1, 'live GitHub source must return a verified SHA');
     assert.equal(report.observations, 1);
-    const observed = await env.DB.prepare('SELECT head_sha,event_type FROM observations WHERE monitor_id=?').bind(id).first();
+    const observed = await env.DB.prepare('SELECT head_sha,event_type,event_sequence FROM observations WHERE monitor_id=?').bind(id).first();
     assert.equal(observed.event_type, 'BASELINE');
+    assert.equal(observed.event_sequence,1,'fresh migrated D1 must persist a first event sequence');
     assert.match(observed.head_sha, /^[a-f0-9]{40}$/);
     // A separate official GitHub ref endpoint corroborates the current default branch.
     const refResponse = await fetch('https://api.github.com/repos/naraya07pedro-spec/NARAYA-Pocket-Agent/git/ref/heads/main', {
