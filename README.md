@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-O signed-user identity admission without hidden D1 writes implemented in PR #21 (78/78 source tests, 11/11 local workerd/D1, 20/20 Android security JVM at corrected code SHA; documentation-final CI pending). No remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-O signed-user identity admission without hidden D1 writes MERGED via PR #21 (78/78 backend, 11/11 local workerd/D1, 20/20 Android security JVM; 5/5 final PR-head CI SUCCESS). No remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-O mobile sync read-only D1 registration (PR #21, local tests only)
+## P1-O mobile sync read-only D1 registration (PR #21 merged, local tests only)
 
 Previously every valid signed-user sync request attempted a D1 `INSERT INTO user_identities`, including repeated GETs, and malformed calls could consume one of the 20 pilot identity slots before input validation. Now **Google/OIDC JWT authentication is first, followed by route/UUID/body validation**, then an indexed existing-user lookup. Only a user's **first valid, explicit cloud-monitor POST** performs atomic identity registration. First GET of an empty cloud list returns `{"monitors":[]}` without changing D1. Unknown monitor reads and PATCH for unregistered users return 404 without onboarding. Known accounts issue no additional identity INSERT attempts on repeated GET/PATCH/POST.
 
