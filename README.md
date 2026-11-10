@@ -1,5 +1,10 @@
 # NARAYA Pocket Agent
 
+## P1-W Google OIDC signing-key provenance hardening (PR #29, source/local only)
+
+A source audit found that a JWT could claim issuer \`https://accounts.google.com\` while the Worker verified its RSA signature against an **arbitrary operator-configured HTTPS JWKS host**. Under bad/compromised config, the signature could be mathematically valid without being Google's. P1-W requires the **exact Google-published JWKS URL** \`https://www.googleapis.com/oauth2/v3/certs\` when Google is configured as issuer, and rejects any mismatch before network or D1 writes. Non-Google issuers retain their explicit JWKS settings; Google issuer alias, backend audience and authorized Android presenter checks are preserved. Source+synthetic RSA+real **local** workerd/D1 tests cover failure and valid paths. **No live Google key/token, Google Console, actual Cloudflare account, remote Cron/deploy, or powered-off Android acceptance is claimed.** See [ADR-0024](docs/ADR/0024-google-issuer-jwks-trust-binding.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
+
+
 ## P1-V Google Android authorized-presenter OIDC fix (PR #28 MERGED, local evidence only)
 
 Google ID tokens may have `azp` (the authorized Android presenter) **different from** `aud` (the Web/backend OAuth client ID). The old Worker rejected that shape and required a single issuer spelling. P1-V supports at most three **explicitly owner-approved** additional `OIDC_AUTHORIZED_PRESENTERS`, with the old strict behavior retained by default; Google legacy `accounts.google.com` issuer is canonicalized to `https://accounts.google.com` so it uses the **same durable D1 identity**. JWT RSA signature, exact backend audience, expiry and caller restrictions remain enforced. Synthetic crypto tests plus an actual local workerd/D1 restart test cover compatibility and owner identity replay. **No actual Google token or account, remote Cloudflare OAuth/deployment, phone-OFF proof or extra cost has been tested**. See [ADR-0023](docs/ADR/0023-google-oidc-authorized-presenters.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
