@@ -1,5 +1,23 @@
 # P1-T release readiness gate | Owner-approved remote pilot ONLY
 
+## P1-V | Google-issued Android token must have correct Web audience and authorized presenter
+
+**Source-level Google compatibility fix:** Google's official [OpenID Connect reference](https://developers.google.com/identity/openid-connect/reference) distinguishes signed token `aud` (server/Web backend OAuth client ID) from `azp` (authorized presenter, potentially the separately registered Android OAuth client ID). `iss` can be `https://accounts.google.com` or `accounts.google.com`. The Worker previously rejected a distinct `azp` or legacy issuer. P1-V accepts the legacy **Google-only** alias and explicitly approved Android presenters, never arbitrary signers or audience IDs.
+
+**Operator-only intended configuration (do not apply without separate owner approval, and do not enter guessed values):**
+- `OIDC_ISSUER`: canonical `https://accounts.google.com`.
+- `OIDC_AUDIENCE`: **real Google Web OAuth client ID** corresponding to the Android app's server-client-ID request; must match JWT `aud` exactly, never an arbitrary Android client ID unless it actually is the intended backend audience.
+- `OIDC_JWKS_URL`: validated **official Google JWKS URI from Google's OIDC discovery metadata**, not any URL supplied by a token or external caller.
+- `OIDC_AUTHORIZED_PRESENTERS`: optional comma-delimited, maximum three **owner-verified** Android OAuth client IDs, each presenter's value matching a real Google-issued JWT `azp`. Omit by default if it is unnecessary. No wildcards, spaces, unverified or unrelated client IDs. This field does **not** modify the backend audience allowlist.
+- The Android app's configured public server client ID must be the same as `OIDC_AUDIENCE`. Verify the actual Android **package name and signing certificate fingerprint** against the Google Console entry; debug and release builds may differ.
+
+**Acceptance procedure, after separate Cloudflare account-cost approval and inert deployment authorization:** use an owner-approved physical Android app to obtain a real Google ID token. Keep token **only on the private device**. Verify actual issuer, audience, authorized presenter, signature, nonce/expiry where applicable and real `GET /v1/me` HTTP status (the app must not store or print JWT). If you need to inspect only claim names locally, redact IDs/tokens before sharing. An actual signed `/v1/me` success is not Cron/phone-OFF acceptance: test signed-user owner isolation, first `PAUSED` monitor replay, and new permissioned Cron separately.
+
+P1-V CI uses **self-signed synthetic RSA token fixtures**, not authentic Google-signed tokens. Even if all tests pass, Google OAuth Console, live Cloudflare binding/CPU/D1 costs and physical phone-OFF remain **NOT_VERIFIED**. No remote OAuth, resource or billing change is authorized by this documentation. See [ADR-0023](ADR/0023-google-oidc-authorized-presenters.md) and [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
+
 ## P1-U | Exact Cron-to-D1 ID proof for a future authorized phone-OFF pilot
 
 The owner-supplied **private** offline evidence manifest is now **v2**, replacing the historical P1-N v1 synthetic example. A real `scheduled_tick` Worker log will include `observationIds`, **only** for new D1 observations inserted in that tick. An ordinary check with no GitHub SHA change reports an empty array; a successful change reports the UUID of the corresponding D1 `observations.id` row. Up to three IDs may appear per 15-minute tick under the existing provider dispatch cap.

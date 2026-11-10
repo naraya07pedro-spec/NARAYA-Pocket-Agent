@@ -1,5 +1,10 @@
 # NARAYA Pocket Agent
 
+## P1-V Google Android authorized-presenter OIDC fix (PR #28, local evidence only)
+
+Google ID tokens may have `azp` (the authorized Android presenter) **different from** `aud` (the Web/backend OAuth client ID). The old Worker rejected that shape and required a single issuer spelling. P1-V supports at most three **explicitly owner-approved** additional `OIDC_AUTHORIZED_PRESENTERS`, with the old strict behavior retained by default; Google legacy `accounts.google.com` issuer is canonicalized to `https://accounts.google.com` so it uses the **same durable D1 identity**. JWT RSA signature, exact backend audience, expiry and caller restrictions remain enforced. Synthetic crypto tests plus an actual local workerd/D1 restart test cover compatibility and owner identity replay. **No actual Google token or account, remote Cloudflare OAuth/deployment, phone-OFF proof or extra cost has been tested**. See [ADR-0023](docs/ADR/0023-google-oidc-authorized-presenters.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
+
+
 ## P1-U exact Cron-to-D1 evidence correlation (PR #27 MERGED, source/local only)
 
 The scheduled Worker now includes a bounded array of actual persisted D1 `observations.id` UUIDs in the `scheduled_tick` log, and **only** when the existing transactional D1 batch confirms a new observation. Repeated identical HEAD, failed fetches and stale leases do not generate fictional IDs. This improves the future phone-OFF acceptance evidence from a loose timestamp heuristic to **exact Cron log UUID -> D1 row UUID** matching, without a D1 migration, new provider API call, Android background service or cost-bearing infrastructure. The strict, offline-only owner evidence gate is now v2 and rejects a timestamp-only match. A synthetic JSON example passing the structural gate is **still not authenticated Cloudflare proof**. No real cloud account, D1/Cron deployment, OIDC phone sign-in or physically powered-OFF test occurred. See [ADR-0022](docs/ADR/0022-cron-d1-observation-id-correlation.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
