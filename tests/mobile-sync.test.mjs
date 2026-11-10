@@ -211,6 +211,13 @@ test('mobile activation requires explicit scheduler flag, owner match and curren
     assert.equal((await patch(a,'ACTIVE',1)).status,409);
     assert.equal((await patch(b,'PAUSED',1)).status,404);
     env.MOBILE_SCHEDULING_ENABLED='true';
+    // Mobile-only flag must NOT create pending ACTIVE jobs with global Cron OFF.
+    assert.equal((await patch(a,'ACTIVE',1)).status,409);
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const incomplete=(await(await request(env,'/v1/sync/monitors',a)).json()).monitors[0];
+    assert.equal(incomplete.schedulerEligible,false);
+    env.SCHEDULER_ENABLED='true';
     assert.equal((await patch(a,'ACTIVE',99)).status,409);
     const enabled=await patch(a,'ACTIVE',1);
     assert.equal(enabled.status,200);
@@ -248,6 +255,7 @@ test('scheduler preserves opt-in default-off and rotates due owners under global
     assert.equal(disabled.claimed,0);
     assert.equal(calls.length,0);
     env.MOBILE_SCHEDULING_ENABLED='true';
+    env.SCHEDULER_ENABLED='true';
     for(let i=0;i<4;i++){
       const r=await request(env,'/v1/sync/monitors/'+ids[i],owners[i],'PATCH',{status:'ACTIVE',expectedVersion:1});
       assert.equal(r.status,200);
@@ -273,7 +281,7 @@ test('scheduler preserves opt-in default-off and rotates due owners under global
 
 test('global mobile active cap of 9 prevents unbounded external reads and permits replacement',async()=>{
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
-  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
   try {
     const users=await Promise.all(['m0','m1','m2','m3'].map(s=>token(s)));
     const ids=[];
@@ -312,7 +320,7 @@ test('bounded pilot identity creation rejects 21st identity, but existing accoun
 
 test('pausing mobile task during upstream request rejects stale worker completion',async()=>{
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
-  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
   try {
     const a=await token('pause-worker');
     const created=(await(await create(env,a,uuid())).json()).monitor;
@@ -331,4 +339,110 @@ test('pausing mobile task during upstream request rejects stale worker completio
     assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,0);
     assert.equal(monitors(env)[0].status,'PAUSED');
   } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+
+test('existing ACTIVE mobile row loses eligibility immediately when global Cron OFF, while owner can PAUSE',async()=>{
+  const original=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try{
+    const signed=await token('dual-gate-owner');
+    const fresh=(await(await create(env,signed,uuid(),'python/cpython')).json()).monitor;
+    const url='/v1/sync/monitors/'+fresh.id;
+    const active=await request(env,url,signed,'PATCH',{status:'ACTIVE',expectedVersion:1});
+    assert.equal(active.status,200);
+    assert.equal((await active.json()).schedulerEligible,true);
+    const initial=(await(await request(env,'/v1/sync/monitors',signed)).json()).monitors[0];
+    assert.equal(initial.status,'ACTIVE');
+    assert.equal(initial.schedulerEligible,true);
+    env.SCHEDULER_ENABLED=undefined; // Operational kill switch.
+    const after=(await(await request(env,'/v1/sync/monitors',signed)).json()).monitors[0];
+    assert.equal(after.status,'ACTIVE','global stop is not destructive to saved monitor status');
+    assert.equal(after.schedulerEligible,false,'must not advertise execution eligibility');
+    const identity=(await(await request(env,'/v1/me',signed)).json());
+    assert.deepEqual(identity,{authenticated:true,capabilities:{
+      monitorSync:true,mobileActivationConfigured:false,
+    }});
+    const retry=await request(env,url,signed,'PATCH',{status:'ACTIVE',expectedVersion:2});
+    assert.equal(retry.status,409);
+    assert.deepEqual(await retry.json(),{error:'scheduler_disabled'});
+    const paused=await request(env,url,signed,'PATCH',{status:'PAUSED',expectedVersion:2});
+    assert.equal(paused.status,200,'pause must stay permitted while operator kill switch is OFF');
+    assert.deepEqual(await paused.json(),{id:fresh.id,status:'PAUSED',version:3,schedulerEligible:false});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    env.SCHEDULER_ENABLED='true';
+    const withoutMobile=await request(env,url,signed,'PATCH',{status:'ACTIVE',expectedVersion:3});
+    env.MOBILE_SCHEDULING_ENABLED=undefined;
+    // Previous request may succeed with both flags (tested elsewhere); the
+    // second below must refuse once the user-specific operator flag is OFF.
+    assert.equal(withoutMobile.status,200);
+    const noMobile=(await(await request(env,'/v1/sync/monitors',signed)).json()).monitors[0];
+    assert.equal(noMobile.schedulerEligible,false);
+  }finally{globalThis.fetch=original;env.DB.close();}
+});
+
+test('verified identity probe advertises implemented source capability without claiming live scheduler',async()=>{
+  const original=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const signed=await token('me-capabilities');
+    let result=await request(env,'/v1/me',signed);
+    assert.equal(result.status,200);
+    assert.deepEqual(await result.json(),{authenticated:true,capabilities:{
+      monitorSync:true,mobileActivationConfigured:false,
+    }});
+    env.MOBILE_SCHEDULING_ENABLED='true';
+    result=await request(env,'/v1/me',signed);
+    assert.equal((await result.json()).capabilities.mobileActivationConfigured,false);
+    env.SCHEDULER_ENABLED='true';
+    result=await request(env,'/v1/me',signed);
+    assert.equal((await result.json()).capabilities.mobileActivationConfigured,true);
+    env.OWNER_ID='';
+    result=await request(env,'/v1/me',signed);
+    assert.equal((await result.json()).capabilities.mobileActivationConfigured,false);
+    assert.equal(identities(env).length,0,'read-only capability probe must not onboard identity');
+  }finally{globalThis.fetch=original;env.DB.close();}
+});
+
+
+test('mobile ACTIVE fails closed when shared Cron budget row is absent, and PAUSE still works',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try{
+    const t=await token('missing-budget-row');
+    const monitor=(await(await create(env,t,uuid())).json()).monitor;
+    env.DB.connection.exec('DELETE FROM scheduler_control');
+    const denied=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'ACTIVE',expectedVersion:1,
+    });
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const paused=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'PAUSED',expectedVersion:1,
+    });
+    assert.equal(paused.status,200);
+    assert.equal(monitors(env)[0].version,2);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('mobile ACTIVE fails closed without scheduler_control migration (no accidental 200)',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try{
+    const t=await token('missing-budget-table');
+    const monitor=(await(await create(env,t,uuid())).json()).monitor;
+    env.DB.connection.exec('DROP TABLE scheduler_control');
+    const denied=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'ACTIVE',expectedVersion:1,
+    });
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+  }finally{globalThis.fetch=previous;env.DB.close();}
 });

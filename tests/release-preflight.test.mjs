@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,11);
+  assert.equal(result.checks.length,12);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -102,5 +102,28 @@ test('pilot template is inert and no future change can silently activate Cron or
     const s=clone();
     mutate(s.pilot);
     assert.ok(failures(audit(s)).includes('inert_approval_only_pilot_template'));
+  }
+});
+
+
+test('preflight rejects mobile activation if either global gate or budget migration guard is removed',()=>{
+  const mutate=[
+    s=>{s.schedulerEligibility=s.schedulerEligibility.replace(
+      "env.SCHEDULER_ENABLED === 'true'","true");},
+    s=>{s.schedulerEligibility=s.schedulerEligibility.replace(
+      "env.MOBILE_SCHEDULING_ENABLED === 'true'","true");},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      "status === 'ACTIVE' && !mobileSchedulerConfigured(env)",
+      "status === 'ACTIVE' && false");},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      "status === 'ACTIVE' && !await schedulerBudgetReady(env)",
+      "status === 'ACTIVE' && false");},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      "schedulerEligible: row.status === 'ACTIVE' && !!env && mobileSchedulerConfigured(env)",
+      "schedulerEligible: row.status === 'ACTIVE'");},
+  ];
+  for (const update of mutate){
+    const s=clone();update(s);
+    assert.ok(failures(audit(s)).includes('mobile_activation_requires_both_flags_and_migrated_d1'));
   }
 });
