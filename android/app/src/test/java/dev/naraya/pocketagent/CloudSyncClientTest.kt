@@ -24,6 +24,12 @@ class CloudSyncClientTest {
     private fun uploaded(created: Boolean = true, row: JSONObject = monitor()) =
         JSONObject().put("monitor", row).put("created", created).toString()
 
+    @Test fun standardDebugBuildIsFailClosedWithoutOAuthOrWorkerConfig() {
+        assertEquals("", BuildConfig.GOOGLE_WEB_CLIENT_ID)
+        assertEquals("", BuildConfig.CLOUD_API_ORIGIN)
+        assertFalse(CloudSyncClient.validOrigin(BuildConfig.CLOUD_API_ORIGIN))
+    }
+
     @Test fun invalidOriginAndMissingTokenNeverInvokeTransport() {
         var calls = 0
         val fake = SyncTransport { _, _, _, _, _ -> calls++; SyncHttpResponse(200, uploaded()) }
