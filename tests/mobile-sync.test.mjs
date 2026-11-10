@@ -683,3 +683,101 @@ test('P1-O invalid JWT does not get to body parsing, D1 identity lookup or onboa
     assert.equal(identities(env).length,0);
   }finally{globalThis.fetch=previous;env.DB.close();}
 });
+
+
+test('P1-P D1 transaction rolls back an identity if first monitor SQL fails mid-batch',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv(),realDb=env.DB;
+  try {
+    const signed=await token('P1P-batch-failure');
+    const draft=uuid();
+    let intercepted=0;
+    env.DB={...realDb,
+      batch(stmts){
+        intercepted++;
+        assert.equal(stmts.length,3,'first identity+monitor+conditional cleanup must be one transaction');
+        const injected=stmts.map((stmt,i)=>i===1?{
+          async run(){throw new Error('synthetic_monitor_write_failure')}
+        }:stmt);
+        return realDb.batch(injected);
+      },
+    };
+    const first=await create(env,signed,draft);
+    assert.equal(first.status,500,'an interrupted transaction must never respond 201');
+    assert.deepEqual(await first.json(),{error:'internal_error'});
+    assert.equal(intercepted,1);
+    assert.equal(identities(env).length,0,'rolled-back batch must not consume an identity slot');
+    assert.equal(monitors(env).length,0,'failed first monitor must not exist');
+    env.DB=realDb;
+    const retry=await create(env,signed,draft);
+    assert.equal(retry.status,201,'same valid draft can recover cleanly after rollback');
+    assert.equal(identities(env).length,1);
+    assert.equal(monitors(env).length,1);
+    assert.equal((await create(env,signed,draft)).status,200,'subsequent retry stays idempotent');
+  }finally{globalThis.fetch=previous;realDb.close();}
+});
+
+test('P1-P zero-change monitor insert in a valid first POST cannot leave an orphan identity',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv(),realDb=env.DB;
+  try {
+    const signed=await token('P1P-zero-changes');
+    const draft=uuid();
+    let calls=0;
+    env.DB={...realDb,
+      batch(stmts){
+        calls++;
+        assert.equal(stmts.length,3);
+        // Simulates a D1 INSERT OR IGNORE outcome of zero rows after a
+        // successful first identity registration. Cleanup must be in
+        // the SAME transaction, not asynchronous compensation.
+        const injected=stmts.map((stmt,i)=>i===1?{
+          async run(){return {success:true,meta:{changes:0}}}
+        }:stmt);
+        return realDb.batch(injected);
+      },
+    };
+    const invalid=await create(env,signed,draft);
+    assert.equal(invalid.status,500,'no monitor row means onboarding is not successful');
+    assert.equal(calls,1);
+    assert.equal(identities(env).length,0,'candidate identity was removed transactionally');
+    assert.equal(monitors(env).length,0);
+    env.DB=realDb;
+    const fresh=await create(env,signed,draft);
+    assert.equal(fresh.status,201);
+    assert.equal(identities(env).length,1);
+    assert.equal(monitors(env).length,1);
+  }finally{globalThis.fetch=previous;realDb.close();}
+});
+
+
+test('P1-P an already committed batch with missing metadata fails closed and replays idempotently',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv(),realDb=env.DB;
+  try{
+    const signed=await token('P1P-ambiguous-success');
+    const draft=uuid();
+    let executed=0;
+    env.DB={...realDb,
+      async batch(stmts){
+        const results=await realDb.batch(stmts);
+        executed++;
+        // A real D1 transaction has committed, but its returned metadata
+        // was lost/corrupted. Do NOT claim success without knowing changes.
+        return results.map((entry,i)=>i===1?{...entry,meta:undefined}:entry);
+      },
+    };
+    const uncertain=await create(env,signed,draft);
+    assert.equal(uncertain.status,500);
+    assert.deepEqual(await uncertain.json(),{error:'internal_error'});
+    assert.equal(executed,1);
+    assert.equal(identities(env).length,1,'the synthetic batch actually committed');
+    assert.equal(monitors(env).length,1,'the synthetic batch actually committed one monitor');
+    env.DB=realDb;
+    const replay=await create(env,signed,draft);
+    assert.equal(replay.status,200,'retry resolves an ambiguous commit using the same clientDraftId');
+    assert.equal((await replay.json()).created,false);
+    assert.equal(identities(env).length,1);
+    assert.equal(monitors(env).length,1);
+  }finally{globalThis.fetch=previous;realDb.close();}
+});
