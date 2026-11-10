@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-I: Cron global OFF and no-network release preflight (10 November 2026; PR #15)
+## P1-I: Cron global OFF and no-network release preflight (10 November 2026; PR #15 merged, not deployed)
 
 | Gate / claim | Evidence class | Exact source, result and limitations |
 | --- | --- | --- |
@@ -9,6 +9,8 @@
 | Real public GitHub read with shipped Worker, isolated local D1 | CI_VERIFIED_PROVIDER_READ_LOCAL_D1 | [Live GitHub read 42780576662](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576662), SUCCESS; **not a remote Cloudflare deployment** |
 | Android API adapter regression, APK build and JVM security | CI_VERIFIED_JVM_BUILD_ONLY | [Android adapter 42780576882](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576882), [Android debug APK 42780576952](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576952) SUCCESS; **13 executed/0 failed/errors/skipped**, APK SHA256 `1c4124226f23b1d6a770336fa6bcbfbfee8cd083db3fccc9f622d03704c465f8` |
 | Real Cloudflare CPU 10ms Cron, quota/billing, remote D1, real Google OAuth, physical Android phone-off proof | NOT_VERIFIED | Source audit intentionally emits `remote_readiness: BLOCKED`; no provider/account tool authentication, Cloudflare deployment, remote D1 migration, registered Google app, hardware benchmark or phone-off test |
+
+**Final gate:** exact PR-head SHA `1f1ff9006853a535ee6e4a312afd2abc9d906e07`, **5/5 workflows SUCCESS**. [Node/source 42781427926](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42781427926) **53/53, preflight PASS/remote BLOCKED**; [Cloudflare local D1 42781427816](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42781427816) **10/10**; [real public GitHub local D1 42781428111](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42781428111) SUCCESS; [Android public GitHub adapter 42781427857](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42781427857) SUCCESS; [Android debug APK 42781427789](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42781427789) SUCCESS, **13/13 CloudSyncClientTest executed**, 0 skips/errors/failures; APK SHA256 `3ca70f474e6c1ab6ebce083444c9c7fd8b79dc98ee874e801ed3ac059ff6dc26`. [PR #15](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/15) merged as `0a344f334ccbc4ca6881b2d2cf7d91aef134c990`. **No independent merged-main/ledger-only CI claim.** No remote Cloudflare/Google account or actual phone-off proof.
 
 **Current source evidence:** 5/5 workflow SUCCESS at source `63a625128a9729aa4dbec85344af92a22935b1b5`. Later documentation SHA `aa940280557d6c8ab270d9b26d657dc0204608b3` independently showed 5/5 SUCCESS; the **final PR HEAD** still requires its own 5/5 verification after these ledgers. No work was performed asynchronously or without direct GitHub connector calls. No Cloudflare real resource was created/modified.
 
