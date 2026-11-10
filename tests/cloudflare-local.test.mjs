@@ -324,7 +324,13 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
       prepare(sql){return DB.prepare(sql);},
       batch(stmts){
         assert.equal(stmts.length,3);
-        return DB.batch([stmts[0],DB.prepare('SELECT * FROM p1p_missing_table_for_rollback')]);
+        // This is a VALID SQL statement that MUST fail only after the
+        // previous batch statement has inserted the same issuer/subject.
+        // It therefore proves rollback after an executed first write.
+        return DB.batch([stmts[0],DB.prepare(
+          'INSERT INTO user_identities(id,issuer,subject,created_at) '+
+          'SELECT id,issuer,subject,created_at FROM user_identities WHERE issuer=? AND subject=?'
+        ).bind(issuer,'android-A')]);
       },
     }};
     const aborted=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
