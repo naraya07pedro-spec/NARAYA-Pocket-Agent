@@ -1,5 +1,25 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-C owner isolation and idempotent mobile-sync API (PR #9, not yet deployed)
+
+**Implemented on PR #9 source**:
+- `0002_mobile_identity_sync.sql`: additive `user_identities` table and nullable client draft/digest columns plus unique index on `(owner_id,client_draft_id)`. Legacy operator rows are not auto-adopted.
+- Verified `issuer+subject` mapped to server-generated opaque UUID. Client-supplied owner IDs have no authority.
+- `GET/POST /v1/sync/monitors` use OIDC bearer only, strict schema, bounded single-item body, normalized repository, atomically checked 3-monitor owner quota, replay-safe draft IDs, changed-payload conflict. Lists are SQL owner-scoped.
+- `GET /v1/sync/observations?monitorId=...` requires ownership or returns 404. Operator bearer token still exclusively gates legacy endpoints.
+- New mobile monitors are **PAUSED**; scheduling is explicitly NOT enabled for mobile users until the scheduler's single-owner design is safely replaced.
+
+**Test evidence at source SHA `633ccda10beda76d864a1ee9cd1303e284bf8268`:**
+- [Offline source CI 42750701827](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701827): SUCCESS; **28/28** backend tests and TypeScript typecheck. New tests cover two accounts, IDOR, owner keys, duplicate replay, changed payload, quota, malicious fields, invalid/forged tokens, legacy separation and concurrent calls.
+- [Local workerd/D1 CI 42750701808](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701808): SUCCESS; **4/4** D1 tests including cross-owner isolation, replay after persisted runtime restart, and applying migration `0002` to a database with a prior operator row.
+- [Official GitHub read CI 42750701796](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701796), [Android live adapter CI 42750702269](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750702269), [Android build CI 42750701661](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750701661): SUCCESS, preserving prior read-only behavior.
+
+**Evidence class**: CI_VERIFIED_SYNTHETIC for signed identity + mobile sync backed by local SQLite/workerd-D1, not a real OIDC provider or deployed Cloudflare. Android app still uses manual public GitHub preview; it has **no token acquisition or sync UI**. Remote Cloudflare Cron, user tasks executing while phone is off, RAM/battery, billing and production access remain NOT_VERIFIED. This branch's final docs commit and merge SHA must be separately checked; links above refer to precise earlier source SHA.
+
+**Next**: choose and verify actual free-tier OIDC provider, implement secure Android login/token lifecycle and opt-in sync; implement fair bounded multi-user scheduler before permitting ACTIVE; execute real cloud and phone-off verification only after explicit owner authorization. See [issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
 ## 2026-11-10 | P1-C first implementation slice: server-side cryptographic identity verification
 
 **Implemented and merged to main by PR #7, merge SHA `cd2298a6b91392af9024afa4bd7ba42d8bdc6be3`:**
