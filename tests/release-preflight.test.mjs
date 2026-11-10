@@ -240,7 +240,7 @@ test('P1-P static guard refuses splitting identity registration from its first m
     s=>{s.mobileSync=s.mobileSync.replace(
       'DELETE FROM user_identities','SELECT * FROM user_identities');},
     s=>{s.mobileSync=s.mobileSync.replace(
-      'if (rollbackUnused.meta.changes===1) {','if (false) {');},
+      'if (cleanupChanges===1) {','if (false) {');},
     s=>{s.mobileSync=s.mobileSync.replace(
       'if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject)',
       'if (creating) return json({error:"pretend_created"},201)');},
