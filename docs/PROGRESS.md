@@ -1,5 +1,24 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-Q Cloudflare owner-operated read-only account inventory (PR #23, source implementation; CI pending)
+
+**Direct blocker targeted:** P1-P and prior work are source/local integration proofs, not an authenticated Cloudflare account inventory. We need account-specific Worker/D1/Cron metadata before choosing the owner-approved release path.
+
+**Implemented on P1-Q branch (not deployed):**
+- Added `scripts/cloudflare-readonly-inspect.mjs` with **zero-network offline default** and explicit `--inspect-live` requiring account ID/token only from the owner-run process environment. The only allowed network method is **GET** on documented Cloudflare v4 inventory endpoints. Response text is bounded, redirects forbidden, no arbitrary remote D1 SQL, route or method and no automatic deploy.
+- Output is limited to named target Worker/D1 presence, Cron schedule count, database size if obtainable, and incomplete/error status. No token, account ID, D1 UUID, raw provider error, secret or API response is emitted. Incomplete pagination and denied permissions remain inconclusive.
+- Every report retains immutable `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`. It **cannot** assert real billing, Free-plan eligibility, CPU timing, migrations, Google-issued token, physically OFF phone or autonomous remote execution.
+- Added adversarial offline Node tests for correct GET path/method/host, credential/report redaction, malformed/403 responses, invalid account/token, missing pagination evidence and untrusted UUID. Included test script in `npm test`.
+- Added [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md), updated remote owner release runbook. Official Cloudflare limits were rechecked on 10 November 2026; **account-specific data was not inspected**.
+- **CI/evidence status at writing:** tests and GitHub Actions must be checked at the exact final PR HEAD before any MERGED/CI_VERIFIED claim. No remote Cloudflare account, Google project, physical phone, new D1 resource, API credential or payment was accessed/modified.
+
+**Next evidence gate:** review actual owner account plan/usage/billing and live inventory privately via least-privilege read-only Cloudflare token (user-led), plus explicit owner approval for backup/migrations 0001–0005, inert Worker and eventually controlled Cron/physical phone-OFF acceptance. This milestone does **not** authorize those writes.
+
+[Source inspector](../scripts/cloudflare-readonly-inspect.mjs) · [Adversarial tests](../tests/cloudflare-readonly-inspect.test.mjs) · [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md) · [Remote readiness](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+---
+
+
 ## 2026-11-10 | P1-P atomic first-monitor identity admission and no orphan pilot slots (PR #22 MERGED, source/local only)
 
 **Concrete source finding:** P1-O registered a new authenticated identity with a D1 INSERT **before** inserting its first PAUSED monitor in a separate DB operation. If the second operation errored or silently inserted zero rows, a newly registered identity could remain stranded without any monitor, permanently occupying one of the **20** pilot identity slots. This is a documented source-level failure scenario, **not evidence of a real remote Cloudflare incident**.
