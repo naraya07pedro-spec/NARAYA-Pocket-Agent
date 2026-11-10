@@ -145,6 +145,8 @@ test('preflight rejects Android client and UI regressions that hide Cron eligibi
       'previous.withConfirmedStatus(outcome)','previous');},
     s=>{s.androidMainActivity=s.androidMainActivity.replace(
       'SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE','SyncFailure.UNAVAILABLE');},
+    s=>{s.androidMainActivity=s.androidMainActivity.replace(
+      'migrations 0001–0005','migrations 0001–0004');},
   ];
   for(const mutate of mutators){
     const s=clone();mutate(s);
