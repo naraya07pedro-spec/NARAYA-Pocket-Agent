@@ -32,6 +32,20 @@ jobs:
           gradle-version: '9.4.1'
       - name: Unit tests and debug-signed pilot APK
         run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify cloud-sync security JVM tests actually executed
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path("android/app/build/test-results/testDebugUnitTest/TEST-dev.naraya.pocketagent.CloudSyncClientTest.xml")
+          if not report.exists():
+              raise SystemExit("CloudSyncClientTest XML missing; cannot claim tests passed")
+          suite = ET.parse(report).getroot()
+          metrics = {k: int(suite.attrib.get(k, 0)) for k in ("tests", "failures", "errors", "skipped")}
+          print("Cloud sync security tests:", metrics)
+          if metrics["tests"] < 7 or any(metrics[x] for x in ("failures", "errors", "skipped")):
+              raise SystemExit("Cloud sync security test count or result invalid")
+          PY
       - name: Verify built APK permissions and absence of local secrets
         run: |
           test -f android/app/build/outputs/apk/debug/app-debug.apk
