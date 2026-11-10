@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## 2026-11-10 P1-C identity boundary: source proof only
+
+| Gate | Classification | Evidence and limitation |
+| --- | --- | --- |
+| RS256 cryptographic verifier | CI_VERIFIED_SYNTHETIC | [Offline CI 42747877456](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42747877456) SUCCESS on `af55967f6d6370861dc1b02367a7c53883f08219`; 19/19 backend tests including 7 OIDC security cases, TypeScript check; generated test RSA/JWKS, not Google live |
+| `GET /v1/me` | CI_VERIFIED_SYNTHETIC | Worker endpoint exercised with signed synthetic token and mocked JWKS fetch; no owner token or DB required. Response says `monitorSync:false`. Not deployed |
+| Wrong issuer/audience, expiry, alg confusion, forged token, wrong/ambiguous JWKS keys | CI_VERIFIED_SYNTHETIC | Negative test cases; fail-closed behavior for these tested scenarios, NOT a complete security audit |
+| Public real OIDC provider login | NOT_VERIFIED | No real Google/Firebase/OIDC credential or issuer integration |
+| Mobile secure token storage and account-scoped data | NOT_IMPLEMENTED | No server user mapping, SQL owner isolation for OIDC identities, or Android login/cloud sync |
+| Remote Cloudflare + powered-off phone | NOT_VERIFIED | Issue #2 stays open |
+| Final PR docs/merge SHA | PENDING | CI above covers source SHA before subsequent documentation commits |
+
+**Observed failure/correction:** source run 42747699679 failed one integration assertion on SHA `24c83e393424f6582daa16dae1ea545929432272`: test referenced synthetic JWKS hostname without a fetch fixture, causing 503. Fixed test stub only; source run 42747877456 then passed. This is test infrastructure evidence, not a live-provider outage.
+
+---
+
 ## Current milestone: 2026-11-10 P1-B
 
 | Gate | Status pending final CI | Interpretation |
