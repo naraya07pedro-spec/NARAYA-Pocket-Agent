@@ -165,7 +165,11 @@ export async function mobileSync(request: Request, env: Env, path: string): Prom
   if (path === '/v1/sync/monitors' && request.method === 'GET') return listSyncMonitors(env,ownerId);
   if (path === '/v1/sync/monitors' && request.method === 'POST') return createSyncMonitor(request,env,ownerId);
   if (path === '/v1/sync/observations' && request.method === 'GET') return listSyncObservations(request,env,ownerId);
-  const changed = /^\\/v1\\/sync\\/monitors\\/([0-9a-f-]{36})$/i.exec(path);
+  const changed = new RegExp('^/v1/sync/monitors/([0-9a-f-]{36})
+  if (changed && request.method === 'PATCH') return updateSyncStatus(request,env,ownerId,changed[1]);
+  return json({error:'not_found'},404);
+}
+,'i').exec(path);
   if (changed && request.method === 'PATCH') return updateSyncStatus(request,env,ownerId,changed[1]);
   return json({error:'not_found'},404);
 }
