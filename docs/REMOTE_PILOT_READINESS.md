@@ -1,4 +1,38 @@
-# P1-R release readiness gate | Owner-approved remote pilot ONLY
+# P1-S release readiness gate | Owner-approved remote pilot ONLY
+
+## P1-S: Owner-only Cloudflare subscription and billing-history risk inspection (no billing writes)
+
+The [Cloudflare subscriptions GET API](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/) and [account billing history GET API](https://developers.cloudflare.com/api/resources/billing/subresources/history/methods/list/) both accept the **Billing Read** API token permission. P1-S adds a **separate**, optional Billing Read-only inspector that is **offline by default** and does NOT reuse the P1-R Worker/D1 inventory token. Neither the assistant nor CI can inspect your actual account, and P1-S did not do so.
+
+Without a token (zero network), from the repository root:
+
+```powershell
+npm run cloudflare:billing-offline
+```
+
+To inspect billing metadata **only on your trusted private Windows device** after reviewing the script and creating a **least-privilege Billing Read API token scoped to the intended account** (never a Global API key, Billing Write, or general-purpose token):
+
+```powershell
+$env:CF_BILLING_ACCOUNT_ID = Read-Host 'Cloudflare Account ID'
+$billingSecret = Read-Host 'Billing Read API token' -AsSecureString
+try {
+  $env:CF_BILLING_READ_TOKEN = [System.Net.NetworkCredential]::new('', $billingSecret).Password
+  npm run cloudflare:billing-live
+} finally {
+  Remove-Item Env:CF_BILLING_READ_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:CF_BILLING_ACCOUNT_ID -ErrorAction SilentlyContinue
+  Remove-Variable billingSecret -ErrorAction SilentlyContinue
+}
+```
+
+**Do not paste** the token, account ID, invoices, screenshots with billing details or raw response into ChatGPT, GitHub issues or GitHub Actions. The script only outputs coarse signals and numbers of scanned records, not invoice IDs, billing values, currencies or provider response text. `POTENTIAL_PAID_SUBSCRIPTION_PRESENT` requires review; `NONE_RETURNED_NOT_FREE_PROOF` **never proves Free plan**. `YES_HISTORICAL_ONLY` refers to historic positive amount in the scanned history, not current obligations. Incomplete/failed API reads return unknown markers, not an assertion of zero cost. Use [ADR-0020](ADR/0020-owner-cloudflare-billing-readonly-preflight.md).
+
+**Manual review remains mandatory even if both API GETs pass.** Open Cloudflare Dashboard → Billing to inspect **current/estimated charges, Workers plan/usage, and future automatic billing arrangements**; inspect D1 Metrics for account daily billable **rows read/written**, account quotas, and deployed Workers CPU/cron. Cloudflare's official [D1 metrics](https://developers.cloudflare.com/d1/observability/metrics-analytics/) distinguish raw query counts from billable rows and note coverage limitations. A previous invoice or absent subscription is **not** the billable usage forecast. Even after these checks, actual Cloudflare Cron execution + D1 and physical Android OFF/OAuth still require separately authorized pilot acceptance.
+
+P1-S scripts **do not** create resources, send SQL, register OAuth, migrate D1, deploy a Worker, toggle Cron or trigger fees on their own. All reports intentionally retain `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`, `current_free_tier_proven:false` and `future_zero_extra_cost_proven:false`.
+
+---
+
 
 ## P1-R: Paginated D1 owner inventory must not claim absent before complete
 
