@@ -295,3 +295,36 @@ test('concurrent callers never cache bearer headers, subjects or request-bound p
   assert.ok(!bytes.includes('Bearer'));
   assert.ok(!bytes.includes(goodPayload.sub));
 });
+
+
+test('Worker runtime discovers dedicated named JWKS cache per request without global Promise state',async()=>{
+  const original = Object.getOwnPropertyDescriptor(globalThis,'caches');
+  const cache = fakeCache();
+  let opens=0,providerCalls=0;
+  Object.defineProperty(globalThis,'caches',{
+    configurable:true,
+    value:{
+      async open(namespace){
+        opens++;
+        assert.equal(namespace,'naraya-pocket-agent-public-jwks-v1');
+        return cache;
+      },
+    },
+  });
+  try {
+    const valid=await sign();
+    const provider=async()=>{
+      providerCalls++;
+      return new Response(JSON.stringify({keys:[jwk]}),{
+        headers:{'Cache-Control':'public, max-age=50'},
+      });
+    };
+    await verifyOidcBearer(request(valid),settings,provider,fixedTime);
+    await verifyOidcBearer(request(valid),settings,provider,fixedTime+1000);
+    assert.equal(opens,2,'namespace resolved per request, no shared request-bound cache-open Promise');
+    assert.equal(providerCalls,1,'public key bytes reused after Cache API hit');
+  } finally {
+    if(original)Object.defineProperty(globalThis,'caches',original);
+    else delete globalThis.caches;
+  }
+});
