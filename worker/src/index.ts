@@ -101,6 +101,12 @@ export default {
     }
   },
   async scheduled(_event: unknown, env: Env): Promise<void> {
+    // Global, opt-in kill switch: deployed Cron triggers alone MUST NOT issue
+    // provider requests or touch D1. Mobile permission is a separate gate.
+    if (env.SCHEDULER_ENABLED !== 'true') {
+      console.log(JSON.stringify({event:'scheduled_disabled'}));
+      return;
+    }
     const report = await runScheduler(env);
     console.log(JSON.stringify({ event: 'scheduled_tick', ...report }));
   },

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "naraya-pocket-agent-pilot-REPLACE_ME",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-09",
+  "workers_dev": true,
+  "vars": {
+    "SCHEDULER_ENABLED": "false",
+    "MOBILE_SCHEDULING_ENABLED": "false"
+  },
+  "triggers": {
+    "crons": []
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "naraya-pocket-agent-pilot-REPLACE_ME",
+      "database_id": "REPLACE_WITH_OWNER_APPROVED_D1_UUID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

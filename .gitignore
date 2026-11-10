@@ -60,3 +60,9 @@ node_modules/
 *.db-wal
 *.db-shm
 coverage/
+
+# Owner-only pilot config and downloaded database exports (never commit)
+worker/wrangler.pilot.jsonc
+worker/wrangler.pilot.local.jsonc
+cloudflare-exports/
+pilot-evidence-private/

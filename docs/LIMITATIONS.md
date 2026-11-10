@@ -1,6 +1,18 @@
 # Limitations and non-claims
 
-## Current stage P1-B (2026-11-10)
+## Current P1-I source and remote status (10 November 2026)
+
+The Worker has a global **default-OFF Cron kill-switch** `SCHEDULER_ENABLED`, separate from mobile owner scheduling. An offline release preflight checks source config, migration chain, ignored private pilot config, Android OAuth defaults and CI no-deploy rules. A valid preflight **must still report remote readiness BLOCKED** because there is no owner-approved Cloudflare deployment, actual Google OAuth account/token, remote D1 database, public Worker HTTPS route, real Cron execution, physically powered-off-device acceptance or account CPU/billing measurements.
+
+Cloudflare Workers Free publishes **10ms CPU per Cron trigger**, and D1 Free has its own limits; tests under local workerd do **not** prove that a production invocation satisfies the Free CPU cap. An OFF Cron can still be invoked and counted by the platform even though the handler makes no D1 or provider calls. A future owner-approved configuration must check quotas and charges before turning on triggers.
+
+Android **source** implements explicit Credential Manager login, manual owner-scoped sync, status PATCH and observation GET. The standard debug APK lacks Google Web Client ID and Worker origin, so those cloud controls are disabled. Android has **not** been installed on consenting physical hardware for a signed-in end-to-end test. Neither source/JVM/CI nor a mocked RSA token proves production security, performance, reliability or real-world autonomy.
+
+Source and acceptance: [ADR-0010](ADR/0010-default-off-cron-release-gate.md), [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md), [PROGRESS](PROGRESS.md), [EVIDENCE](EVIDENCE.md).
+
+---
+
+## Historical stage P1-B snapshot (2026-11-10; superseded by P1-E/P1-I)
 
 Android now has an experimental **manual public GitHub HTTPS preview**, with a debug APK and JVM tests. INTERNET permission is intentionally present for this single read-only feature. Snapshot storage remains local and not encrypted. No verified Android hardware test, actual RAM/thermal/battery measurement, multi-user authentication, cloud sync, device-off autonomy, production deployment or paid AI exists. The code does not embed the owner backend secret. Rate-limits, connectivity loss, and upstream changes can prevent a check; previous valid snapshot is retained. No third-party writes or automatic Android background work occur.
 

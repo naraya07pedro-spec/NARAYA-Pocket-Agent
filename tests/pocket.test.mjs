@@ -330,3 +330,39 @@ test('missing budget migration or invalid clock fails closed before any provider
     assert.equal(monitorRow(env).lease_token,null);
   } finally {env.DB.close();}
 });
+
+
+
+test('Cron entrypoint defaults OFF even if active operator work exists: no D1 and no provider requests', async()=>{
+  const logs=[];
+  const previous=console.log;
+  let dbCalls=0;
+  const DB={prepare(){dbCalls++;throw Error('D1 must not be contacted when disabled')}};
+  try {
+    console.log=(value)=>logs.push(String(value));
+    for(const flag of [undefined,'false','TRUE','true ', '', '1']) {
+      await worker.scheduled({scheduledTime:Date.now()},{
+        DB,OWNER_ID:'test-owner',SCHEDULER_ENABLED:flag,MOBILE_SCHEDULING_ENABLED:'true',
+      });
+    }
+    assert.equal(dbCalls,0);
+    assert.equal(logs.length,6);
+    for(const line of logs)assert.deepEqual(JSON.parse(line),{event:'scheduled_disabled'});
+  } finally {console.log=previous;}
+});
+
+test('Cron true gate reaches scheduler, and explicit mobile flag remains independently default-OFF',async()=>{
+  const env=make(),logs=[];
+  const prev=console.log;
+  try {
+    console.log=value=>logs.push(String(value));
+    await worker.scheduled({}, {...env,SCHEDULER_ENABLED:'true'});
+    assert.deepEqual(JSON.parse(logs.at(-1)),{
+      event:'scheduled_tick', claimed:0,completed:0,observations:0,deferred:0,skipped:0,
+    });
+    // An absent OWNER_ID must still fail closed when scheduler really enabled.
+    await assert.rejects(worker.scheduled({},{
+      DB:env.DB,SCHEDULER_ENABLED:'true',MOBILE_SCHEDULING_ENABLED:'true',
+    }),/owner_not_configured/);
+  }finally{console.log=prev;env.DB.close();}
+});
