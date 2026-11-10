@@ -3,7 +3,7 @@
  * P1-Q owner-run Cloudflare inventory inspection.
  *
  * Live mode is EXPLICIT, credentials are environment-only, and the only
- * network method is GET against five fixed Cloudflare API v4 paths.
+ * network method is GET against four allowlisted Cloudflare API v4 endpoint patterns.
  * The output intentionally omits account IDs, D1 UUIDs, tokens and raw API
  * responses. Read-only metadata is NOT a quota, billing, CPU or phone-OFF proof.
  */
