@@ -1,6 +1,6 @@
 # Progress ledger | NARAYA Pocket Agent
 
-## 2026-11-10 | P1-R accurate paginated D1 account inventory (PR #24, source CI-VERIFIED; remote still BLOCKED)
+## 2026-11-10 | P1-R accurate paginated D1 account inventory (PR #24 MERGED; remote still BLOCKED)
 
 **Why P1-R:** source-level audit of [P1-Q inspector](../scripts/cloudflare-readonly-inspect.mjs) against [official D1 List API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/) found a trust-boundary error: the inspector could call a short first page complete despite `result_info.total_count` indicating additional unseen databases, because `total_pages` was missing. This could mark an unseen target database falsely absent. **No actual Cloudflare incident was observed.**
 
@@ -19,6 +19,8 @@
 - [Public GitHub GET on isolated local D1 42829389108](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389108): SUCCESS, **not remote Cloudflare**.
 - [Android native adapter 42829389279](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389279): SUCCESS.
 - [Android debug APK + security JVM 42829389235](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389235): SUCCESS, **20/20 actual JVM**, 0 failures/errors/skips. APK debug SHA-256 `af048f7c6a3e973a77179a2e9edb4b3afcd40357af5d53b4f6f4a8ec9bbbdc49`.
+
+**FINAL PR #24 MERGED:** merge commit `06a6698d326e42aecdc5a4ac2f0acaf8e15229c1`. Independently tested final PR HEAD `04021bd6b017793e302e70d0fa0fe2608562254d` passed **5/5 GitHub Actions**: [Node 100/100 42830301894](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42830301894), [workerd/D1 11/11 42830301825](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42830301825), [GitHub public GET/local D1 42830301796](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42830301796), [Android adapter 42830302177](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42830302177), [Android APK + 20/20 security JVM 42830301866](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42830301866). **Final debug APK SHA256** `f8e4433c4a42c7abe8fb9046050a37de4a8550883f16039669c785e31b4ec19e`. These are exactly **PR HEAD** workflows, not automatic proof of merge or subsequent main documentation commits. No real Cloudflare account or physical phone was accessed.
 
 **Evidence class:** local synthetic/mock + source CI verified **only for that exact corrected code SHA**; additional documentation commits require an independent final PR HEAD check. The account-specific Cloudflare Free plan, billing, row usage, CPU and real D1/Worker/Cron, Google OAuth Android, physical phone OFF and post-restart mobile retrieval remain **NOT VERIFIED**. No network call to the actual account was made. No automatic deployment or cost.
 
