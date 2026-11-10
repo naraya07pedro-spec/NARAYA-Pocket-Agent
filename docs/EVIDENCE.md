@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-E Android Google sign-in + manual cloud adapter (10 November 2026; branch candidate)
+## P1-E Android Google sign-in + manual cloud adapter (10 November 2026; PR #11 merged, not deployed)
 
 | Gate | Result | Exact environment/source |
 | --- | --- | --- |
@@ -12,6 +12,8 @@
 | Explicit Android signed-in cloud sync | NOT_VERIFIED | Google Web Client ID and Worker HTTPS origin intentionally blank in CI; tests mock transport and token-shaped strings |
 | Real Google sign-in + actual server ID token verification | NOT_VERIFIED | No configured Google OAuth project/device/real issued token |
 | Device installation, RAM/battery, powered-off Cloudflare Cron | NOT_VERIFIED | Device and remote setup/authorization required |
+
+**Final PR-head CI gate:** 5/5 workflows SUCCESS on SHA `e1dc90816ecc85df064fa379bda114c35541e967`: [Android 42761079608](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42761079608) with `CloudSyncClientTest` 7/7 executed, 0 skipped/failures/errors and debug APK SHA-256 `172d937de4f021716be1504ea74bc9329070edc39722402e98a6b801722c3bc0`; [Android provider adapter 42761079643](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42761079643); [backend 42761079408](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42761079408); [local D1 42761079456](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42761079456); [GitHub read 42761079496](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42761079496). [PR #11](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/11) merged as `a1b86a3a95895c8516d3be766379ec6b42faee17`. Main merge SHA and later docs commits have not been independently CI-verified. No remote Cloudflare, real Google identity, phone-off test or spending.
 
 **Initial failure and correction:** Android runs [42759905864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905864) and [42759905986](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905986) failed on `cbc107b5c730ddc097f2e5efd8b8e3f0397985b5` due to Google ID SDK 1.2.1 Kotlin 2.4 metadata incompatible with app compiler 2.2 metadata reader. Pinning `googleid:1.1.1` yielded green CI, without unsafe skip flags.
 
