@@ -1,5 +1,6 @@
 import { boundedJson, InputError, json, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { verifyOidcBearer } from './oidc.ts';
+import { mobileSchedulerConfigured } from './scheduler-eligibility.ts';
 import type { Env } from './types.ts';
 
 export class IdentityCapacityError extends Error {}
@@ -30,7 +31,7 @@ function syncView(row: MobileMonitor, env?: Env) {
     lastSha: row.last_sha,
     lastCheckedAt: row.last_checked_at,
     scheduled: false, // No real remote Cloudflare execution is verified.
-    schedulerEligible: row.status === 'ACTIVE' && env?.MOBILE_SCHEDULING_ENABLED === 'true',
+    schedulerEligible: row.status === 'ACTIVE' && !!env && mobileSchedulerConfigured(env),
   };
 }
 
@@ -137,7 +138,7 @@ async function listSyncObservations(request: Request, env: Env, ownerId: string)
 async function updateSyncStatus(request: Request, env: Env, ownerId: string, id: string): Promise<Response> {
   if (!UUID.test(id)) return json({error:'not_found'},404);
   const {status,expectedVersion} = parseStatusInput(await boundedJson(request));
-  if (status === 'ACTIVE' && env.MOBILE_SCHEDULING_ENABLED !== 'true')
+  if (status === 'ACTIVE' && !mobileSchedulerConfigured(env))
     return json({error:'scheduler_disabled'},409);
 
   const now = Date.now();
