@@ -36,6 +36,8 @@ export function readSourceSnapshot(base=root){
     migrations,
     migration0004:text(base,'worker/migrations/0004_global_scheduler_budget.sql'),
     workerIndex:text(base,'worker/src/index.ts'),
+    schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
+    mobileSync:text(base,'worker/src/mobile-sync.ts'),
     workerTypes:text(base,'worker/src/types.ts'),
     androidGradle:text(base,'android/app/build.gradle.kts'),
     workflows,
@@ -81,6 +83,13 @@ export function auditSource(s){
     check('mobile_activation_default_off',
       !/^(true|1)$/i.test(String(s.prod.vars?.MOBILE_SCHEDULING_ENABLED??''))),
     check('no_implicit_public_route',s.prod.workers_dev===false && !hasPublicRoute(s.prod)),
+    check('mobile_activation_requires_both_flags_and_migrated_d1',
+      /env\.SCHEDULER_ENABLED === 'true'/.test(s.schedulerEligibility) &&
+      /env\.MOBILE_SCHEDULING_ENABLED === 'true'/.test(s.schedulerEligibility) &&
+      /typeof env\.OWNER_ID === 'string'/.test(s.schedulerEligibility) &&
+      /schedulerEligible: row.status === 'ACTIVE' && !!env && mobileSchedulerConfigured\(env\)/.test(s.mobileSync) &&
+      /status === 'ACTIVE' && !mobileSchedulerConfigured\(env\)/.test(s.mobileSync) &&
+      /status === 'ACTIVE' && !await schedulerBudgetReady\(env\)/.test(s.mobileSync)),
     check('cron_cadence_fixed',Array.isArray(s.prod.triggers?.crons) &&
       s.prod.triggers.crons.length===1 && s.prod.triggers.crons[0]==='*/15 * * * *'),
     check('d1_binding_and_migration_root',Boolean(d && d.binding==='DB' &&
