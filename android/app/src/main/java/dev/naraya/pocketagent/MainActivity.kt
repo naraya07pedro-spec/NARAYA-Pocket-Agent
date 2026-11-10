@@ -53,7 +53,13 @@ class MainActivity : ComponentActivity() {
                 onBackground = Color(0xFFF1F5F4),
             )
             MaterialTheme(colorScheme = colors) {
-                MonitorDraftScreen(store, remember { GithubHeadClient() })
+                MonitorDraftScreen(
+                    store = store,
+                    github = remember { GithubHeadClient() },
+                    cloud = remember { CloudSyncClient(BuildConfig.CLOUD_API_ORIGIN) },
+                    identity = remember { GoogleIdentityClient(this) },
+                    webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID,
+                )
             }
         }
     }
@@ -70,12 +76,24 @@ private fun readableError(code: HeadError) = when (code) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
+private fun MonitorDraftScreen(
+    store: DraftStore,
+    github: GithubHeadClient,
+    cloud: CloudSyncClient,
+    identity: GoogleIdentityClient,
+    webClientId: String,
+) {
     var draftRepo by remember { mutableStateOf("") }
     var interval by remember { mutableStateOf(60) }
     var drafts by remember { mutableStateOf(store.list()) }
     var notice by remember { mutableStateOf("") }
     var checkingId by remember { mutableStateOf<String?>(null) }
+    val session = remember { EphemeralIdToken() } // RAM only; never rememberSaveable.
+    var signedIn by remember { mutableStateOf(false) }
+    var cloudBusy by remember { mutableStateOf(false) }
+    var cloudRows by remember { mutableStateOf<List<CloudMonitor>>(emptyList()) }
+    var cloudNotice by remember { mutableStateOf("") }
+    val cloudConfigured = webClientId.isNotBlank() && CloudSyncClient.validOrigin(BuildConfig.CLOUD_API_ORIGIN)
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -132,6 +150,82 @@ private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
                     }
                 }
             }
+            item {
+                Card(shape = RoundedCornerShape(18.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Cloud sync · explicit permission", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Google sign-in is required before uploading any public repository draft. " +
+                                "ID tokens stay in memory; no token is saved locally. " +
+                                "Remote cloud execution has NOT been verified.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (!cloudConfigured) {
+                            Text("Cloud sync unavailable in this build. Missing public OAuth/Worker configuration.",
+                                style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            if (!signedIn) {
+                                Button(
+                                    enabled = !cloudBusy,
+                                    onClick = {
+                                        cloudBusy = true
+                                        cloudNotice = "Opening Google sign-in..."
+                                        scope.launch {
+                                            val token = identity.signIn(webClientId)
+                                            signedIn = token != null && session.replace(token)
+                                            cloudNotice = if (signedIn) "Google ID token obtained. Refresh cloud state to verify backend access."
+                                                else "Sign-in unavailable or canceled; no cloud request was made."
+                                            cloudBusy = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Sign in with Google") }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Button(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            cloudBusy = true
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { cloud.list(session.read()) }
+                                                when (result) {
+                                                    is SyncResult.Listed -> {
+                                                        cloudRows = result.monitors
+                                                        cloudNotice = "Server returned ${result.monitors.size} monitor(s); cloud state refreshed."
+                                                    }
+                                                    is SyncResult.Failed -> {
+                                                        if (result.code == SyncFailure.UNAUTHORIZED) {
+                                                            session.clear()
+                                                            signedIn = false
+                                                            cloudRows = emptyList()
+                                                        }
+                                                        cloudNotice = "Cloud refresh failed: ${result.code}. Local drafts unchanged."
+                                                    }
+                                                    else -> cloudNotice = "Unexpected server response; local drafts unchanged."
+                                                }
+                                                cloudBusy = false
+                                            }
+                                        },
+                                    ) { Text("Refresh cloud state") }
+                                    OutlinedButton(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            session.clear()
+                                            signedIn = false
+                                            cloudRows = emptyList()
+                                            cloudNotice = "Local session cleared."
+                                            scope.launch { identity.signOut() }
+                                        },
+                                    ) { Text("Sign out") }
+                                }
+                                Text("Session exists only in app memory. Reauthentication is required after expiration or restart.",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (cloudNotice.isNotBlank()) Text(cloudNotice, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
             item { Text("Saved on this phone · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium) }
             if (drafts.isEmpty()) {
                 item { Text("No repositories added. Add one above.", style = MaterialTheme.typography.bodyMedium) }
@@ -147,6 +241,44 @@ private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
                                 DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                                     .format(Date(draft.lastCheckedAt)), style = MaterialTheme.typography.bodySmall)
                         } else Text("No verified local snapshot yet", style = MaterialTheme.typography.bodySmall)
+                        val remote = cloudRows.firstOrNull { it.clientDraftId == draft.id }
+                        if (remote != null) {
+                            Text("Server state: ${remote.status} · version ${remote.version} · ID ${remote.id.take(8)}",
+                                style = MaterialTheme.typography.bodySmall)
+                        } else if (signedIn) {
+                            Text("No verified server mapping loaded.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (signedIn && cloudConfigured) {
+                            OutlinedButton(
+                                enabled = !cloudBusy && checkingId == null,
+                                onClick = {
+                                    cloudBusy = true
+                                    cloudNotice = "Uploading exactly one public repository draft..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { cloud.upload(session.read(), draft) }
+                                        when (result) {
+                                            is SyncResult.Uploaded -> {
+                                                cloudRows = cloudRows.filterNot { it.clientDraftId == result.monitor.clientDraftId } +
+                                                    result.monitor
+                                                cloudNotice = if (result.created)
+                                                    "Server confirmed PAUSED cloud monitor for ${draft.repository}; not remotely executed."
+                                                else "Server confirmed existing mapping for ${draft.repository}; no new duplicate."
+                                            }
+                                            is SyncResult.Failed -> {
+                                                if (result.code == SyncFailure.UNAUTHORIZED) {
+                                                    session.clear()
+                                                    signedIn = false
+                                                    cloudRows = emptyList()
+                                                }
+                                                cloudNotice = "Cloud upload failed: ${result.code}; local draft and verified SHA preserved."
+                                            }
+                                            else -> cloudNotice = "Unexpected cloud response; local draft unchanged."
+                                        }
+                                        cloudBusy = false
+                                    }
+                                },
+                            ) { Text(if (cloudBusy) "Syncing..." else "Sync this draft to cloud") }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
                                 enabled = checkingId == null,
@@ -180,10 +312,10 @@ private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
                                 onClick = {
                                     if (store.remove(draft.id)) {
                                         drafts = store.list()
-                                        notice = "Repository removed from this phone"
+                                        notice = "Local draft removed ONLY. Any separate cloud monitor remains unchanged; sign in and refresh cloud state."
                                     } else notice = "Could not save removal"
                                 }
-                            ) { Text("Remove") }
+                            ) { Text("Remove local only") }
                         }
                     }
                 }
@@ -191,10 +323,9 @@ private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
             item {
                 HorizontalDivider()
                 Text(
-                    "One manual HTTPS read goes directly to api.github.com. No GitHub token, " +
-                        "owner Worker credential or personal records are uploaded. GitHub sees the " +
-                        "requester's network address and requested public repository. " +
-                        "No Android background execution or powered-off-phone monitoring is active.",
+                    "Manual GitHub preview uses api.github.com without tokens. Optional explicit cloud " +
+                        "sync sends the selected public repo and ephemeral Google ID token to the configured " +
+                        "Worker. No operator API token, Android background process, or verified phone-off task.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

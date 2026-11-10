@@ -1,5 +1,26 @@
 # Android acceptance matrix | P1-A history + P1-B active
 
+## P1-E Android Google identity/cloud manual sync: new acceptance gates (10 November 2026)
+
+**Source functionality**: explicit Credential Manager sign-in, ephemeral in-memory Google ID token, single-draft POST to fixed trusted HTTPS Worker and manual owner-scoped GET reconciliation. No token is stored locally; default APK has neither Web Client ID nor Worker origin, so cloud controls are disabled. See [ADR-0006](ADR/0006-android-google-identity-manual-sync.md).
+
+**CI gates:** verify Android compile and APK, JVM `CloudSyncClientTest` (>=7 executed/none skipped), permission manifest check, existing official public GitHub adapter; backend OIDC and D1 regressions. These are **synthetic and JVM tests, not live OAuth**.
+
+**Owner-authorized on-device tests remain REQUIRED:**
+1. Configure a public Google Web OAuth client ID and Android package/signing certificate; confirm real issuer/audience signature at Worker. Do not ship any client secret or operator token.
+2. Deploy Worker/D1 and migrations only after explicit approval and checking the actual zero-spend account limits. Confirm trusted HTTPS host and actual JWKS verifier before handing real ID token to that host.
+3. Install the exactly hashed debug APK on a consenting Android; sign in using Credential Manager, confirm `GET /v1/sync/monitors` succeeds as that account, then send one explicit `POST`. Record a server monitor ID and version only if confirmed by Worker response.
+4. Retry after a simulated timeout: same `clientDraftId` must map to same server monitor ID, not create another row; change content with same ID => conflict.
+5. Sign out and restart app; token must not reappear from preferences and cloud state must not be fabricated. Re-sign in and retrieve the same server monitor; send a 401 and verify reauthentication.
+6. Test airplane mode and provider error: previously verified offline SHA and local draft remain unchanged. Verify that "Remove local only" doesn't imply remote record deletion.
+7. Prove a truly powered-off device and remotely scheduled D1/Cron separately using specific timestamps, owner ID (opaque), task IDs, log provenance and free-tier counters; never infer from successful CI.
+8. Measure real startup, RAM/PSS, battery/thermal, crashes/ANRs on named Android model/OS; do not invent readings.
+
+**Security and privacy:** no long-lived token storage or background login, no automatic cloud activation, do not paste any OAuth secret, client secret, Google API token or Cloudflare operator bearer in APK. The Google Web client identifier is public, not proof of authorized account. Record only redacted/nonsecret evidence.
+
+---
+
+
 ## P1-B functionality (Android debug APK)
 A native Kotlin/Compose screen creates, lists, and removes up to 20 public repository drafts. A user pressing **Check now** triggers one official public GitHub HTTPS GET, validates commit SHA, and stores last successful SHA + timestamp offline. Version-tolerant cache decoding retains P1-A drafts. No user login, cloud control, AI, notifications, or background automation exists.
 

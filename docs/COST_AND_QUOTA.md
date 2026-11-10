@@ -21,3 +21,12 @@ Official references (must be rechecked at deploy time):
 When `MOBILE_SCHEDULING_ENABLED==='true'`: at most 20 mapped identity subjects for this pilot, 3 monitors per mapped owner, 9 globally ACTIVE mobile monitors, at most 1 due task per owner and 3 total GitHub GET attempts per tick **across operator and mobile owners**. The D1 cursor persists owner rotation. Without the flag, the original single-owner schedule remains.
 
 These are runtime **application-level constraints**, not Cloudflare/GitHub account allocation proofs or guaranteed cadence. A task may run later than its declared interval under backlog. Live D1/Cron, billing/cost counters, Google login, device-off execution and schedule fairness during overlapping remote invocations remain unverified. Enabling any remote deployment still needs explicit operator authorization and fresh free-tier validation.
+
+
+## P1-E Android Google identity bridge (10 November 2026)
+
+The checked-in/CI Android APK has no Google Web Client ID and no Worker origin, so it cannot send ID tokens or cloud drafts. Google Credential Manager dependencies are included in the Android build; explicit real OAuth setup is not performed. Google OAuth project, verified domain and Android signing setup remain owner-controlled prerequisites.
+
+Cloud sync is **one selected public repo POST per explicit user click**, not background polling; each fetch has a 6-second connect/read timeout, 16 KiB bounded response, and 4 KiB bounded request. Retries reuse the existing draft UUID and server-side deduplication. Google credentials, provider quotas, OAuth project eligibility and actual Worker/D1 costs are **not checked from any connected account**. Do not equate library availability or CI passing with a free live deployment. Remote Cloudflare remains excluded until an explicit cost/authorization gate is satisfied.
+
+No client secret, Google API access token, user password, OAuth refresh token or operator Worker token is placed in the APK or Gradle properties. Public Google Web Client IDs and Worker origins can be configured at build time only after ownership checks; control that build channel carefully, since a malicious Worker host could receive an ID token.
