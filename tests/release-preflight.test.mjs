@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,13);
+  assert.equal(result.checks.length,14);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -149,5 +149,23 @@ test('preflight rejects Android client and UI regressions that hide Cron eligibi
   for(const mutate of mutators){
     const s=clone();mutate(s);
     assert.ok(failures(audit(s)).includes('android_cloud_execution_is_not_inferred_from_active'));
+  }
+});
+
+
+test('P1-L preflight rejects removed observation SHA linkage or unsafe tie assumption',()=>{
+  const sources=[
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'if (!coherentObservationHistory(output))','if (false)');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'newer.previousSha != older.headSha','false');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'rows.count { it.type == "BASELINE" } > 1','false');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'rows.map { it.observedAt }.toSet().size == rows.size','true');},
+  ];
+  for(const mutate of sources){
+    const snapshot=clone();mutate(snapshot);
+    assert.ok(failures(audit(snapshot)).includes('android_observation_timeline_chain_guard'));
   }
 });
