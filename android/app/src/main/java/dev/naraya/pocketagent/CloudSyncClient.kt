@@ -66,6 +66,19 @@ internal sealed interface SyncResult {
     data class Failed(val code: SyncFailure) : SyncResult
 }
 
+/**
+ * Keep the on-screen monitor derived from the verified versioned server ACK.
+ * Never leave a stale eligible=true flag after a confirmed PAUSE, or infer
+ * scheduling from a successful status change.
+ */
+internal fun CloudMonitor.withConfirmedStatus(change: SyncResult.StatusChanged): CloudMonitor? {
+    if (change.monitorId != id || change.version != version + 1 ||
+        change.status !in listOf("ACTIVE", "PAUSED") || change.status == status ||
+        change.schedulerEligible != (change.status == "ACTIVE")) return null
+    return copy(status = change.status, version = change.version,
+        schedulerEligible = change.schedulerEligible, scheduled = false)
+}
+
 internal data class SyncHttpResponse(val status: Int, val body: String)
 internal fun interface SyncTransport {
     fun execute(origin: String, path: String, method: String, token: String, jsonBody: String?): SyncHttpResponse
