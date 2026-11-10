@@ -30,6 +30,18 @@ internal data class CloudMonitor(
     val scheduled: Boolean,
 )
 
+/**
+ * Honest user-facing distinction between stored state, last known scheduling
+ * configuration and physical/remote execution proof. Never infer a running
+ * Cron from ACTIVE or schedulerEligible alone.
+ */
+internal fun CloudMonitor.executionSummary(): String = when {
+    status == "PAUSED" -> "PAUSED (last server snapshot). No execution is authorized."
+    !schedulerEligible -> "Stored ACTIVE, but scheduler eligibility is OFF in the last server snapshot."
+    scheduled -> "Server reports scheduled; physical phone-off execution is NOT independently verified."
+    else -> "Stored ACTIVE and configuration-eligible; remote Cron execution is NOT verified."
+}
+
 internal enum class SyncFailure {
     NOT_CONFIGURED, SIGN_IN_REQUIRED, UNAUTHORIZED, RATE_LIMITED, CONFLICT, NOT_FOUND,
     SCHEDULER_DISABLED, SCHEDULER_STORAGE_UNAVAILABLE, STALE_VERSION, ACTIVE_LIMIT,
