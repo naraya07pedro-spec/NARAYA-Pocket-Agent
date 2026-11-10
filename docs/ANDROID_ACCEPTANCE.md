@@ -1,4 +1,18 @@
-# Android acceptance matrix | P1-F source merged, real-device and remote Cron acceptance pending
+# Android acceptance matrix | P1-I Cron OFF and release preflight; real device/remote Cloudflare blocked
+
+## P1-I offline deployment guard, not Android-cloud completion
+
+**Implemented and CI-tested:** The remote Worker code's `scheduled()` callback requires literal `SCHEDULER_ENABLED='true'` before it may query D1 or call GitHub. This is independent of signed-mobile `MOBILE_SCHEDULING_ENABLED` and prevents even legacy ACTIVE operator monitors running on an unapproved deployment. Local workerd/D1 tests assert a disabled Cron does not claim a lease, increment the quota or fetch GitHub.
+
+**Preflight:** `npm run preflight` is a required offline code gate; its result is `source_safety: PASS` and `remote_readiness: BLOCKED`, not a deploy approval. `worker/wrangler.pilot.example.jsonc` is an invalid-ID/name **template** with a possible public route but NO Cron and two disabled scheduler flags. It must never be deployed as-is. Real Google OAuth registration, Cloudflare account plan/quota and CPU, physical Android installation and phone-OFF verification remain NOT_VERIFIED.
+
+**Source proof on SHA `63a625128a9729aa4dbec85344af92a22935b1b5`:** [Node/source 42780576969](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576969) **53/53**, [D1 workerd local 42780576610](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576610) **10/10**, [Android APK/JVM 42780576952](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576952) **13/13 security tests**, plus real public GitHub local D1 and Android provider adapters SUCCESS. All figures are **CI, not hardware or remote-cloud acceptance**. Exact PR-head proof is recorded separately before merge.
+
+Next actual acceptance steps are owner-approved Cloudflare/Google account setup, trusted Worker HTTPS host, signed-in real Android, remote D1 monitor and observation, controlled Cron activation, physical phone switch-OFF and post-restart reconciliation. See [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md), [ADR-0010](ADR/0010-default-off-cron-release-gate.md), [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
+
 
 ## P1-F owner-scoped remote controls and server observations (10 November 2026)
 
