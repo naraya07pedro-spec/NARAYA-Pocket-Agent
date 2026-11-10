@@ -1,4 +1,15 @@
-# P1-S release readiness gate | Owner-approved remote pilot ONLY
+# P1-T release readiness gate | Owner-approved remote pilot ONLY
+
+## P1-T owner interpretation: historic billing evidence never disappears on later failures
+
+P1-T corrects two **source-level** blind spots in P1-S's optional Cloudflare Billing Read inspector. A `Provisioned` subscription that reports non-free `rate_plan.id` (such as `pro` or `business`) but no top-level `price`, or status `AwaitingPayment`, now raises **`POTENTIAL_PAID_SUBSCRIPTION_PRESENT`**. A missing price and ambiguous subscription state returns **`SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN`**, never a Free-tier conclusion.
+
+If billing history page 1 contains an already validated positive `amount` or `amount_to_pay`, and page 2 returns a permission error, malformed data or contradictory `total_count`, the report now preserves **`historical_positive_amount_seen: YES_HISTORICAL_ONLY`** and the count of validated earlier items, **while billing_history is still UNAVAILABLE or INVALID_RESPONSE**. That historical signal is **not a current debt, charge or new cost**; it only means a positive number was observed in a valid historical record.
+
+The owner must still check the actual billing dashboard, account subscription, current usage, Workers Free CPU and D1 daily billable rows. The inspector is GET-only, offline by default and requires a separately scoped Billing Read token *entered privately*. **Do not place tokens or raw invoices in ChatGPT/GitHub**, and do not activate Cron or deploy anything merely because an inspector returns `billing_metadata_complete:true`. [ADR-0021](ADR/0021-monotonic-billing-evidence-and-subscription-risk.md).
+
+---
+
 
 ## P1-S: Owner-only Cloudflare subscription and billing-history risk inspection (no billing writes)
 
