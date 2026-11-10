@@ -1,23 +1,25 @@
 # Progress ledger | NARAYA Pocket Agent
 
-## 2026-11-10 | P1-Q Cloudflare owner-operated read-only account inventory (PR #23, source implementation; CI pending)
+## 2026-11-10 | P1-Q read-only Cloudflare account inventory and safety gate (PR #23)
 
-**Direct blocker targeted:** P1-P and prior work are source/local integration proofs, not an authenticated Cloudflare account inventory. We need account-specific Worker/D1/Cron metadata before choosing the owner-approved release path.
+**Purpose:** reduce the real Cloudflare acceptance blocker without adding unapproved cloud state. Previous P1-P source/local D1 tests do not prove account billing, remote deployment, Google OAuth or a physically OFF Android.
 
-**Implemented on P1-Q branch (not deployed):**
-- Added `scripts/cloudflare-readonly-inspect.mjs` with **zero-network offline default** and explicit `--inspect-live` requiring account ID/token only from the owner-run process environment. The only allowed network method is **GET** on documented Cloudflare v4 inventory endpoints. Response text is bounded, redirects forbidden, no arbitrary remote D1 SQL, route or method and no automatic deploy.
-- Output is limited to named target Worker/D1 presence, Cron schedule count, database size if obtainable, and incomplete/error status. No token, account ID, D1 UUID, raw provider error, secret or API response is emitted. Incomplete pagination and denied permissions remain inconclusive.
-- Every report retains immutable `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`. It **cannot** assert real billing, Free-plan eligibility, CPU timing, migrations, Google-issued token, physically OFF phone or autonomous remote execution.
-- Added adversarial offline Node tests for correct GET path/method/host, credential/report redaction, malformed/403 responses, invalid account/token, missing pagination evidence and untrusted UUID. Included test script in `npm test`.
-- Added [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md), updated remote owner release runbook. Official Cloudflare limits were rechecked on 10 November 2026; **account-specific data was not inspected**.
-- **CI/evidence status at writing:** tests and GitHub Actions must be checked at the exact final PR HEAD before any MERGED/CI_VERIFIED claim. No remote Cloudflare account, Google project, physical phone, new D1 resource, API credential or payment was accessed/modified.
+**Implemented:**
+- New **offline-by-default** `scripts/cloudflare-readonly-inspect.mjs`; only an owner-supplied `--inspect-live` flag, environment-provided account ID and least-privilege token can issue API requests, and those calls are constrained to fixed Cloudflare GET metadata paths. No D1 SQL, POST/PUT/PATCH/DELETE, migrations, deploys or Cron activation.
+- Reports only target Worker/D1 existence, D1 size if provided, Cron schedule count if readable and partial/inconclusive inventory markers. No raw account identifiers, tokens, D1 UUIDs, API payloads or error messages appear. All outputs default `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`.
+- Seven adversarial mocked-fetch Node tests for GET-only calls, strict endpoint/host, output sanitization, 403/malformed responses, unexpected token/account input, incomplete pagination, invalid database UUID. Updated `npm test`, owner-only PowerShell instructions in `REMOTE_PILOT_READINESS.md`, [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md), [EVIDENCE](EVIDENCE.md).
+- Official Cloudflare Workers/D1 Free limits verified from docs on **10 Nov 2026**. Published limits are **not** live account quota, invoice, CPU usage or safe deploy authorization.
 
-**Next evidence gate:** review actual owner account plan/usage/billing and live inventory privately via least-privilege read-only Cloudflare token (user-led), plus explicit owner approval for backup/migrations 0001–0005, inert Worker and eventually controlled Cron/physical phone-OFF acceptance. This milestone does **not** authorize those writes.
+**Code checkpoint `2e431a5d0aeca95993d714feab7d7feebc474fce`: all 5/5 PR workflows SUCCESS.**
+[Backend/source 42823140152](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140152) **89/89 Node** and TypeScript PASS; [real local D1 42823140172](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140172) **11/11**; [public GitHub read/local D1 42823140149](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140149) SUCCESS; [Android native adapter 42823140201](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140201) SUCCESS; [Android APK/security 42823140120](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140120) SUCCESS **20/20 JVM, no fail/error/skip**, debug APK SHA256 `b41d3403eb6073c130bc44ebe2f81c29b1e0cac54e95b538006c2e048023e4fb`.
 
-[Source inspector](../scripts/cloudflare-readonly-inspect.mjs) · [Adversarial tests](../tests/cloudflare-readonly-inspect.test.mjs) · [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md) · [Remote readiness](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+**Evidence limits:** the above five workflows cover exactly the code SHA, not subsequent documentation SHAs or a deployment. No Cloudflare API token or authenticated account, real Google Android sign-in, remote D1, remote Cron, paid resource, provider write or real OFF phone was used. P1-Q remains a preparation step, not remote acceptance.
+
+**Next gate:** actual owner-approved **read-only** Cloudflare plan/billing/usage and metadata inventory (not done), then separate approval for private backup and migrations 0001–0005, inert Worker, OAuth on device and later bounded Cron while Android physically OFF.
+
+[PR #23](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/23) · [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md) · [Remote readiness](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
 
 ---
-
 
 ## 2026-11-10 | P1-P atomic first-monitor identity admission and no orphan pilot slots (PR #22 MERGED, source/local only)
 
