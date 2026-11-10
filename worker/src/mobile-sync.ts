@@ -127,10 +127,10 @@ async function listSyncObservations(request: Request, env: Env, ownerId: string)
     WHERE owner_id=? AND id=? AND client_draft_id IS NOT NULL`)
     .bind(ownerId,id).first();
   if (!monitor) return json({error:'not_found'},404);
-  const result = await env.DB.prepare(`SELECT o.id,o.monitor_id,o.event_type,o.previous_sha,o.head_sha,o.observed_at
+  const result = await env.DB.prepare(`SELECT o.id,o.monitor_id,o.event_type,o.previous_sha,o.head_sha,o.observed_at,o.event_sequence
     FROM observations o JOIN monitors m ON m.id=o.monitor_id
     WHERE m.owner_id=? AND m.client_draft_id IS NOT NULL AND o.monitor_id=?
-    ORDER BY o.observed_at DESC,o.id DESC LIMIT 50`)
+    ORDER BY o.event_sequence DESC LIMIT 50`)
     .bind(ownerId,id).all();
   return json({observations:result.results});
 }
