@@ -1,5 +1,28 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-K Android truth-in-status, typed D1 recovery and strict cloud contract (PR #17; not deployed)
+
+**Critical user-facing discrepancy:** P1-J server already sent `schedulerEligible` and `scheduled:false`, but Android's `CloudSyncClient.parseMonitor` ignored these and `MainActivity` displayed only persisted `ACTIVE`. A monitor could thus **look actively running on Android** after the operator disabled global Cron, even though the backend no longer allowed scheduled work. This bug was found by **source inspection**, not from a real Cloudflare production deployment.
+
+**Implemented:**
+- `CloudMonitor` now explicitly stores last-server-snapshot `schedulerEligible` and `scheduled` Booleans. Parser rejects missing or string-coerced flags, PAUSED+eligible/scheduled contradictions and scheduled=true when eligibility=false. No token/owner data persisted and no execution fabricated.
+- Both Android UI representations (cloud monitor list and local draft's bound cloud row) now show **stored status**, **scheduler eligibility in the last successful response**, and a distinct notice that **remote Cron and phone-OFF execution are NOT independently verified**. ACTIVE with eligibility OFF states explicitly that the scheduler is not eligible rather than implying remote activity.
+- `CloudMonitor.withConfirmedStatus()` advances a row only on a matching monitor ID and exactly next server version; copies the verified status + eligibility together, resets `scheduled:false` after PAUSE/ACTIVE, and retains last confirmed state after errors/conflicts.
+- Android now surfaces server `503 scheduler_storage_unavailable` as a bounded, strict and **typed** error with a nonsecret recovery instruction to verify D1 migrations 0001–0004; unknown/malformed/oversize 503 remains a generic unavailable error, and arbitrary upstream debug data or bearer tokens are never shown.
+- Android list parser now accepts all **backend-valid 30–1440-minute intervals in 15-minute increments** (including 45 minutes), while existing local draft creation presets are intentionally unchanged.
+- Added **5 Android CloudSyncClient JVM security tests (13→18)**, plus one adversarial Node preflight test and a new source checker for both Android UI surfaces, required flags, safe D1 failure mapping and guarded status transitions.
+
+**CI evidence before final docs:**
+- Initial implementation source `0893f990b3e20a3c5acf6f1021b5ef301c9ec839`: **5/5 CI SUCCESS**, [Android APK/JVM 42790946891](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42790946891) **18/18 tests executed**, 0 fail/errors/skipped, APK SHA256 `9ba4e4a3ab5ca1662b1619f5370b2b2cc43e333a2c352678e13c240983a121ed`.
+- Adversarial checker source `162e6bdea6016136603227d0584e030f26d4969f`: [Node source 42791391659](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791391659) **FAILED 1 of 59**. Its mutation removed the eligibility summary in one of **two Android UI locations**, while the checker only required one remaining occurrence. This uncovered a test **coverage weakness**, not an Android release failure. The faulty checker was corrected, **not ignored**.
+- Corrected source `cc7c526965db60099b35326eadce4ccce8e69e8e`: **5/5 workflows SUCCESS**: [backend/preflight 42791519409](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519409) **59/59 PASS**, source safety PASS, remote BLOCKED; [local workerd/D1 42791519518](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519518) **10/10 PASS**; [live public GitHub read with local D1 42791519495](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519495), [Android provider adapter 42791519405](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519405), [Android debug APK 42791519376](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519376): SUCCESS, **18/18 security JVM tests** (0 skips/fail/errors), APK SHA256 `8a3bca16a885d8016d76ae305ee6acb09cb1575e6271f37191ffff0eaa212bdc`. **Final documentation-head CI must be checked separately before merging.**
+
+**What remains NOT VERIFIED:** real Google-signed OAuth on a consenting Android, real Cloudflare Worker route/D1/Cron deployment, remote device-OFF observation, account-level Free CPU, billing, battery/RAM, actual push or notification behavior. The default APK has blank public Web Client ID and Worker origin; both Cron permission flags remain OFF by default. This Android fix neither enables a Cron nor authorizes a cloud service. A green local CI result is **not** a remote acceptance certificate.
+
+**Next:** owner-approved [remote pilot readiness](REMOTE_PILOT_READINESS.md) with true Cloudflare account quotas/backup and Google OAuth registration, followed by physical phone-OFF acceptance, while preserving strict `P1-K` UI source contract. [ADR-0012](ADR/0012-android-cloud-truth-and-fail-closed-recovery.md) · [EVIDENCE](EVIDENCE.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
 ## 2026-11-10 | P1-J dual Cron authorization and activation readiness (PR #16 merged; not deployed)
 
 **Source audit finding:** P1-I globally disabled the Worker `scheduled()` handler unless `SCHEDULER_ENABLED='true'`, but mobile signed-user `PATCH ACTIVE` and its `schedulerEligible` response still used only the separate `MOBILE_SCHEDULING_ENABLED` flag. That could result in **HTTP 200 ACTIVE with actual global Cron OFF**, misleading an Android user without triggering an actual task. There was no remote deployment; this is a **source-level bug**, not a real production incident.
