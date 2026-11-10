@@ -552,3 +552,32 @@ test('migration 0005 durably backfills preexisting observation insertion order w
     assert.equal(latest[1].observed_at,100);
   }finally{db.close();}
 });
+
+
+test('missing migration 0005 fails closed before mobile activation or operator provider GET',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
+  try {
+    // Recreate the old 0004-only observations schema without fake provider data.
+    env.DB.connection.exec('DROP INDEX observations_event_sequence_unique; DROP INDEX observations_monitor_sequence; ALTER TABLE observations DROP COLUMN event_sequence;');
+    const t=await token('needs-migration-five');
+    const newRow=(await(await create(env,t,uuid())).json()).monitor;
+    const target='/v1/sync/monitors/'+newRow.id;
+    const denied=await request(env,target,t,'PATCH',{status:'ACTIVE',expectedVersion:1});
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const bearer=env.OWNER_API_TOKEN;
+    const created=await request(env,'/v1/monitors',bearer,'POST',{repository:'nodejs/node',intervalMinutes:30});
+    assert.equal(created.status,201);
+    let providerCalls=0;
+    await assert.rejects(runScheduler(env,Date.now()+1000,async()=>{
+      providerCalls++;return new Response(JSON.stringify([{sha:'a'.repeat(40)}]));
+    }),/no such column|event_sequence/i);
+    assert.equal(providerCalls,0,'missing sequence migration must not consume a GitHub provider request');
+    const paused=await request(env,target,t,'PATCH',{status:'PAUSED',expectedVersion:1});
+    assert.equal(paused.status,200,'owner can still safely PAUSE during migration outage');
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
