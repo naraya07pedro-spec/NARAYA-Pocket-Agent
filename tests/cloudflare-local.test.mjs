@@ -117,3 +117,63 @@ test('Cloudflare local D1: rejected stale claim and no duplicate observation', {
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual workerd restart', {timeout: 90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-mobile-'));
+  let platform;
+  const originalFetch=globalThis.fetch;
+  const issuer='https://login.example.invalid';
+  const settings={OIDC_ISSUER:issuer,OIDC_AUDIENCE:'pocket-agent-mobile-test',OIDC_JWKS_URL:'https://keys.example.invalid/jwks'};
+  const pair=await crypto.subtle.generateKey({
+    name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+    publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+  },true,['sign','verify']);
+  const jwk={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'fixture-key',use:'sig',alg:'RS256'};
+  const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+  const jwt=async subject=>{
+    const now=Math.floor(Date.now()/1000);
+    const input=encode({alg:'RS256',kid:'fixture-key',typ:'JWT'})+'.'+
+      encode({iss:issuer,aud:settings.OIDC_AUDIENCE,sub:subject,iat:now-30,exp:now+1200});
+    const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(input));
+    return input+'.'+Buffer.from(signature).toString('base64url');
+  };
+  const id='bbbbb888-8888-4888-8888-888888888888';
+  const request=(token,method='GET',url='/v1/sync/monitors',body)=>new Request(base+url,{
+    method,headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},
+    body:body?JSON.stringify(body):undefined,
+  });
+  try {
+    platform=await setupPlatform(dir);
+    await applySchema(platform.env.DB);
+    globalThis.fetch=async (url,options)=>{
+      assert.equal(url,settings.OIDC_JWKS_URL);
+      assert.equal(options.redirect,'error');
+      return new Response(JSON.stringify({keys:[jwk]}),{status:200});
+    };
+    const a=await jwt('test-A'),b=await jwt('test-B');
+    const body={clientDraftId:id,repository:'python/cpython',intervalMinutes:30};
+    const env={DB:platform.env.DB,...settings};
+    const first=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),env);
+    assert.equal(first.status,201);
+    const monitor=(await first.json()).monitor;
+    assert.equal(monitor.status,'PAUSED');
+    assert.equal(monitor.scheduled,false);
+    assert.equal((await(await worker.fetch(request(b),env)).json()).monitors.length,0);
+    assert.equal((await worker.fetch(request(b,'GET','/v1/sync/observations?monitorId='+monitor.id),env)).status,404);
+    const mapped=await env.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first();
+    assert.equal(mapped.n,2);
+    await platform.dispose(); platform=null;
+    platform=await setupPlatform(dir);
+    const restarted={DB:platform.env.DB,...settings};
+    const retry=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),restarted);
+    assert.equal(retry.status,200);
+    assert.equal((await retry.json()).monitor.id,monitor.id);
+    assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM monitors').first()).n,1);
+    assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,2);
+  } finally {
+    globalThis.fetch=originalFetch;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
