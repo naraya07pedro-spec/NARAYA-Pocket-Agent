@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-E optional Android Google Credential Manager sign-in and manual authenticated draft-sync merged in PR #11 (CI verified, no real OAuth/backend deployment); P1-D feature-gated multi-user scheduler and P1-C scoped backend sync are merged but not deployed. Default Android build keeps cloud controls disabled without public OAuth/Worker configuration.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-F Android explicit owner-scoped pause/activate controls and server observation history merged in PR #12 (13 Android security tests + 6 local D1 tests verified), building on P1-E Google sign-in/manual sync and P1-D bounded scheduler. Default Android APK has no OAuth client ID or Worker origin, and mobile server scheduling stays OFF; there is no deployed remote cloud agent.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,10 @@
 - 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-F Android monitor controls (merged PR #12, source CI only)
+
+With a real configured, trusted OAuth/Worker environment, a signed-in user can explicitly request server-side `ACTIVE` or `PAUSED` for their own monitor using optimistic `expectedVersion`, and read server-recorded `BASELINE`/`CHANGE` observations. Android never fabricates cloud success; it validates exact status/version and observation provenance, and refuses arbitrary host/route extensions. HTTP 409 is safely classified into scheduler-disabled, stale-version, or active-limit without revealing error bodies. **The default mobile scheduler is OFF**, so requesting activation from an unconfigured deployment is rejected. None of this proves actual Cloudflare D1/Cron, a real signed-in device or phone-off autonomy. See [ADR-0007](docs/ADR/0007-android-cloud-control-observation-evidence.md), [PROGRESS](docs/PROGRESS.md), and [EVIDENCE](docs/EVIDENCE.md).
 
 ## P1-E Android signed-in cloud bridge, disabled by default
 
