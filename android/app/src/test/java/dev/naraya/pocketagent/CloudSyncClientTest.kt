@@ -265,7 +265,7 @@ class CloudSyncClientTest {
         assertEquals(SyncResult.Failed(SyncFailure.NOT_FOUND), foreign.observations(token,serverId))
     }
 
-    @Test fun 409ErrorBodyIsStrictlyMappedToKnownSafeCodes() {
+    @Test fun conflict409BodyIsStrictlyMappedToKnownSafeCodes() {
         val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
         for ((raw, code) in listOf(
             "scheduler_disabled" to SyncFailure.SCHEDULER_DISABLED,
