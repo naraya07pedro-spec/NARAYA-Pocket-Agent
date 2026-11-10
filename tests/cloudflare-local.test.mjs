@@ -308,12 +308,26 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
       method,headers:{authorization:'Bearer '+t,...(body?{'content-type':'application/json'}:{})},
       body:body?JSON.stringify(body):undefined,
     });
+    // First signed-user list is read-only and must NOT consume a D1 user slot.
+    const unknown=await worker.fetch(req(b,'/v1/sync/monitors'),env);
+    assert.equal(unknown.status,200);
+    assert.deepEqual(await unknown.json(),{monitors:[]});
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
+    const invalid=await worker.fetch(req(b,
+      '/v1/sync/observations?monitorId=not-a-valid-uuid'),env);
+    assert.equal(invalid.status,400);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
     const draft=crypto.randomUUID();
     const create=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
       clientDraftId:draft,repository:'python/cpython',intervalMinutes:30,
     }),env);
     assert.equal(create.status,201);
     const first=(await create.json()).monitor;
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
+    for(let repeat=0;repeat<5;repeat++){
+      assert.equal((await worker.fetch(req(a,'/v1/sync/monitors'),env)).status,200);
+    }
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,1);
     assert.equal(first.status,'PAUSED');
     assert.equal(first.clientDraftId,draft);
     const path='/v1/sync/monitors/'+first.id;
