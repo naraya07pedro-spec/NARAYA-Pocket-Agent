@@ -136,7 +136,7 @@ test('contradictory history page metadata fails closed',async()=>{
       if(mode==='page')return history([],0,2);
       if(mode==='size')return history([],0,1,{per_page:11});
       if(mode==='count')return history([{amount:1}],1,1,{count:0});
-      if(mode==='zero-page')return history([{amount:0}],2,1);
+      if(mode==='zero-page')return page===1?history([{amount:0}],2,1):history([],2,2);
       return page===1?history([{amount:0}],2,1):history([{amount:0}],3,2);
     }});
     if(mode==='zero-page') {
@@ -211,7 +211,8 @@ test('redirect response cannot exfiltrate bearer token into redirect destination
 test('positive amount on an incomplete history is historical evidence, not free-tier clearance',async()=>{
   const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>{
     if(url.endsWith('/subscriptions'))return subscriptions([]);
-    return history([{amount:100}],2,Number(new URL(url).searchParams.get('page')));
+    const page=Number(new URL(url).searchParams.get('page'));
+    return history([{amount:100}],page===1?2:3,page);
   }});
   assert.equal(report.billing_history,'INVALID_RESPONSE');
   assert.equal(report.historical_positive_amount_seen,'UNKNOWN'); // page metadata inconsistency
