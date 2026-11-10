@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-H | Cross-invocation D1 global Cron dispatch budget (10 November 2026; pre-merge CI)
+
+| Verification | Evidence class | Exact proof |
+| --- | --- | --- |
+| At most three provider reservations **per fixed UTC quarter-hour per D1 database**, even with interleaved scheduler invocations; safe refund on failed lease and reject clock rewind/missing migration | CI_VERIFIED_SQLITE_SYNTHETIC | [Backend CI 42777373598](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373598): **43/43 PASS + TypeScript typecheck**, corrected source `067b7905f9781193cba11beb3eaf650c6ecec5c4`, three added backend adversarial tests |
+| Shared quota, restart persistence, additive 0004 migration preserves existing cursor/operator monitor | CI_VERIFIED_LOCAL_WORKERD_D1 | [workerd/D1 CI 42777373148](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373148): **9/9 PASS**, two added real **local** D1 binding tests on same corrected source SHA |
+| Shipped scheduler against real public GitHub REST read in local Cloudflare D1 | CI_VERIFIED_PUBLIC_PROVIDER_LOCAL_DB | [GitHub live-read 42777373157](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373157): SUCCESS after applying migrations 0001–0004 to isolated local D1; **not a deployed Cron** |
+| Android JVM/provider adapter and APK regression | CI_VERIFIED_JVM_BUILD | [Android adapter 42777373129](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373129), [Android debug APK 42777373585](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373585): SUCCESS, no on-device run, app source unchanged |
+| First live-read test run with **outdated local migration fixture** | FAILED_TEST_SETUP_FIXED | [Failed workflow 42777198245](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777198245), old head `7f66a2197eb16f2edadd2acafc4161bbdfdbc7be`; error `D1_ERROR: no such table: scheduler_control`. Test fixture incorrectly applied **only 0001**. Fixed to apply 0001–0004 in `tests/github-live.test.mjs`; rerun 42777373157 SUCCESS |
+| Real remote Cloudflare Cron concurrency, account quota/charge, phone-off Android acceptance, live Google OAuth | NOT_VERIFIED | No deployment, provisioned D1, billable service, real Google signed-in device, actual cloud usage counters or physical device metrics |
+
+**Claim precision:** source/runtime local CI at `067b7905f9781193cba11beb3eaf650c6ecec5c4` **5/5 SUCCESS**, not yet the final docs-head/merge SHA. "Global" applies **only to invocations sharing the same D1 database**, not other Worker projects or database bindings. A fixed 15-minute UTC bucket is not a rolling 15-minute cap; six attempts can straddle the boundary. A granted reservation may be forfeited on a crash and tasks can be delayed. Neither exact owner fairness under remote contention nor Cloudflare Workers Free CPU viability has been tested.
+
+**References:** [ADR-0009](ADR/0009-d1-global-cron-budget.md), [PROGRESS](PROGRESS.md), Cloudflare <https://developers.cloudflare.com/workers/configuration/cron-triggers/> and D1 single-database query processing <https://developers.cloudflare.com/d1/reference/faq/>.
+
+---
+
 ## P1-G: request-safe public JWKS Cache API (10 November 2026, merged PR #13; no remote deployment)
 
 | Claim | Evidence classification | Exact SHA and proof |
