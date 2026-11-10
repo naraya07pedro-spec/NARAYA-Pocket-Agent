@@ -586,3 +586,46 @@ test('Cloudflare local D1: default-off Cron handler does not claim, reserve, or 
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+test('Cloudflare local D1: sequence disambiguates three identical-ms Cron observations and survives restart',{timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-observation-sequence-'));
+  let platform;
+  try{
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const env={DB,OWNER_ID:owner,OWNER_API_TOKEN:TOKEN};
+    const response=await worker.fetch(new Request(base+'/v1/monitors',{
+      method:'POST',headers:{...auth,'content-type':'application/json'},
+      body:JSON.stringify({repository:'python/cpython',intervalMinutes:30}),
+    }),env);
+    assert.equal(response.status,201);
+    const {id}=await response.json();
+    const at=Date.now()+1000;
+    for(const letter of ['a','b','c']){
+      // Explicit test-only due reset allows three separate local invocations
+      // with the SAME fake clock, exercising equal observed_at milliseconds.
+      const due=await DB.prepare('UPDATE monitors SET next_due_at=? WHERE id=?')
+        .bind(at-1,id).run();
+      assert.equal(due.meta.changes,1);
+      const report=await runScheduler(env,at,fakeGithub(letter.repeat(40)));
+      assert.equal(report.claimed,1);
+      assert.equal(report.observations,1);
+    }
+    let data=(await DB.prepare('SELECT event_sequence,event_type,previous_sha,head_sha,observed_at FROM observations WHERE monitor_id=? ORDER BY event_sequence DESC').bind(id).all()).results;
+    assert.deepEqual(data.map(e=>e.event_sequence),[3,2,1]);
+    assert.deepEqual(data.map(e=>e.event_type),['CHANGE','CHANGE','BASELINE']);
+    assert.ok(data.every(e=>e.observed_at===at));
+    assert.equal(data[0].previous_sha,data[1].head_sha);
+    assert.equal(data[1].previous_sha,data[2].head_sha);
+    await platform.dispose();
+    platform=null;
+    platform=await setupPlatform(dir);
+    const again=(await platform.env.DB.prepare('SELECT event_sequence,event_type,previous_sha,head_sha,observed_at FROM observations WHERE monitor_id=? ORDER BY event_sequence DESC').bind(id).all()).results;
+    assert.deepEqual(again,data,'D1 persisted causal order must survive Worker process recreation');
+  }finally{
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
