@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-N offline owner-supplied phone-OFF evidence review gate implemented in PR #20 (74/74 initial corrected source tests, 11/11 local D1, 20/20 Android JVM; final documentation-head CI pending). No remote deployment or real device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-N offline owner-supplied phone-OFF evidence review gate MERGED via PR #20 (74/74 Node tests, 11/11 local D1, 20/20 Android security JVM; 5/5 final PR-head CI SUCCESS). No remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-N honest offline phone-OFF evidence review (PR #20, source/local CI only)
+## P1-N honest offline phone-OFF evidence review (PR #20 merged, source/local CI only)
 
 A real cloud pilot will need independent evidence that Cloudflare Cron produced a D1 observation while Android was **physically switched OFF**, followed by authenticated sync after restart. Passing GitHub Actions or entering a plausible JSON timeline does **not** prove that. P1-N adds an entirely offline, no-network **structural evidence verifier** that checks a declared OFF/ON interval, Cron/D1 timestamps, monotonic D1 `event_sequence`, SHA predecessors, GitHub corroboration and post-restart observation IDs.
 
