@@ -1,4 +1,12 @@
-# Android acceptance matrix | P1-I Cron OFF and release preflight; real device/remote Cloudflare blocked
+# Android acceptance matrix | P1-J dual activation guard; physical device and remote Cloudflare still unverified
+
+## P1-J signed-owner ACTIVE acceptance (source tested, real provider NOT VERIFIED)
+
+The server now rejects a signed Android `ACTIVE` request if **global Cron OFF** or **mobile scheduling OFF**: HTTP 409 `scheduler_disabled`, no status or version change. When both are ON but the D1 budget row/table from migrations 0003–0004 is unavailable, HTTP 503 `scheduler_storage_unavailable` is returned, not a false 200 success. PAUSE remains possible under either failure. For a previously ACTIVE monitor, refreshing cloud GET while global Cron is OFF must yield `schedulerEligible:false` and preserve its last confirmed status.
+
+**Local proof:** PR #16 initial source SHA `01da4689a6f0a2f01025f93fb5c6d2fa51c19ddc`, [Node 42787134336](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134336) **58/58 PASS**, [workerd/D1 42787134473](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134473) **10/10 PASS**, including two signed synthetic users, real `worker.scheduled()` with fake GitHub provider, observation read and PAUSE. This is NOT a real Google-issued ID token, remote Cron, physical Android install or phone-off measurement. [ADR-0011](ADR/0011-dual-scheduler-authorization.md).
+
+---
 
 ## P1-I offline deployment guard, not Android-cloud completion
 
