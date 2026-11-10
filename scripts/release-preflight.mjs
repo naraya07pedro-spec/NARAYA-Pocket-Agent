@@ -120,7 +120,9 @@ export function auditSource(s){
       /fun CloudMonitor.executionSummary\(\)/.test(s.androidCloudClient) &&
       /fun CloudMonitor.withConfirmedStatus\(/.test(s.androidCloudClient) &&
       /"scheduler_storage_unavailable"/.test(s.androidCloudClient) &&
-      s.androidMainActivity.includes('remote.executionSummary()') &&
+      // Both the cloud-monitor list and the local-draft mapping must convey
+      // the last-known execution eligibility, not just one of them.
+      s.androidMainActivity.split('remote.executionSummary()').length === 3 &&
       s.androidMainActivity.includes('previous.withConfirmedStatus(outcome)') &&
       s.androidMainActivity.includes('SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE')),
     check('android_public_configuration_off_by_default',
