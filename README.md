@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-M persistent observation insertion sequence, additive migration 0005 and cross-runtime SHA-chain checks (PR #19, 65/65 backend and 11/11 local D1 tests, 20/20 Android JVM at first corrected source CI; no remote deployment).** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-M persistent observation insertion sequence, additive migration 0005 and cross-runtime SHA-chain checks MERGED via PR #19 (65/65 backend, 11/11 local D1, 20/20 Android security JVM, 5/5 final PR-head CI SUCCESS; no remote deployment).** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-M durable observation sequence (PR #19; source CI, no cloud deployment)
+## P1-M durable observation sequence (PR #19 merged; source CI, no cloud deployment)
 
 Migration `worker/migrations/0005_observation_event_sequence.sql` copies historical observation insertion order into a durable `event_sequence` column with unique and owner-monitor lookup indexes. The bounded signed-owner observation API sorts by this field, rather than timestamp/UUID. The existing fenced D1 insert allocates the next retained sequence in the same SQL statement. Android now **verifies every SHA predecessor, even for events with identical or backward timestamps**, using strictly positive descending numeric sequences; missing/forged fields fail closed. Shared fixture v2 and local Cloudflare workerd/D1 tests verify the contract and persistence after simulated restart.
 
