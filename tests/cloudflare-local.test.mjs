@@ -9,7 +9,7 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
   // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
@@ -422,6 +422,106 @@ test('Local workerd/D1: public JWKS cache reuses keys across two separately owne
     globalThis.fetch=oldFetch;
     if(oldCaches)Object.defineProperty(globalThis,'caches',oldCaches);
     else delete globalThis.caches;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+
+test('Cloudflare local D1: 3 global fetch reservations survive overlapping calls and process restart', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-global-budget-'));
+  let platform;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const now=Date.now();
+    const when=Math.ceil(now/900_000)*900_000+1000;
+    const repositories=['python/cpython','nodejs/node','microsoft/vscode',
+      'cloudflare/workers-sdk','denoland/deno','rust-lang/rust'];
+    for(let i=0;i<repositories.length;i++){
+      const id=crypto.randomUUID(),ownerId=crypto.randomUUID();
+      await DB.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+        .bind(ownerId,'https://signed-user.test','budget-'+i,now).run();
+      const [repoOwner,repoName]=repositories[i].split('/');
+      await DB.prepare(
+        "INSERT INTO monitors(id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at,client_draft_id,sync_request_digest) "+
+        "VALUES(?,?,?,?,'ACTIVE',30,?,?,?,?,?)"
+      ).bind(id,ownerId,repoOwner,repoName,now,now,now,crypto.randomUUID(),'fixture-digest').run();
+    }
+    const config={DB,OWNER_ID:owner,MOBILE_SCHEDULING_ENABLED:'true'};
+    let calls=0,release,entered;
+    const gateway=new Promise(resolve=>release=resolve);
+    const inFlight=new Promise(resolve=>entered=resolve);
+    const provider=async(url,options)=>{
+      assert.equal(options.method,'GET');
+      assert.equal(new URL(url).hostname,'api.github.com');
+      calls++;
+      if(calls===1){entered();await gateway;}
+      return new Response(JSON.stringify([{sha:headA}]),{status:200});
+    };
+    const first=runScheduler(config,when,provider);
+    try {
+      await inFlight;
+      const second=await runScheduler({...config},when,provider);
+      assert.equal(second.claimed,2);
+      assert.equal(calls,3);
+      const budget=await DB.prepare(
+        'SELECT budget_window_start,budget_claims,last_owner_id FROM scheduler_control WHERE id=1').first();
+      assert.equal(budget.budget_claims,3);
+      assert.equal(budget.budget_window_start,Math.floor(when/900_000)*900_000);
+      assert.ok(budget.last_owner_id);
+    } finally {release?.();}
+    assert.equal((await first).claimed,1);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,3);
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const restartedDB=platform.env.DB;
+    assert.equal((await restartedDB.prepare(
+      'SELECT budget_claims FROM scheduler_control WHERE id=1').first()).budget_claims,3);
+    const again=await runScheduler({...config,DB:restartedDB},when,provider);
+    assert.equal(again.claimed,0,'restarting same window cannot create more provider calls');
+    assert.equal(calls,3);
+    const later=await runScheduler({...config,DB:restartedDB},when+900_000,provider);
+    assert.equal(later.claimed,3);
+    assert.equal(calls,6);
+    assert.equal((await restartedDB.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,6);
+    assert.equal((await restartedDB.prepare(
+      'SELECT budget_claims FROM scheduler_control WHERE id=1').first()).budget_claims,3);
+  } finally {
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+test('Cloudflare local D1: additive 0004 migration retains legacy cursor and operator monitor', {timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-budget-migration-'));
+  let platform;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    for(const schema of migrationSql.slice(0,3))await applyStatements(DB,schema);
+    const now=Date.now(),id=crypto.randomUUID();
+    await DB.prepare("UPDATE scheduler_control SET last_owner_id=? WHERE id=1")
+      .bind('legacy-owner-cursor').run();
+    await DB.prepare(
+      "INSERT INTO monitors(id,owner_id,repo_owner,repo_name,interval_minutes,next_due_at,created_at,updated_at) "+
+      "VALUES(?,?,?, ?,30,?,?,?)"
+    ).bind(id,owner,'python','cpython',now,now,now).run();
+    await applyStatements(DB,migrationSql[3]);
+    const control=await DB.prepare('SELECT * FROM scheduler_control WHERE id=1').first();
+    assert.equal(control.last_owner_id,'legacy-owner-cursor');
+    assert.equal(control.budget_window_start,0);
+    assert.equal(control.budget_claims,0);
+    const monitor=await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(id).first();
+    assert.equal(monitor.owner_id,owner);
+    assert.equal(monitor.status,'ACTIVE');
+    assert.equal(monitor.version,1);
+    const env={DB,OWNER_ID:owner};
+    const report=await runScheduler(env,now+1000,fakeGithub(headA));
+    assert.equal(report.claimed,1);
+    assert.equal((await DB.prepare('SELECT budget_claims FROM scheduler_control WHERE id=1').first()).budget_claims,1);
+  } finally {
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});
   }

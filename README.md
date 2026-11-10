@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-G bounded public OIDC JWKS Cache API merged via PR #13 (40/40 backend, 7/7 local D1, 13/13 Android security tests on final PR head; no remote deployment), on top of P1-F Android monitor controls, P1-E Google sign-in source code and P1-D bounded scheduler. Default Android APK has no Google OAuth client ID or Worker origin and mobile scheduling remains OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-H shared D1 Cron budget added in PR #14 (local CI, no remote deployment), after P1-G public OIDC JWKS Cache API, P1-F Android owner controls and P1-D multi-user scheduling. Both operator and opt-in mobile modes now reserve from the same fixed UTC 15-minute D1 budget before GitHub GET. Default Android APK still has no Google OAuth client ID or Worker origin and mobile scheduling remains OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -10,10 +10,16 @@
 - Cloudflare D1 schema for monitors, observations, execution leases, and redacted audit events.
 - Cron-triggered public GitHub default-branch commit-head monitoring using official read-only REST calls.
 - Durable baseline/change observations; atomic conditional lease claims, fencing, pausing, stale-version rejection, bounded retries, and auto-pause after 5 consecutive failures.
-- Strictly bounded workload: at most **3 monitors per owner**, 3 checks per cron tick, intervals 30–1,440 minutes, fixed GitHub API hostname, no redirects, no outbound writes, no paid model API.
+- Strictly bounded workload: at most **3 monitors per owner**, max 3 checks per Cron invocation AND at most 3 reserved provider attempts per fixed UTC 15-minute window shared across invocations using one D1 database (requires migration 0004), intervals 30–1,440 minutes, fixed GitHub API hostname, no redirects, no outbound writes, no paid model API.
 - 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-H D1-global Cron quota guard (PR #14, local CI only)
+
+Two overlapping Worker Cron invocations can defeat a per-invocation request cap. The scheduler now atomically reserves one of **three provider attempt slots in each fixed UTC quarter-hour** on the shared D1 `scheduler_control` row **before** a GitHub request, and refunds a slot only when a monitor lease is definitely not obtained. Applies to both legacy operator mode and opt-in mobile mode; the latter stays OFF by default. `0004_global_scheduler_budget.sql` is an **additive, mandatory pre-deployment migration**. Missing migration or backward clock replay fails closed.
+
+**Precise limits:** three per *fixed* 15-minute UTC bucket is **not** three in a rolling 15-minute span, and tasks might be delayed by backlog or crashes. Only Workflows sharing the exact same D1 database share the quota; none of this proves Cloudflare remote execution or account expenses. See [ADR-0009](docs/ADR/0009-d1-global-cron-budget.md), [PROGRESS](docs/PROGRESS.md) and [EVIDENCE](docs/EVIDENCE.md).
 
 ## P1-G OIDC JWKS reliability and cost guard (PR #13, source-verified)
 
