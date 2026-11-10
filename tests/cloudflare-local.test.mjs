@@ -318,6 +318,23 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
     assert.equal(invalid.status,400);
     assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
     const draft=crypto.randomUUID();
+    // Real local workerd/D1 must roll back a first identity when a later
+    // statement in the SAME batch fails, not only under the Node SQLite mock.
+    const forcedFailure={...env,DB:{
+      prepare(sql){return DB.prepare(sql);},
+      batch(stmts){
+        assert.equal(stmts.length,3);
+        return DB.batch([stmts[0],DB.prepare('SELECT * FROM p1p_missing_table_for_rollback')]);
+      },
+    }};
+    const aborted=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
+      clientDraftId:draft,repository:'python/cpython',intervalMinutes:30,
+    }),forcedFailure);
+    assert.equal(aborted.status,500);
+    assert.deepEqual(await aborted.json(),{error:'internal_error'});
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0,
+      'local D1 transaction must roll back registration when monitor operation errors');
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM monitors').first()).n,0);
     const create=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
       clientDraftId:draft,repository:'python/cpython',intervalMinutes:30,
     }),env);
