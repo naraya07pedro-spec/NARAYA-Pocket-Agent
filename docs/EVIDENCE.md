@@ -1,18 +1,19 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-Q | Explicit Cloudflare GET-only account inventory (10 November 2026; exact PR-head CI PENDING)
+## P1-Q | Explicit Cloudflare GET-only account inventory (10 November 2026; source CI VERIFIED)
 
-| Claim | Classification | Current evidence boundary |
+| Claim | Evidence class | Exact source and limits |
 | --- | --- | --- |
-| Inspector implements explicit live opt-in, allowlisted GET Cloudflare metadata endpoints, no API write method or arbitrary target | IMPLEMENTED_SOURCE; TEST_PENDING | [Inspector source](../scripts/cloudflare-readonly-inspect.mjs), [test suite](../tests/cloudflare-readonly-inspect.test.mjs); check Node CI on **exact final PR HEAD** before raising classification |
-| Private owner account IDs/tokens/D1 UUIDs absent from structured report, malformed responses fail closed, pagination incompleteness is not passed as complete | IMPLEMENTED_SOURCE; TEST_PENDING | Offline mocked-fetch tests added; not actual Cloudflare API integration or external penetration test |
-| Current account plan, billing state, daily D1 usage, Free CPU, runtime Cron status/CPU, remote migration 0001–0005, physical Android phone-OFF | **NOT_VERIFIED** | No owner's Cloudflare account connected; no live read-only inspector run, deployment, or new provider cost. Even a successful GET report explicitly remains BLOCKED |
-| Official Free quotas as of 10 Nov 2026 | WEB_DOCUMENTED_NOT_ACCOUNT_VERIFIED | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 September 2026 Free enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/) |
+| Owner-run inspector is offline-by-default, explicitly opts into a fixed set of read-only Cloudflare API GETs; rejects redirects/arbitrary UUID paths; cannot deploy or activate Cron | CI_VERIFIED_OFFLINE_MOCKED_NODE | [Source verification 42823140152](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140152), exact code checkpoint `2e431a5d0aeca95993d714feab7d7feebc474fce`: **89/89 Node tests PASS** including seven new inspector cases, TypeScript typecheck PASS and source safety PASS/remote BLOCKED |
+| Token/account ID/D1 UUID suppressed from report; invalid credentials, 403, malformed API response and incomplete pages fail closed | CI_VERIFIED_OFFLINE_MOCKED_NODE | Same [source run 42823140152](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140152); **synthetic mocked fetch only**, not a live API account or end-to-end security proof |
+| Existing backend D1 and external official public GitHub read are unaffected | CI_VERIFIED_LOCAL_WORKERD_AND_PUBLIC_READ | [Real local Cloudflare workerd/D1 42823140172](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140172) **11/11 PASS**; [real public GitHub read, isolated local D1 42823140149](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140149) SUCCESS. Neither used remote Cloudflare D1/Cron |
+| Android adapter and debug APK compatibility | CI_VERIFIED_ANDROID_JVM_BUILD | [Android native adapter 42823140201](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140201) SUCCESS; [Android debug APK 42823140120](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42823140120) SUCCESS, **20/20 security JVM tests run, zero failed/errors/skipped**, debug APK SHA256 `b41d3403eb6073c130bc44ebe2f81c29b1e0cac54e95b538006c2e048023e4fb` |
+| Actual owner Cloudflare Free plan, billing, quota usage/CPU, active Cron evidence, remote D1 migrations, live Google OAuth and phone powered OFF | **NOT_VERIFIED** | No owner account connected or probed; account inspector **never executed live** in P1-Q. Report cannot promote this evidence to remote LIVE_VERIFIED. No deploy, cron activation or cloud write |
+| Official Free-tier public policy as of 10 November 2026 | WEB_DOCUMENTED_NOT_ACCOUNT_VERIFIED | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [D1 September 2026 Free enforcement](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/) |
 
-Keep P1-P [5/5 CI](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/22) historical; do **not** attribute it to P1-Q branch or postmerge main. [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md).
+**Exact code checkpoint P1-Q `2e431a5d0aeca95993d714feab7d7feebc474fce`: 5/5 GitHub Actions SUCCESS.** The five runs above validate **that SHA**; any following documentation commit is a distinct SHA and is not retrospectively covered. Final PR-head 5/5 and merge SHA must be checked separately. See [ADR-0018](ADR/0018-cloudflare-readonly-account-inventory.md), [PROGRESS](PROGRESS.md), and [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
 
 ---
-
 
 ## P1-P | Atomic first identity+monitor D1 batch and orphan prevention (10 November 2026; PR #22 MERGED, local only)
 
