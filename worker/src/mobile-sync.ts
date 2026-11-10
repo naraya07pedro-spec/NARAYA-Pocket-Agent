@@ -135,11 +135,33 @@ async function listSyncObservations(request: Request, env: Env, ownerId: string)
   return json({observations:result.results});
 }
 
+/**
+ * An enabled flag is not sufficient if a remote deployment skipped additive
+ * migration 0004. Refuse to mark ACTIVE when the shared reservation authority
+ * does not exist. This does not certify a configured Cloudflare Cron trigger,
+ * published HTTPS route, Google OAuth, or actual remote runtime performance.
+ */
+async function schedulerBudgetReady(env: Env): Promise<boolean> {
+  try {
+    const control = await env.DB.prepare(`SELECT budget_window_start,budget_claims
+      FROM scheduler_control WHERE id=1`)
+      .first<{budget_window_start:number;budget_claims:number}>();
+    return !!control &&
+      Number.isSafeInteger(control.budget_window_start) && control.budget_window_start >= 0 &&
+      Number.isSafeInteger(control.budget_claims) &&
+      control.budget_claims >= 0 && control.budget_claims <= 3;
+  } catch {
+    return false; // Missing migration, control row, or unavailable D1: no activation.
+  }
+}
+
 async function updateSyncStatus(request: Request, env: Env, ownerId: string, id: string): Promise<Response> {
   if (!UUID.test(id)) return json({error:'not_found'},404);
   const {status,expectedVersion} = parseStatusInput(await boundedJson(request));
   if (status === 'ACTIVE' && !mobileSchedulerConfigured(env))
     return json({error:'scheduler_disabled'},409);
+  if (status === 'ACTIVE' && !await schedulerBudgetReady(env))
+    return json({error:'scheduler_storage_unavailable'},503);
 
   const now = Date.now();
   const result = await env.DB.prepare(`UPDATE monitors SET status=?,next_due_at=?,
