@@ -1,7 +1,7 @@
 # ADR-0005 | Opt-in fair and bounded multi-user GitHub monitoring
 
 Date: 2026-11-10
-Status: IMPLEMENTED IN PR #10; CI_VERIFIED_LOCAL (not remotely deployed)
+Status: MERGED via PR #10 as `2368b27c18d0f6c07c2e61377c12ad6331b1c36b`; CI_VERIFIED_LOCAL (not remotely deployed)
 
 ## Context
 
@@ -33,7 +33,7 @@ P1-C introduced per-user D1 monitor rows, but all mobile rows were PAUSED, and t
 - [Android real GitHub adapter in JVM CI](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265417): SUCCESS, not a physical device.
 - [Android debug APK build](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265184): SUCCESS, not a release APK.
 
-Earlier PR-head run `c7312e712f695283a1108f1ac73e7c5965690765` failed due to malformed route syntax; `1d764041...` corrected the route and passed. Preserve the failed CI in historical evidence. Later documentation SHA and merge SHA each need independent evidence before claiming their CI success.
+Earlier PR-head run `c7312e712f695283a1108f1ac73e7c5965690765` failed due to malformed route syntax; `1d764041...` corrected the route and passed. Preserve the failed CI in historical evidence. Five workflows on final PR HEAD `fa8471459ed7608fd6bf3f45d13cca74006851b5` succeeded. Merge SHA was confirmed, but a separate main-merge CI check and later ledger-only commits are not yet independently verified.
 
 ## Next steps
 
