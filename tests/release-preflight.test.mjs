@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,15);
+  assert.equal(result.checks.length,16);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -183,5 +183,25 @@ test('P1-M preflight rejects missing migration or faked durable event ordering',
   for(const mutation of mutators){
     const s=clone();mutation(s);
     assert.equal(audit(s).source_safety,'FAIL');
+  }
+});
+
+
+test('P1-N source gate refuses an owner-supplied manifest being promoted to verified/cloud-enabled',()=>{
+  const changes=[
+    s=>{s.offdeviceEvidenceGate=s.offdeviceEvidenceGate.replace(
+      "const REMOTE_UNVERIFIED = 'NOT_VERIFIED'","const REMOTE_UNVERIFIED = 'VERIFIED'");},
+    s=>{s.offdeviceEvidenceGate=s.offdeviceEvidenceGate.replace(
+      'safe_to_activate_scheduler:false','safe_to_activate_scheduler:true');},
+    s=>{s.offdeviceEvidenceGate=s.offdeviceEvidenceGate.replace(
+      'remote_acceptance:REMOTE_UNVERIFIED','remote_acceptance:"VERIFIED"');},
+    s=>{s.offdeviceEvidenceGate=s.offdeviceEvidenceGate.replace(
+      'requireRemote?2:0','requireRemote?0:0');},
+    s=>{s.offdeviceEvidenceGate=s.offdeviceEvidenceGate.replace(
+      'raw.byteLength>65_536','false');},
+  ];
+  for(const mutate of changes){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes('owner_evidence_can_never_certify_remote_or_activate'));
   }
 });
