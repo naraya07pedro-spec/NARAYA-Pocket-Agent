@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-P first-monitor/identity atomic D1 registration implemented in PR #22 (CI implementation and docs-final validation in progress). Previously merged P1-O remains in main. No remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-P atomic first-monitor/identity D1 registration MERGED via PR #22 (82/82 Node backend/typecheck, 11/11 local workerd/D1, 20/20 Android security JVM, final PR HEAD 5/5 CI SUCCESS). No remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-P transactionally safe first monitor registration (PR #22, local-only validation)
+## P1-P transactionally safe first monitor registration (PR #22 merged, source/local CI only)
 
 A new signed owner previously received a durable D1 identity **before** the first monitor was inserted in a separate DB operation. A failed or ignored monitor insert could strand that identity against the 20-owner pilot cap. The first valid `POST /v1/sync/monitors` now uses **one D1 `batch()` transaction**: register the capped unique identity, insert the first **PAUSED** monitor using the winning mapped owner ID, and conditionally delete the request's own candidate identity **if no monitor was persisted**. Any SQL exception causes D1 to roll back the batch. D1 batch metadata is checked rather than assuming a monitor was saved.
 
