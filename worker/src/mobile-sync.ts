@@ -139,16 +139,26 @@ async function createFirstSyncMonitor(
         AND NOT EXISTS (SELECT 1 FROM monitors WHERE owner_id=?)`)
       .bind(candidate,issuer,subject,candidate),
   ]);
+  // D1 metadata is optional in its TypeScript type. Absence must never
+  // silently become a CREATED response or conceal a failed cleanup.
+  const identityChanges=identityWrite.meta?.changes;
+  const monitorChanges=monitorWrite.meta?.changes;
+  const cleanupChanges=rollbackUnused.meta?.changes;
+  if ((identityChanges!==0 && identityChanges!==1) ||
+      (monitorChanges!==0 && monitorChanges!==1) ||
+      (cleanupChanges!==0 && cleanupChanges!==1)) {
+    throw new Error('onboarding_batch_metadata_unavailable');
+  }
   const ownerId=await ownerFromVerifiedIdentity(issuer,subject,env);
-  if (rollbackUnused.meta.changes===1) {
+  if (cleanupChanges===1) {
     // Do not claim an onboarded identity when its first monitor wasn't saved.
     throw new Error('first_monitor_not_persisted');
   }
   if (!ownerId) {
-    if (identityWrite.meta.changes===0) throw new IdentityCapacityError();
+    if (identityChanges===0) throw new IdentityCapacityError();
     throw new Error('first_monitor_identity_missing');
   }
-  return createSyncMonitor(body,env,ownerId,{digest,changes:monitorWrite.meta.changes});
+  return createSyncMonitor(body,env,ownerId,{digest,changes:monitorChanges});
 }
 
 async function listSyncMonitors(env: Env, ownerId: string): Promise<Response> {
