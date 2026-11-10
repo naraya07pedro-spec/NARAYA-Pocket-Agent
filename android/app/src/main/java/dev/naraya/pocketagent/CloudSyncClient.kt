@@ -29,6 +29,7 @@ internal data class CloudMonitor(
 
 internal enum class SyncFailure {
     NOT_CONFIGURED, SIGN_IN_REQUIRED, UNAUTHORIZED, RATE_LIMITED, CONFLICT, NOT_FOUND,
+    SCHEDULER_DISABLED, STALE_VERSION, ACTIVE_LIMIT,
     UNAVAILABLE, INVALID_SERVER_RESPONSE, NETWORK_ERROR
 }
 
@@ -80,6 +81,15 @@ internal object WorkerSyncTransport : SyncTransport {
                 connection.outputStream.use { it.write(jsonBody!!.toByteArray(StandardCharsets.UTF_8)) }
             }
             val status = connection.responseCode
+            if (status == 409) {
+                val stream = connection.errorStream ?: return SyncHttpResponse(status, "")
+                if (connection.contentLengthLong > 2_048) return SyncHttpResponse(status, "")
+                val bytes = stream.use { readBounded(it, 2_048) }
+                val utf8 = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                return SyncHttpResponse(status, utf8.decode(ByteBuffer.wrap(bytes)).toString())
+            }
             if (status !in listOf(200, 201)) return SyncHttpResponse(status, "")
             if (connection.contentLengthLong > MAX_BODY) throw InvalidProviderBody()
             val bytes = connection.inputStream.use { readBounded(it, MAX_BODY) }
@@ -176,7 +186,16 @@ internal class CloudSyncClient(
                 }
                 401, 403 -> RawFailure(SyncFailure.UNAUTHORIZED)
                 404 -> RawFailure(SyncFailure.NOT_FOUND)
-                409 -> RawFailure(SyncFailure.CONFLICT)
+                409 -> {
+                    // Only server-defined finite error codes are surfaced; never echo raw upstream text.
+                    val code = try { JSONObject(response.body).optString("error") } catch (_: Exception) { "" }
+                    RawFailure(when (code) {
+                        "scheduler_disabled" -> SyncFailure.SCHEDULER_DISABLED
+                        "stale_version" -> SyncFailure.STALE_VERSION
+                        "active_monitor_limit" -> SyncFailure.ACTIVE_LIMIT
+                        else -> SyncFailure.CONFLICT
+                    })
+                }
                 429 -> RawFailure(SyncFailure.RATE_LIMITED)
                 else -> RawFailure(SyncFailure.UNAVAILABLE)
             }
