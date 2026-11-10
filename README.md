@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-J dual-scheduler activation protection and D1 readiness check merged in PR #16 (58/58 backend, 10/10 workerd/D1 local, 13/13 Android security tests; 5/5 final PR-head CI SUCCESS; no remote deployment), after P1-I global default-OFF Cron, P1-H shared D1 quota, P1-G JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-K Android truthful cloud scheduler state and typed D1 recovery implemented in PR #17 (18 Android security JVM tests, source/local CI; no remote deployment), after P1-J dual Cron activation protection, P1-I global default-OFF Cron, P1-H shared D1 quota and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,12 @@
 - Automated Node/SQLite, real **local** Cloudflare workerd/D1, JVM Android, Android debug APK and public GitHub GET verification on GitHub Actions. Exact current test counts, SHAs and environment distinctions are in [EVIDENCE](docs/EVIDENCE.md), rather than historical figures.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-K Android cloud state must tell the truth (PR #17, CI only)
+
+The Android client previously **ignored** backend `schedulerEligible` and `scheduled` and showed just stored `ACTIVE`, risking a false “running” impression when global Cron was OFF. The client now requires both **real JSON Booleans**, rejects contradictory/missing values, and displays the stored status separately from **eligibility in the last successful server snapshot** and independently **unverified** remote execution. Both the cloud monitor panel and each synced local draft use this distinction; versioned PAUSE/ACTIVATE acknowledgements update the monitor and eligibility together.
+
+The app also distinguishes **503 `scheduler_storage_unavailable`** (the operator must inspect additive D1 migrations 0001–0004) from generic outages without exposing raw server data, and reads all backend-valid 15-minute interval increments. Local creation presets remain unchanged. Android JVM tests cover strict flag validation, status fencing, actionable 503 and interval compatibility; this is **not an installed-device or live Cloudflare acceptance**. See [ADR-0012](docs/ADR/0012-android-cloud-truth-and-fail-closed-recovery.md), [EVIDENCE](docs/EVIDENCE.md) and [ANDROID_ACCEPTANCE](docs/ANDROID_ACCEPTANCE.md).
 
 ## P1-J signed-user activation requires both Cron permissions and budget schema (PR #16 merged, CI only)
 
