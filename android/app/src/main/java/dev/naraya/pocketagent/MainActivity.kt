@@ -53,7 +53,13 @@ class MainActivity : ComponentActivity() {
                 onBackground = Color(0xFFF1F5F4),
             )
             MaterialTheme(colorScheme = colors) {
-                MonitorDraftScreen(store, remember { GithubHeadClient() })
+                MonitorDraftScreen(
+                    store = store,
+                    github = remember { GithubHeadClient() },
+                    cloud = remember { CloudSyncClient(BuildConfig.CLOUD_API_ORIGIN) },
+                    identity = remember { GoogleIdentityClient(this) },
+                    webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID,
+                )
             }
         }
     }
@@ -70,12 +76,24 @@ private fun readableError(code: HeadError) = when (code) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MonitorDraftScreen(store: DraftStore, github: GithubHeadClient) {
+private fun MonitorDraftScreen(
+    store: DraftStore,
+    github: GithubHeadClient,
+    cloud: CloudSyncClient,
+    identity: GoogleIdentityClient,
+    webClientId: String,
+) {
     var draftRepo by remember { mutableStateOf("") }
     var interval by remember { mutableStateOf(60) }
     var drafts by remember { mutableStateOf(store.list()) }
     var notice by remember { mutableStateOf("") }
     var checkingId by remember { mutableStateOf<String?>(null) }
+    val session = remember { EphemeralIdToken() } // RAM only; never rememberSaveable.
+    var signedIn by remember { mutableStateOf(false) }
+    var cloudBusy by remember { mutableStateOf(false) }
+    var cloudRows by remember { mutableStateOf<List<CloudMonitor>>(emptyList()) }
+    var cloudNotice by remember { mutableStateOf("") }
+    val cloudConfigured = webClientId.isNotBlank() && CloudSyncClient.validOrigin(BuildConfig.CLOUD_API_ORIGIN)
     val scope = rememberCoroutineScope()
 
     Scaffold(
