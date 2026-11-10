@@ -211,6 +211,13 @@ test('mobile activation requires explicit scheduler flag, owner match and curren
     assert.equal((await patch(a,'ACTIVE',1)).status,409);
     assert.equal((await patch(b,'PAUSED',1)).status,404);
     env.MOBILE_SCHEDULING_ENABLED='true';
+    // Mobile-only flag must NOT create pending ACTIVE jobs with global Cron OFF.
+    assert.equal((await patch(a,'ACTIVE',1)).status,409);
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const incomplete=(await(await request(env,'/v1/sync/monitors',a)).json()).monitors[0];
+    assert.equal(incomplete.schedulerEligible,false);
+    env.SCHEDULER_ENABLED='true';
     assert.equal((await patch(a,'ACTIVE',99)).status,409);
     const enabled=await patch(a,'ACTIVE',1);
     assert.equal(enabled.status,200);
@@ -248,6 +255,7 @@ test('scheduler preserves opt-in default-off and rotates due owners under global
     assert.equal(disabled.claimed,0);
     assert.equal(calls.length,0);
     env.MOBILE_SCHEDULING_ENABLED='true';
+    env.SCHEDULER_ENABLED='true';
     for(let i=0;i<4;i++){
       const r=await request(env,'/v1/sync/monitors/'+ids[i],owners[i],'PATCH',{status:'ACTIVE',expectedVersion:1});
       assert.equal(r.status,200);
@@ -273,7 +281,7 @@ test('scheduler preserves opt-in default-off and rotates due owners under global
 
 test('global mobile active cap of 9 prevents unbounded external reads and permits replacement',async()=>{
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
-  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
   try {
     const users=await Promise.all(['m0','m1','m2','m3'].map(s=>token(s)));
     const ids=[];
@@ -312,7 +320,7 @@ test('bounded pilot identity creation rejects 21st identity, but existing accoun
 
 test('pausing mobile task during upstream request rejects stale worker completion',async()=>{
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
-  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
   try {
     const a=await token('pause-worker');
     const created=(await(await create(env,a,uuid())).json()).monitor;
