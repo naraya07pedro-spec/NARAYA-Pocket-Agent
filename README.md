@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-H shared D1 Cron budget merged via PR #14 (43/43 backend tests, 9/9 local D1 tests, 5/5 final PR-head CI SUCCESS; no remote deployment), after P1-G public OIDC JWKS Cache API, P1-F Android owner controls and P1-D multi-user scheduling. Operator and opt-in mobile modes now reserve from the same fixed UTC 15-minute D1 budget before GitHub GET. Default Android APK still has no Google OAuth client ID or Worker origin and mobile scheduling remains OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-I global default-OFF Cron permission and offline release preflight in PR #15, building on P1-H D1 budget, P1-G bounded JWKS cache and P1-F Android owner controls. Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -11,9 +11,17 @@
 - Cron-triggered public GitHub default-branch commit-head monitoring using official read-only REST calls.
 - Durable baseline/change observations; atomic conditional lease claims, fencing, pausing, stale-version rejection, bounded retries, and auto-pause after 5 consecutive failures.
 - Strictly bounded workload: at most **3 monitors per owner**, max 3 checks per Cron invocation AND at most 3 reserved provider attempts per fixed UTC 15-minute window shared across invocations using one D1 database (requires migration 0004), intervals 30–1,440 minutes, fixed GitHub API hostname, no redirects, no outbound writes, no paid model API.
-- 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
+- Automated Node/SQLite, real **local** Cloudflare workerd/D1, JVM Android, Android debug APK and public GitHub GET verification on GitHub Actions. Exact current test counts, SHAs and environment distinctions are in [EVIDENCE](docs/EVIDENCE.md), rather than historical figures.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-I default-OFF Cron and offline release gate (PR #15; not deployed)
+
+The Worker `scheduled()` entrypoint now **returns before any D1 or GitHub request unless `SCHEDULER_ENABLED === 'true'`**. The existing `MOBILE_SCHEDULING_ENABLED` gate is independent. Therefore merely deploying the Worker with a Cron definition would not activate operator or mobile provider checks. An explicit opt-in is required after owner approval.
+
+`npm run preflight` runs **locally with no network or cloud account access** and is mandatory inside `npm test`. It validates checked-in Cron flags, migration chain 0001–0004, no automated cloud deploy workflows, local fake D1, absence of literal secrets and Android's empty public OAuth/origin defaults. A green `source_safety: PASS` **never** changes `remote_readiness: BLOCKED`; `npm run preflight:require-remote` exits 2 intentionally.
+
+The pilot starter `worker/wrangler.pilot.example.jsonc` contains an invalid D1 placeholder and name, a potential user-facing Workers HTTPS route, **no Cron triggers**, and both scheduler flags OFF. It is **not** deploy-ready and is not a grant to create resources. Any real cloud test requires explicit approval, verified Free-tier CPU/D1/quotas, Google OAuth and an account-specific rollback plan. See [ADR-0010](docs/ADR/0010-default-off-cron-release-gate.md) and [REMOTE_PILOT_READINESS](docs/REMOTE_PILOT_READINESS.md).
 
 ## P1-H D1-global Cron quota guard (PR #14 merged, local CI only)
 
@@ -33,13 +41,13 @@ With a real configured, trusted OAuth/Worker environment, a signed-in user can e
 
 Merged PR #11 adds Google Credential Manager explicit sign-in, in-memory only Google ID token, owner-scoped backend monitor reconciliation, one-draft idempotent cloud POST, and typed offline/401/409/429 failure handling. Public `narayaGoogleWebClientId` and `narayaApiOrigin` Gradle properties must be explicitly configured by the operator; both are **empty by default**. The Android app never contains the legacy `OWNER_API_TOKEN` and never stores the user ID token in SharedPreferences.
 
-**CI-only status**: Android APK and JVM test build succeeded after pinning an SDK compatible with the existing Kotlin toolchain. Real Google OAuth registration, Android login with a genuine token, remotely deployed Cloudflare Worker/D1/Cron, and powered-off phone execution are all **not verified**. Sync creates a **PAUSED** cloud monitor; this version does not provide an activation UI or automatic phone-side polling. See [ADR-0006](docs/ADR/0006-android-google-identity-manual-sync.md), [Android README](android/README.md), [Evidence](docs/EVIDENCE.md), and [Android acceptance](docs/ANDROID_ACCEPTANCE.md).
+**CI-only status**: Android APK and JVM test build succeeded after pinning an SDK compatible with the existing Kotlin toolchain. Real Google OAuth registration, Android login with a genuine token, remotely deployed Cloudflare Worker/D1/Cron, and powered-off phone execution are all **not verified**. Sync creates a **PAUSED** cloud monitor; the later P1-F Android source adds an explicit status/observation UI, but there is still no automatic phone-side polling or live production evidence. See [ADR-0006](docs/ADR/0006-android-google-identity-manual-sync.md), [Android README](android/README.md), [Evidence](docs/EVIDENCE.md), and [Android acceptance](docs/ANDROID_ACCEPTANCE.md).
 
 ## Experimental P1-C backend identity boundary (merged PR #7; not deployed)
 
 The separate read-only `GET /v1/me` endpoint requires an RS256-signed identity JWT, validated server-side against **operator-configured** `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` (HTTPS). Without these settings it fails closed. The issuer must exactly match the token; the JWKS URL is never taken from token headers. Response on verified identity: `{"authenticated":true,"capabilities":{"monitorSync":false}}`.
 
-**This is not a completed Android login.** CI verifies generated test RSA signatures and synthetic JWKS only. No live OIDC provider login, Android OAuth flow, secure mobile token storage, authenticated Android-to-backend sync, remote Cloudflare or actual phone-off autonomy is claimed. Server-side per-user SQL authorization and draft-sync API are separately implemented below. Legacy owner bearer must NEVER be placed in the mobile app. See [ADR-0004](docs/ADR/0004-secure-android-cloud-sync.md), [evidence](docs/EVIDENCE.md), and [progress](docs/PROGRESS.md). Do not enable a production identity endpoint before real provider verification, secure mobile token lifecycle, JWKS caching/rotation and abuse controls are reviewed.
+**Historical P1-C statement, superseded at source level by P1-E/P1-F:** CI verifies generated RSA signatures and synthetic JWKS, not real provider login. The Android OAuth/owner sync UI is now implemented as source code, but real Google login, remotely deployed Cloudflare, and actual phone-off autonomy remain unverified. Server-side per-user SQL authorization and draft-sync API are separately implemented below. Legacy owner bearer must NEVER be placed in the mobile app. See [ADR-0004](docs/ADR/0004-secure-android-cloud-sync.md), [evidence](docs/EVIDENCE.md), and [progress](docs/PROGRESS.md). Do not enable a production identity endpoint before real provider verification, secure mobile token lifecycle, JWKS caching/rotation and abuse controls are reviewed.
 
 ## P1-C developer-only server-side mobile sync (merged PR #9; not deployed)
 
@@ -49,7 +57,7 @@ Separate OIDC bearer-protected routes (not the old operator token):
 - `GET /v1/sync/observations?monitorId=<UUID>`: owner-scoped event read (404 for foreign/nonexistent monitor).
 - `GET /v1/me`: earlier read-only verified-identity probe; still reports `monitorSync:false` because the Android app has not been integrated.
 
-The server derives authority from a verified `issuer + subject` mapped to an internal UUID in `user_identities`; client-provided owner fields are rejected. Migration `0002` preserves legacy operator records. **All new user monitors are PAUSED**: user-owned Cron scheduling has not yet been implemented safely. The Android APK has no mobile OIDC flow, token or sync controls. The implementation is synthetic/local-CI-verified only, not a live Cloudflare deployment. Real OIDC selection, anti-abuse controls/JWKS key caching, device secure token handling and remote cost gates remain open.
+The server derives authority from a verified `issuer + subject` mapped to an internal UUID in `user_identities`; client-provided owner fields are rejected. Migration `0002` preserves legacy operator records. **All newly synced user monitors initially start PAUSED.** Later P1-D implemented opt-in server scheduling, and P1-E/P1-F implemented Android credential and explicit sync/control source. None is activated in the default APK or remotely deployed. The implementation is synthetic/local-CI-verified only, not a live Cloudflare deployment. Real OIDC selection, anti-abuse controls/JWKS key caching, device secure token handling and remote cost gates remain open.
 
 ## P1-D experimental bounded scheduler, OFF by default (merged PR #10)
 
@@ -67,7 +75,7 @@ This branch adds `PATCH /v1/sync/monitors/{id}` with `{"status":"ACTIVE","expect
 | `PATCH` | `/v1/monitors/{id}` | Pause/resume with `expectedVersion` optimistic concurrency |
 | `GET` | `/v1/observations?monitorId={id}` | Read up to 50 owner-scoped observations |
 
-All `/v1` routes require `Authorization: Bearer <OWNER_API_TOKEN>` where the token is a random 32+ character secret stored only in the Worker secret binding. **Never embed this token in the Android app or a browser frontend.** Replace pilot auth with provider-validated identity and server-side user scoping before any Android release.
+**Only the legacy operator endpoints in the table above** require `Authorization: Bearer <OWNER_API_TOKEN>`, a random 32+ character Worker secret. The separate `/v1/sync/*` and `/v1/me` routes instead require a cryptographically validated end-user OIDC bearer. **Never embed this token in the Android app or a browser frontend.** Replace pilot auth with provider-validated identity and server-side user scoping before any Android release.
 
 Create payload: `{"repository":"python/cpython","intervalMinutes":30}`. Pause: `{"status":"PAUSED","expectedVersion":1}`. Next successful checks increment the version, so fetch the latest value before changing status.
 
@@ -93,7 +101,7 @@ See [operator runbook](docs/RUNBOOK.md). Wrangler configuration lives at `worker
 - [Progress and acceptance gates](docs/PROGRESS.md) · [Evidence](docs/EVIDENCE.md) · [Limitations](docs/LIMITATIONS.md) · [Budget and quotas](docs/COST_AND_QUOTA.md)
 - [Source of product decisions](docs/PROJECT_BASELINE.md)
 
-**Planned, not implemented:** authenticated Android-cloud sync, Firebase Auth/FCM, approval-bound external writes, business lead intake, Workers AI, live Cloudflare deployment and device RAM/battery benchmarks. The current Kotlin/Compose app adds **manual read-only GitHub previews over HTTPS**, but no cloud task activation or autonomous background execution.
+**Current open items:** genuine Google account/device acceptance, owner-approved remote Cloudflare Worker/D1/Cron deployment, physical phone-off autonomous observation proof, Free-tier CPU/billing measurements, Android RAM/battery benchmarks, Firebase/FCM, approval-bound external writes, business lead intake and Workers AI. **Source-implemented but NOT live-proven**: Android authenticated manual cloud sync, server status control and observation history. No Android background task execution.
 
 Author: Evan Naraya. Public source with no license grant at this stage; see [LICENSE_POLICY](docs/LICENSE_POLICY.md).
 
