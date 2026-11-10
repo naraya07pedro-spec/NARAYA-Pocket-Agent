@@ -264,4 +264,26 @@ class CloudSyncClientTest {
         })
         assertEquals(SyncResult.Failed(SyncFailure.NOT_FOUND), foreign.observations(token,serverId))
     }
+
+    @Test fun 409ErrorBodyIsStrictlyMappedToKnownSafeCodes() {
+        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
+        for ((raw, code) in listOf(
+            "scheduler_disabled" to SyncFailure.SCHEDULER_DISABLED,
+            "stale_version" to SyncFailure.STALE_VERSION,
+            "active_monitor_limit" to SyncFailure.ACTIVE_LIMIT,
+            "surprise-upstream-detail" to SyncFailure.CONFLICT,
+        )) {
+            val response = SyncHttpResponse(409, JSONObject().put("error", raw)
+                .put("debug", "token=$token").toString())
+            val outcome = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ -> response })
+                .changeStatus(token, paused, "ACTIVE")
+            assertEquals(SyncResult.Failed(code), outcome)
+            assertFalse(outcome.toString().contains(token))
+            assertFalse(outcome.toString().contains("debug"))
+        }
+        val invalid = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+            SyncHttpResponse(409, "body including hidden token $token")
+        })
+        assertEquals(SyncResult.Failed(SyncFailure.CONFLICT),invalid.changeStatus(token, paused, "ACTIVE"))
+    }
 }
