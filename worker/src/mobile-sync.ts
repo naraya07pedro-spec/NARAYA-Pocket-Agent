@@ -35,7 +35,9 @@ function syncView(row: MobileMonitor, env?: Env) {
   };
 }
 
-async function ownerFromVerifiedIdentity(issuer: string, subject: string, env: Env): Promise<string> {
+async function ownerFromVerifiedIdentity(
+  issuer: string, subject: string, env: Env, registerOnCreate: boolean,
+): Promise<string | null> {
   // Existing signed-in users are read-only: do not attempt INSERT/COUNT on
   // every GET/PATCH/POST. First-time registration still uses ONE atomic,
   // bounded D1 INSERT, retaining the issuer+subject uniqueness guarantee.
@@ -45,6 +47,10 @@ async function ownerFromVerifiedIdentity(issuer: string, subject: string, env: E
     if (!UUID.test(existing.id)) throw new Error('identity_mapping_invalid');
     return existing.id;
   }
+  // Viewing an empty cloud list or probing another monitor is not account
+  // registration. Only an explicitly requested, valid first POST can consume
+  // one of the 20 durable mobile pilot identity slots.
+  if (!registerOnCreate) return null;
   const candidate = crypto.randomUUID();
   const now = Date.now();
   await env.DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at)
@@ -216,7 +222,11 @@ export async function mobileSync(request: Request, env: Env, path: string): Prom
   const createInput = creating ? parseSyncInput(await boundedJson(request)) : null;
   const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null;
 
-  const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env);
+  const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating);
+  if (!ownerId) {
+    if (listing) return json({monitors:[]});
+    return json({error:'not_found'},404);
+  }
   if (listing) return listSyncMonitors(env,ownerId);
   if (creating) return createSyncMonitor(createInput!,env,ownerId);
   if (reading) return listSyncObservations(env,ownerId,id!);
