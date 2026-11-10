@@ -1,5 +1,24 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-S owner-only Billing Read inspection (PR #25, source + mocked CI; remote remains BLOCKED)
+
+**Problem:** P1-R's owner-triggered GET-only Cloudflare inventory can report Worker/D1/Cron metadata, but cannot tell whether the intended real account has paid subscriptions or historic billing activity. This is a real acceptance blocker for the project's **no unapproved extra cloud cost** requirement. Account-specific Free-tier usage and CPU were never inspected.
+
+**Implemented in P1-S:**
+- New **offline-by-default** `scripts/cloudflare-billing-readonly.mjs`, with optional explicit `--inspect-live` using a dedicated `CF_BILLING_ACCOUNT_ID` and **least-privilege Billing Read token** in `CF_BILLING_READ_TOKEN`. This deliberately does not reuse the D1 metadata token or request Billing Write.
+- Only **GET** to official Cloudflare API v4 `/accounts/:id/subscriptions` and `/accounts/:id/billing/history?page=N&per_page=20`; URL path/host exact-allowlisted, redirects rejected, 131072-byte response stream cap and bounded timeout. At most **five history pages**, all checked against `result_info.total_count`, `page`, `per_page` and optional `count`. Bad metadata/403/oversized response fail closed.
+- Exposes only redacted, generic `paid_subscription_signal`, `historical_positive_amount_seen`, number of history records scanned and completeness. Never prints token, account ID, invoices, subscription IDs, currency, invoice amount, raw provider response or API failure text.
+- **No inference that Free-tier/zero cost is proven** even if subscription/history response is empty: explicit `current_free_tier_proven:false`, `future_zero_extra_cost_proven:false`, `account_plan:NOT_VERIFIED`, `account_billing:NOT_VERIFIED`, `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`.
+- **14 mocked-fetch adversarial Node tests**, integrated into `npm test`. Total offline Node suite **114 cases** when green. Official provider subscription/history GET contracts and separate Billing Read permission are documented in [ADR-0020](ADR/0020-owner-cloudflare-billing-readonly-preflight.md), with one private PowerShell owner runbook in [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md).
+- **No owner Cloudflare token/account linked**, no live billing API was called, no external cloud resource, billing action, D1 migration, Worker deploy, Cron activation, OAuth or physical phone-OFF test. This is code/CI implementation, **not remote acceptance**.
+
+**Source CI evidence:** independently verify exact final PR HEAD's 5/5 workflows before merging; subsequently verify final main SHA separately. A successful mocked Billing Read response does not prove API scopes or live cost on a real account.
+
+**Next gate:** owner-led actual Cloudflare D1/Worker inventory plus Billing Read-only inspection and independent dashboard review for current/estimated charges, plan, Workers CPU/Cron/usage, D1 daily rows read/written. Obtain separate explicit owner authorization before remote backup/migrations 0001–0005, inert deployment, Google OAuth device login or active Cron. See [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8), [Issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2), [EVIDENCE](EVIDENCE.md) and [ADR-0020](ADR/0020-owner-cloudflare-billing-readonly-preflight.md).
+
+---
+
+
 ## 2026-11-10 | P1-R accurate paginated D1 account inventory (PR #24 MERGED; remote still BLOCKED)
 
 **Why P1-R:** source-level audit of [P1-Q inspector](../scripts/cloudflare-readonly-inspect.mjs) against [official D1 List API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/) found a trust-boundary error: the inspector could call a short first page complete despite `result_info.total_count` indicating additional unseen databases, because `total_pages` was missing. This could mark an unseen target database falsely absent. **No actual Cloudflare incident was observed.**
