@@ -749,3 +749,35 @@ test('P1-P zero-change monitor insert in a valid first POST cannot leave an orph
     assert.equal(monitors(env).length,1);
   }finally{globalThis.fetch=previous;realDb.close();}
 });
+
+
+test('P1-P an already committed batch with missing metadata fails closed and replays idempotently',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv(),realDb=env.DB;
+  try{
+    const signed=await token('P1P-ambiguous-success');
+    const draft=uuid();
+    let executed=0;
+    env.DB={...realDb,
+      async batch(stmts){
+        const results=await realDb.batch(stmts);
+        executed++;
+        // A real D1 transaction has committed, but its returned metadata
+        // was lost/corrupted. Do NOT claim success without knowing changes.
+        return results.map((entry,i)=>i===1?{...entry,meta:undefined}:entry);
+      },
+    };
+    const uncertain=await create(env,signed,draft);
+    assert.equal(uncertain.status,500);
+    assert.deepEqual(await uncertain.json(),{error:'internal_error'});
+    assert.equal(executed,1);
+    assert.equal(identities(env).length,1,'the synthetic batch actually committed');
+    assert.equal(monitors(env).length,1,'the synthetic batch actually committed one monitor');
+    env.DB=realDb;
+    const replay=await create(env,signed,draft);
+    assert.equal(replay.status,200,'retry resolves an ambiguous commit using the same clientDraftId');
+    assert.equal((await replay.json()).created,false);
+    assert.equal(identities(env).length,1);
+    assert.equal(monitors(env).length,1);
+  }finally{globalThis.fetch=previous;realDb.close();}
+});
