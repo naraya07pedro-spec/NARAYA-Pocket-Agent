@@ -1,5 +1,5 @@
 /**
- * Signed OIDC identity boundary used by read-only probe and owner-scoped sync.
+ * Signed OIDC identity boundary for owner-scoped mobile synchronization.
  * Configured JWKS URL is operator-controlled, never derived from a token or request.
  */
 export class AuthRejected extends Error {}
@@ -16,31 +16,31 @@ type JsonObject = Record<string, unknown>;
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 const RSA_SHA256 = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const;
 
-// Cache *public signing keys only*. Tokens, claims and subjects are never cached.
-// Isolate each fetcher: synthetic tests cannot poison another fetcher's key set.
-// Cloudflare Worker isolates may evict module state at any time, so caching is
-// opportunistic and must never be required for successful verification.
-const MAX_JWKS_CACHE_ENTRIES = 4;
-const MAX_JWKS_CACHE_MS = 300_000;
-interface JwksEntry {
-  value?: JsonObject;
-  expiresAt: number;
-  pending?: Promise<JsonObject>;
+// A Cache API adapter is injected by tests or read from the Worker runtime per
+// request. Never put a request's Promise, bearer token or identity in module scope.
+export interface PublicJwksCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
 }
-const jwksByFetcher = new WeakMap<Fetcher, Map<string, JwksEntry>>();
+const MAX_JWKS_CACHE_MS = 300_000;
+function defaultJwksCache(): PublicJwksCache | undefined {
+  try {
+    const runtime = globalThis as unknown as { caches?: { default?: PublicJwksCache } };
+    return runtime.caches?.default;
+  } catch { return undefined; }
+}
 
-function cacheTtlMs(headers: Headers): number {
+function ttlMs(headers: Headers): number {
   const directives = (headers.get('cache-control') ?? '')
-    .split(',').map(part => part.trim().toLowerCase());
+    .split(',').map(value => value.trim().toLowerCase());
   if (!directives.includes('public') ||
-      directives.some(value => value === 'private' || value === 'no-store' || value === 'no-cache')) return 0;
+      directives.some(value => value === 'no-cache' || value === 'no-store' || value === 'private')) return 0;
   const ages = directives.filter(value => /^max-age=\d+$/.test(value));
   if (ages.length !== 1) return 0;
   const seconds = Number(ages[0].slice(8));
   if (!Number.isSafeInteger(seconds) || seconds <= 0) return 0;
-  return Math.min(seconds * 1000, MAX_JWKS_CACHE_MS);
+  return Math.min(MAX_JWKS_CACHE_MS, seconds * 1000);
 }
-
 
 function object(value: unknown): value is JsonObject {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -78,7 +78,7 @@ function config(settings: OidcSettings): { issuer: string; audience: string; jwk
   return { issuer, audience, jwks };
 }
 
-async function boundedJwks(url: string, fetcher: Fetcher): Promise<{ keys: JsonObject; ttlMs: number }> {
+async function boundedJwks(url: string, fetcher: Fetcher): Promise<{ keys: JsonObject; bytes: Uint8Array; maxAgeMs: number }> {
   let response: Response;
   try {
     response = await fetcher(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(3000) });
@@ -105,41 +105,74 @@ async function boundedJwks(url: string, fetcher: Fetcher): Promise<{ keys: JsonO
   try {
     const value: unknown = JSON.parse(UTF8.decode(bytes));
     if (!object(value) || !Array.isArray(value.keys) || value.keys.length > 32) throw new AuthUnavailable();
-    return { keys: value, ttlMs: cacheTtlMs(response.headers) };
+    return { keys: value, bytes, maxAgeMs: ttlMs(response.headers) };
   } catch { throw new AuthUnavailable(); }
 }
 
-async function cachedJwks(url: string, fetcher: Fetcher, nowMs: number): Promise<JsonObject> {
-  let entries = jwksByFetcher.get(fetcher);
-  if (!entries) {
-    entries = new Map<string, JwksEntry>();
-    jwksByFetcher.set(fetcher, entries);
-  }
-  const existing = entries.get(url);
-  if (existing?.pending) return existing.pending; // At most one concurrent upstream key fetch per isolate.
-  if (existing?.value && nowMs < existing.expiresAt) return existing.value;
-
-  entries.delete(url); // Expired sets are never accepted on provider failure.
-  if (entries.size >= MAX_JWKS_CACHE_ENTRIES) {
-    const oldest = entries.keys().next().value;
-    if (oldest !== undefined) entries.delete(oldest);
-  }
-  const entry: JwksEntry = { expiresAt: 0 };
-  entries.set(url, entry);
-  entry.pending = boundedJwks(url, fetcher).then(({ keys, ttlMs }) => {
-    if (entries?.get(url) === entry) {
-      if (ttlMs > 0) {
-        entry.value = keys;
-        entry.expiresAt = nowMs + ttlMs;
-        entry.pending = undefined;
-      } else entries.delete(url);
+async function getPublicJwks(
+  url: string, fetcher: Fetcher, nowMs: number, cache?: PublicJwksCache,
+): Promise<JsonObject> {
+  const key = new Request(url); // Canonical, operator-configured HTTPS JWKS URL.
+  if (cache) {
+    let cached: Response | undefined;
+    try { cached = await cache.match(key); } catch { cached = undefined; }
+    if (cached) {
+      const until = Number(cached.headers.get('x-naraya-key-valid-until'));
+      if (Number.isSafeInteger(until) && until > nowMs && until - nowMs <= MAX_JWKS_CACHE_MS) {
+        try {
+          // Cached bytes remain untrusted input: bounds, UTF-8 and key-set
+          // shape are validated on every read. Signature is checked below.
+          return (await parseCachedJwks(cached)).keys;
+        } catch {
+          // Corrupt/invalid cache is never authoritative. Fetch a fresh
+          // validated provider response instead, without stale fallback.
+        }
+      }
     }
-    return keys;
-  }).catch((error: unknown) => {
-    if (entries?.get(url) === entry) entries.delete(url);
-    throw error; // Fail closed; never return stale/unvalidated keys.
-  });
-  return entry.pending;
+  }
+  const fresh = await boundedJwks(url,fetcher);
+  if (cache && fresh.maxAgeMs > 0) {
+    const expiry = nowMs + fresh.maxAgeMs;
+    const response = new Response(fresh.bytes, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=' + Math.floor(fresh.maxAgeMs / 1000),
+        'X-Naraya-Key-Valid-Until': String(expiry),
+      },
+    });
+    try { await cache.put(key, response); } catch {
+      // Cache API availability is optional. Fresh verified provider keys
+      // can still be used; no authorization decision is cached.
+    }
+  }
+  return fresh.keys;
+}
+
+async function parseCachedJwks(response: Response): Promise<{ keys: JsonObject }> {
+  if (!response.body) throw new AuthUnavailable();
+  const length = Number(response.headers.get('content-length') ?? 0);
+  if (!Number.isFinite(length) || length < 0 || length > 65536) throw new AuthUnavailable();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > 65536) { await reader.cancel(); throw new AuthUnavailable(); }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(total);
+  let position = 0;
+  for (const part of chunks) { bytes.set(part,position); position += part.length; }
+  try {
+    const keys: unknown = JSON.parse(UTF8.decode(bytes));
+    if (!object(keys) || !Array.isArray(keys.keys) || keys.keys.length > 32)
+      throw new AuthUnavailable();
+    return { keys };
+  } catch { throw new AuthUnavailable(); }
 }
 
 export async function verifyOidcBearer(
@@ -147,6 +180,7 @@ export async function verifyOidcBearer(
   settings: OidcSettings,
   fetcher: Fetcher = fetch,
   nowMs = Date.now(),
+  cache: PublicJwksCache | undefined = defaultJwksCache(),
 ): Promise<{ issuer: string; subject: string }> {
   // Invalid/missing bearer is rejected before JWKS network activity.
   const authorization = request.headers.get('authorization') ?? '';
@@ -171,7 +205,7 @@ export async function verifyOidcBearer(
       (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || !Number.isSafeInteger(payload.nbf) || payload.nbf > now + 60)) ||
       (payload.azp !== undefined && payload.azp !== audience)) throw new AuthRejected();
 
-  const jwkSet = await cachedJwks(jwks, fetcher, nowMs);
+  const jwkSet = await getPublicJwks(jwks, fetcher, nowMs, cache);
   const candidates = (jwkSet.keys as unknown[]).filter((key): key is JsonObject =>
     object(key) && key.kid === header.kid && key.kty === 'RSA' &&
     (key.use === undefined || key.use === 'sig') &&
