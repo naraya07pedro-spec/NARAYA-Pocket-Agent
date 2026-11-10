@@ -1,4 +1,19 @@
-# P1-V release readiness gate | Owner-approved remote pilot ONLY
+# P1-W release readiness gate | Owner-approved remote pilot ONLY
+
+## P1-W | Trust the issuer's keys, not only the RSA signature
+
+Before owner-approved real Android Google login, verify Google's OIDC discovery metadata on an official trusted source: `https://accounts.google.com/.well-known/openid-configuration`. At this milestone the Google-documented `jwks_uri` is **`https://www.googleapis.com/oauth2/v3/certs`**. When `OIDC_ISSUER=https://accounts.google.com`, P1-W **requires that exact** `OIDC_JWKS_URL`, not an alternative HTTPS host, a Google-looking URL, a JWT-provided `jku`, or a temporary debug endpoint. Google identity tokens must be verified against Google's own signing keys.
+
+The Worker's public OIDC settings must be inspected together: the canonical Google issuer, official JWKS, exact verified Web/backend OAuth `aud`, and optional operator-allowlisted Android `azp`. The latter is **not** a substitute for key authenticity. A wrong JWKS configuration now returns generic HTTP 503 before the verifier fetches keys or creates an identity. Non-Google OIDC providers keep separately configured issuer/JWKS values.
+
+**Change-management trade-off:** Hardcoding the currently published Google JWKS URL means a future Google official discovery change can temporarily block login. This is intentional fail-closed behavior. First independently verify the official discovery, then review/authorize a source update; never automatically accept a new token-specified JWKS URL. No owner Google token, Android signing certificate or Google Console client has been verified.
+
+**P1-W local CI proof:** code-level mocked JWKS calls and real **local** Cloudflare workerd/D1 demonstrate zero account or monitor writes on wrong Google JWKS, correct synthetic behavior on the allowlisted Google URL, and preserved generic OIDC. These checks do not contact an actual Google account or Cloudflare remote. Google Console, Free-tier billing/CPU/D1 quotas, signed Android login and physically OFF phone monitoring still require distinct owner approval and real-world evidence.
+
+[ADR-0024](ADR/0024-google-issuer-jwks-trust-binding.md).
+
+---
+
 
 ## P1-V | Google-issued Android token must have correct Web audience and authorized presenter
 

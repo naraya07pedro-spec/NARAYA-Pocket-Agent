@@ -179,6 +179,10 @@ export function auditSource(s){
 
     check('oidc_google_presenter_explicit_and_issuer_canonical',
       s.oidcSource.includes('OIDC_AUTHORIZED_PRESENTERS?: string') &&
+      // P1-W blocks a Google issuer from trusting operator-misconfigured
+      // or attacker-hosted JWKS even if a synthetic RSA signature verifies.
+      s.oidcSource.includes("const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs'") &&
+      s.oidcSource.includes('if (issuer === GOOGLE_ISSUER && jwks !== GOOGLE_JWKS) throw new AuthUnavailable()') &&
       s.oidcSource.includes("issuer === 'https://accounts.google.com' && payload.iss === 'accounts.google.com'") &&
       s.oidcSource.includes('const authorizedPresenters: ReadonlySet<string> = new Set([audience,...values])') &&
       s.oidcSource.includes("payload.aud !== audience") &&

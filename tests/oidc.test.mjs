@@ -337,7 +337,16 @@ const GOOGLE_ANDROID_CLIENT='1234567890-androidapp.apps.googleusercontent.com';
 const OTHER_ANDROID_CLIENT='1234567890-untrusted.apps.googleusercontent.com';
 const googleSettings={
   ...settings,OIDC_ISSUER:GOOGLE_ISSUER,OIDC_AUDIENCE:GOOGLE_WEB_CLIENT,
+  OIDC_JWKS_URL:'https://www.googleapis.com/oauth2/v3/certs',
   OIDC_AUTHORIZED_PRESENTERS:GOOGLE_ANDROID_CLIENT,
+};
+const googleKeys=()=>async (url,options)=>{
+  // Cryptographic fixtures are SELF-SIGNED and NEVER fetched from Google.
+  // Only the requested URL is the exact real Google JWKS URI.
+  assert.equal(url,googleSettings.OIDC_JWKS_URL);
+  assert.equal(options.method,'GET');
+  assert.equal(options.redirect,'error');
+  return new Response(JSON.stringify({keys:[jwk]}),{status:200,headers:{'content-type':'application/json'}});
 };
 function googleClaims(issuer=GOOGLE_ISSUER){
   return {...goodPayload,iss:issuer,aud:GOOGLE_WEB_CLIENT,azp:GOOGLE_ANDROID_CLIENT};
@@ -345,10 +354,10 @@ function googleClaims(issuer=GOOGLE_ISSUER){
 
 test('P1-V: configured Android presenter differs from server aud but authentic RSA Google-issuer token is accepted',async()=>{
   const signed=await sign(googleClaims());
-  const result=await verifyOidcBearer(request(signed),googleSettings,keys(),fixedTime);
+  const result=await verifyOidcBearer(request(signed),googleSettings,googleKeys(),fixedTime);
   assert.deepEqual(result,{issuer:GOOGLE_ISSUER,subject:goodPayload.sub});
   const signedLegacy=await sign(googleClaims(GOOGLE_LEGACY_ISSUER));
-  const normalized=await verifyOidcBearer(request(signedLegacy),googleSettings,keys(),fixedTime);
+  const normalized=await verifyOidcBearer(request(signedLegacy),googleSettings,googleKeys(),fixedTime);
   assert.deepEqual(normalized,result,'issuer aliases must map to the same durable identity');
 });
 
@@ -420,7 +429,7 @@ test('P1-V: even allowlisted Google Android presenter requires real signature ve
   const good=await sign(googleClaims());
   const [header,,signature]=good.split('.');
   const forged=header+'.'+b64(JSON.stringify({...googleClaims(),sub:'attacker'}))+'.'+signature;
-  await assert.rejects(verifyOidcBearer(request(forged),googleSettings,keys(),fixedTime),AuthRejected);
+  await assert.rejects(verifyOidcBearer(request(forged),googleSettings,googleKeys(),fixedTime),AuthRejected);
 });
 
 test('P1-V: audience-only and self-presented Google tokens preserve default compatible behavior',async()=>{
@@ -431,7 +440,7 @@ test('P1-V: audience-only and self-presented Google tokens preserve default comp
     const signed=await sign(payload);
     const result=await verifyOidcBearer(request(signed),{
       ...googleSettings,OIDC_AUTHORIZED_PRESENTERS:undefined,
-    },keys(),fixedTime);
+    },googleKeys(),fixedTime);
     assert.deepEqual(result,{issuer:GOOGLE_ISSUER,subject:goodPayload.sub});
   }
 });
@@ -442,9 +451,90 @@ test('P1-V: Worker read-only /v1/me accepts synthetic canonical Google ID token 
   });
   const old=globalThis.fetch;
   try{
-    globalThis.fetch=keys();
+    globalThis.fetch=googleKeys();
     const response=await worker.fetch(request(token),googleSettings);
     assert.equal(response.status,200);
     assert.equal((await response.json()).authenticated,true);
   }finally{globalThis.fetch=old}
+});
+
+
+test('P1-W: Google-issuer token signed with non-Google JWKS is blocked before fetching that host',async()=>{
+  // The synthetic signature is valid for this test key, but that key
+  // absolutely does NOT come from Google. Accepting custom keys with Google
+  // issuer would let a wrong/operator-compromised JWKS URL impersonate users.
+  const signed=await sign(googleClaims());
+  for(const url of [
+    'https://attacker.invalid/jwks',
+    'https://keys.example.invalid/jwks.json',
+    'https://www.googleapis.com/oauth2/v3/certs/',
+    'https://www.googleapis.com/oauth2/v3/certs?override=1',
+    'https://googleapis.com/oauth2/v3/certs',
+    'https://www.googleapis.com/oauth2/v1/certs',
+    'https://www.googleapis.com.evil.invalid/oauth2/v3/certs',
+  ]){
+    let calls=0;
+    await assert.rejects(
+      verifyOidcBearer(request(signed),{...googleSettings,OIDC_JWKS_URL:url},
+        async()=>{calls++;throw Error('MUST NOT FETCH '+url)},fixedTime),
+      AuthUnavailable,
+      url,
+    );
+    assert.equal(calls,0,'no attempted provider network request for '+url);
+  }
+});
+
+test('P1-W: Google legacy issuer spelling also cannot use a non-Google key endpoint',async()=>{
+  const token=await sign(googleClaims(GOOGLE_LEGACY_ISSUER));
+  let calls=0;
+  await assert.rejects(
+    verifyOidcBearer(request(token),{...googleSettings,OIDC_JWKS_URL:'https://attacker.invalid/keys'},
+      async()=>{calls++;return new Response(JSON.stringify({keys:[jwk]}))},fixedTime),
+    AuthUnavailable,
+  );
+  assert.equal(calls,0);
+});
+
+test('P1-W: a misconfigured Google/JWKS pair returns sanitized 503 on Worker /v1/me',async()=>{
+  const signed=await sign({...googleClaims(),iat:Math.floor(Date.now()/1000)-10,
+    exp:Math.floor(Date.now()/1000)+600});
+  let calls=0;
+  const prior=globalThis.fetch;
+  globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify({keys:[jwk]}))};
+  try {
+    const reply=await worker.fetch(request(signed),{
+      ...googleSettings,OIDC_JWKS_URL:'https://wrong.example.invalid/jwks',
+    });
+    assert.equal(reply.status,503);
+    assert.deepEqual(await reply.json(),{error:'identity_provider_unavailable'});
+    assert.equal(calls,0);
+  } finally {globalThis.fetch=prior}
+});
+
+test('P1-W: non-Google OIDC issuers still support explicitly configured HTTPS JWKS',async()=>{
+  // Do not unintentionally prevent other standards-compliant issuers from
+  // using their own provider keys. This token is still a synthetic fixture.
+  const signed=await sign();
+  const identity=await verifyOidcBearer(request(signed),settings,keys(),fixedTime);
+  assert.deepEqual(identity,{issuer:settings.OIDC_ISSUER,subject:goodPayload.sub});
+});
+
+test('P1-W: valid Google-issuer token must be signed by the key retrieved at pinned URL',async()=>{
+  const input=await sign(googleClaims());
+  const fake=await crypto.subtle.generateKey({
+    name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+    publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+  },true,['sign','verify']);
+  const wrongKey={...await crypto.subtle.exportKey('jwk',fake.publicKey),
+    kid:jwk.kid,use:'sig',alg:'RS256'};
+  let actual=0;
+  await assert.rejects(
+    verifyOidcBearer(request(input),googleSettings,async(url,opts)=>{
+      actual++;assert.equal(url,googleSettings.OIDC_JWKS_URL);
+      assert.equal(opts.redirect,'error');
+      return new Response(JSON.stringify({keys:[wrongKey]}));
+    },fixedTime),
+    AuthRejected,
+  );
+  assert.equal(actual,1);
 });
