@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-L bounded observation SHA history integrity and cross-runtime Worker↔Android JSON contract implemented in PR #18 (62/62 source tests, 10/10 local workerd/D1, 20/20 Android security JVM, first 5/5 CI successful; no remote deployment), after P1-K truthful cloud status, P1-J dual Cron activation gates and P1-I default-OFF Cron.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-L bounded observation SHA history integrity and cross-runtime Worker↔Android JSON contract MERGED via PR #18 (62/62 source tests, 10/10 local workerd/D1, 20/20 Android security JVM, final PR-head 5/5 CI SUCCESS; no remote deployment), after P1-K truthful cloud status, P1-J dual Cron activation gates and P1-I default-OFF Cron.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-L linked observation integrity and shared JSON contract (PR #18, local CI only)
+## P1-L linked observation integrity and shared JSON contract (PR #18 merged, local CI only)
 
 The Android client previously accepted individually valid but **mutually contradictory** GitHub change events. The observation parser now rejects duplicate BASELINE records, no-op CHANGE events and broken adjacent SHA predecessor chains when event timestamps are distinct. The latest-50 page may legitimately omit its historical baseline. When events share a millisecond, server order uses random UUIDs; Android does **not** invent a causal order from this tie-break and cannot guarantee full chain coherence in that special case.
 
