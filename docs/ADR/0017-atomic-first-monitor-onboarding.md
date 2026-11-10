@@ -1,7 +1,7 @@
 # ADR-0017 | Atomic first-monitor identity registration
 
 Date: 10 November 2026
-Status: P1-P implemented in PR #22, no remote Cloudflare rollout. Final exact PR-head CI and merge evidence recorded after verification.
+Status: MERGED via PR #22 as `9ed668cbc372298bacf4f3785c92a2e3dd07105d`. Exact final PR HEAD `63a43e8b35b5beff314e70d96a853e7dbbbe8bae` passed **5/5 CI** (82/82 Node/backend/typecheck, 11/11 local workerd/D1, 20/20 Android security JVM). No remote Cloudflare deployment, account read or real phone acceptance.
 
 ## Source finding
 
