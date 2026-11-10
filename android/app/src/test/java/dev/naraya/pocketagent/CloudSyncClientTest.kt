@@ -221,7 +221,7 @@ class CloudSyncClientTest {
     @Test fun observationReadIsBoundToOneMonitorAndServerProvenance() {
         val rows = JSONArray()
             .put(observation(kind="CHANGE", previous="a".repeat(40), whenSeen=1800000000000L))
-            .put(observation(kind="BASELINE", whenSeen=1799999990000L))
+            .put(observation(kind="BASELINE", sha="a".repeat(40), whenSeen=1799999990000L))
         var calls = 0
         val client = CloudSyncClient(origin, SyncTransport { _, path, method, bearer, body ->
             assertEquals("GET", method)
@@ -264,6 +264,70 @@ class CloudSyncClientTest {
             SyncHttpResponse(404, "no owner data")
         })
         assertEquals(SyncResult.Failed(SyncFailure.NOT_FOUND), foreign.observations(token,serverId))
+    }
+
+
+    private fun sharedObservationFixture(): JSONObject {
+        val resource = javaClass.classLoader!!.getResourceAsStream("mobile-observations-v1.json")
+            ?: error("Missing shared Worker/Android observation fixture")
+        return JSONObject(resource.bufferedReader(Charsets.UTF_8).use { it.readText() })
+    }
+
+    @Test fun sharedWorkerAndroidObservationContractHasContinuousSHAHistory() {
+        val fixture = sharedObservationFixture()
+        assertEquals(1, fixture.getInt("contractVersion"))
+        val id = fixture.getString("monitorId")
+        val result = CloudSyncClient(origin, SyncTransport { _, path, method, bearer, body ->
+            assertEquals("/v1/sync/observations?monitorId=$id", path)
+            assertEquals("GET", method)
+            assertEquals(token, bearer)
+            assertNull(body)
+            SyncHttpResponse(200, JSONObject().put("observations",fixture.getJSONArray("observations")).toString())
+        }).observations(token,id) as SyncResult.Observed
+        assertEquals(3,result.observations.size)
+        assertEquals(listOf("CHANGE","CHANGE","BASELINE"),result.observations.map { it.type })
+        assertEquals("c".repeat(40),result.observations[0].headSha)
+        assertEquals("b".repeat(40),result.observations[0].previousSha)
+        assertEquals(result.observations[1].headSha,result.observations[0].previousSha)
+        assertEquals(result.observations[2].headSha,result.observations[1].previousSha)
+        assertNull(result.observations.last().previousSha)
+    }
+
+    @Test fun impossibleOrReplayedObservationHistoryIsRejectedWithoutInventingEvents() {
+        val fixture=sharedObservationFixture()
+        val id=fixture.getString("monitorId")
+        fun check(mutator:(JSONArray)->Unit): SyncResult {
+            val rows=JSONArray(fixture.getJSONArray("observations").toString())
+            mutator(rows)
+            return CloudSyncClient(origin,SyncTransport { _, _, _, _, _ ->
+                SyncHttpResponse(200,JSONObject().put("observations",rows).toString())
+            }).observations(token,id)
+        }
+        val invalid=listOf<(JSONArray)->Unit>(
+            { it.getJSONObject(0).put("previous_sha","d".repeat(40)) },
+            { it.getJSONObject(0).put("previous_sha","c".repeat(40)) },
+            { it.getJSONObject(1).put("event_type","BASELINE").put("previous_sha",JSONObject.NULL) },
+            { it.getJSONObject(2).put("observed_at",1800005400000L) },
+            { it.getJSONObject(0).put("previous_sha",JSONObject.NULL) },
+        )
+        for(mutation in invalid){
+            assertEquals(SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE),check(mutation))
+        }
+        // Valid history may have a bounded 50-row page with no BASELINE.
+        val newestOnly=check { rows ->
+            rows.remove(2)
+        }
+        assertTrue(newestOnly is SyncResult.Observed)
+        assertEquals(2,(newestOnly as SyncResult.Observed).observations.size)
+
+        // If two events share the same millisecond, the server breaks ties by
+        // random UUID, not commit causality. Do not falsely reject an otherwise
+        // schema-valid response solely from an assumed UUID order.
+        val ties=check { rows ->
+            rows.getJSONObject(1).put("observed_at",rows.getJSONObject(0).getLong("observed_at"))
+            rows.getJSONObject(0).put("previous_sha","d".repeat(40))
+        }
+        assertTrue(ties is SyncResult.Observed)
     }
 
     @Test fun conflict409BodyIsStrictlyMappedToKnownSafeCodes() {
