@@ -1,5 +1,23 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-I: Cron global OFF and no-network release preflight (10 November 2026; PR #15)
+
+| Gate / claim | Evidence class | Exact source, result and limitations |
+| --- | --- | --- |
+| Default-OFF global `SCHEDULER_ENABLED`; mobile scheduler independently OFF; disabled Cron does not touch D1/provider | CI_VERIFIED_OFFLINE_AND_LOCAL_WORKERD | Source `63a625128a9729aa4dbec85344af92a22935b1b5`; [Node/SQLite source CI 42780576969](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576969) **53/53 PASS**; [Cloudflare local workerd/D1 42780576610](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576610) **10/10 PASS**, including an ACTIVE operator monitor and disabled Cron with zero D1 reservation, provider GET and observations |
+| Offline static config gate: no auto deploy/secret injection, migration 0001–0004, blank Android OAuth/origin, fake local D1, inert pilot template | CI_VERIFIED_SOURCE_STATIC_ONLY | [Source CI 42780576969](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576969) printed `P1-I offline source checks: PASS` and `Remote deployment status: BLOCKED`. Seven new adversarial preflight tests and two new Node Cron handler tests, all 53 total |
+| Real public GitHub read with shipped Worker, isolated local D1 | CI_VERIFIED_PROVIDER_READ_LOCAL_D1 | [Live GitHub read 42780576662](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576662), SUCCESS; **not a remote Cloudflare deployment** |
+| Android API adapter regression, APK build and JVM security | CI_VERIFIED_JVM_BUILD_ONLY | [Android adapter 42780576882](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576882), [Android debug APK 42780576952](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42780576952) SUCCESS; **13 executed/0 failed/errors/skipped**, APK SHA256 `1c4124226f23b1d6a770336fa6bcbfbfee8cd083db3fccc9f622d03704c465f8` |
+| Real Cloudflare CPU 10ms Cron, quota/billing, remote D1, real Google OAuth, physical Android phone-off proof | NOT_VERIFIED | Source audit intentionally emits `remote_readiness: BLOCKED`; no provider/account tool authentication, Cloudflare deployment, remote D1 migration, registered Google app, hardware benchmark or phone-off test |
+
+**Current source evidence:** 5/5 workflow SUCCESS at source `63a625128a9729aa4dbec85344af92a22935b1b5`. Later documentation SHA `aa940280557d6c8ab270d9b26d657dc0204608b3` independently showed 5/5 SUCCESS; the **final PR HEAD** still requires its own 5/5 verification after these ledgers. No work was performed asynchronously or without direct GitHub connector calls. No Cloudflare real resource was created/modified.
+
+**Static checker limitation:** It reads JSON-compatible `.jsonc` configs and tests known fields/code patterns, so it is an engineering guardrail, not cryptographic proof that the implementation is harmless or a substitute for Cloudflare's actual account/API/billing/CPU readings. In particular, `workers_dev:false` and absent route mean the checked-in Worker **is not reachable by Android**, and the pilot template's invalid placeholder ID means **it cannot be deployed as-is**. This is intentional until explicit owner permission. A deployed Cron trigger itself can consume platform allowance even when the entrypoint does no D1 work.
+
+Sources: Cloudflare [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 Free limit enforcement 2026-09-01](https://developers.cloudflare.com/changelog/post/2026-09-01-d1-free-tier-limit-enforcement/). Design: [ADR-0010](ADR/0010-default-off-cron-release-gate.md), [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md), [PROGRESS](PROGRESS.md).
+
+---
+
 ## P1-H | Cross-invocation D1 global Cron dispatch budget (10 November 2026; merged PR #14; not deployed)
 
 | Verification | Evidence class | Exact proof |
