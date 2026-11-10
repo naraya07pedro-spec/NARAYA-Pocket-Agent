@@ -229,6 +229,108 @@ private fun MonitorDraftScreen(
                                 }
                                 Text("Session exists only in app memory. Reauthentication is required after expiration or restart.",
                                     style = MaterialTheme.typography.bodySmall)
+                                Text("These are last confirmed server states, NOT live cloud execution guarantees.",
+                                    style = MaterialTheme.typography.bodySmall)
+                                if (cloudRows.isNotEmpty()) Text("Server monitors (" + cloudRows.size + "/3)",
+                                    style = MaterialTheme.typography.titleSmall)
+                                cloudRows.forEach { remote ->
+                                    HorizontalDivider()
+                                    Text(remote.repository, fontWeight = FontWeight.Medium)
+                                    Text("Server status: " + remote.status + " · version " + remote.version +
+                                        " · ID " + remote.id.take(8), style = MaterialTheme.typography.bodySmall)
+                                    if (remote.lastSha != null) {
+                                        Text("Server-reported head: " + remote.lastSha.take(12),
+                                            style = MaterialTheme.typography.bodySmall)
+                                    } else Text("No server-confirmed GitHub head in this snapshot.",
+                                        style = MaterialTheme.typography.bodySmall)
+                                    val desired = if (remote.status == "ACTIVE") "PAUSED" else "ACTIVE"
+                                    OutlinedButton(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            cloudBusy = true
+                                            cloudNotice = if (desired == "ACTIVE")
+                                                "Requesting ACTIVE eligibility. This may schedule GitHub checks if the server gate is enabled."
+                                            else "Requesting PAUSED state and in-flight lease invalidation."
+                                            scope.launch {
+                                                val outcome = withContext(Dispatchers.IO) {
+                                                    cloud.changeStatus(session.read(), remote, desired)
+                                                }
+                                                when (outcome) {
+                                                    is SyncResult.StatusChanged -> {
+                                                        cloudRows = cloudRows.map { previous ->
+                                                            if (previous.id == outcome.monitorId) previous.copy(
+                                                                status = outcome.status,
+                                                                version = outcome.version,
+                                                            ) else previous
+                                                        }
+                                                        cloudNotice = if (outcome.status == "ACTIVE")
+                                                            "Server accepted activation eligibility. Cron and phone-off execution NOT verified."
+                                                        else "Server confirmed PAUSED. Previously observed events are retained."
+                                                    }
+                                                    is SyncResult.Failed -> {
+                                                        if (outcome.code == SyncFailure.UNAUTHORIZED) {
+                                                            session.clear()
+                                                            signedIn = false
+                                                            cloudRows = emptyList()
+                                                            observedMonitorId = null
+                                                            remoteObservations = emptyList()
+                                                        }
+                                                        cloudNotice = "Status request failed: " + outcome.code +
+                                                            ". No success assumed. Refresh server state before retrying."
+                                                    }
+                                                    else -> cloudNotice = "Unexpected status response. No change confirmed."
+                                                }
+                                                cloudBusy = false
+                                            }
+                                        },
+                                    ) { Text(if (desired == "ACTIVE") "Request cloud activation" else "Pause cloud monitor") }
+                                    OutlinedButton(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            cloudBusy = true
+                                            cloudNotice = "Reading server observations for " + remote.repository + "..."
+                                            scope.launch {
+                                                val outcome = withContext(Dispatchers.IO) {
+                                                    cloud.observations(session.read(), remote.id)
+                                                }
+                                                when (outcome) {
+                                                    is SyncResult.Observed -> {
+                                                        observedMonitorId = outcome.monitorId
+                                                        remoteObservations = outcome.observations
+                                                        cloudNotice = "Server returned " + outcome.observations.size +
+                                                            " observation(s). This is not phone-off acceptance."
+                                                    }
+                                                    is SyncResult.Failed -> {
+                                                        observedMonitorId = null
+                                                        remoteObservations = emptyList()
+                                                        if (outcome.code == SyncFailure.UNAUTHORIZED) {
+                                                            session.clear()
+                                                            signedIn = false
+                                                            cloudRows = emptyList()
+                                                        }
+                                                        cloudNotice = "Observation read failed: " + outcome.code +
+                                                            ". No cloud events were invented."
+                                                    }
+                                                    else -> cloudNotice = "Unexpected observation response."
+                                                }
+                                                cloudBusy = false
+                                            }
+                                        },
+                                    ) { Text("Read server observations") }
+                                    if (observedMonitorId == remote.id) {
+                                        if (remoteObservations.isEmpty()) Text("Server returned no observations.",
+                                            style = MaterialTheme.typography.bodySmall)
+                                        remoteObservations.take(5).forEach { observation ->
+                                            Text(observation.type + ": " + observation.headSha.take(12) + " · " +
+                                                DateFormat.getDateTimeInstance().format(Date(observation.observedAt)),
+                                                style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        if (remoteObservations.size > 5) Text("Showing first 5 of " +
+                                            remoteObservations.size + " observations.",
+                                            style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+
                             }
                         }
                         if (cloudNotice.isNotBlank()) Text(cloudNotice, style = MaterialTheme.typography.bodySmall)
