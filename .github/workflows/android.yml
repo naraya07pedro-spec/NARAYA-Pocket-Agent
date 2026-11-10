@@ -43,7 +43,7 @@ jobs:
           suite = ET.parse(report).getroot()
           metrics = {k: int(suite.attrib.get(k, 0)) for k in ("tests", "failures", "errors", "skipped")}
           print("Cloud sync security tests:", metrics)
-          if metrics["tests"] < 7 or any(metrics[x] for x in ("failures", "errors", "skipped")):
+          if metrics["tests"] < 12 or any(metrics[x] for x in ("failures", "errors", "skipped")):
               raise SystemExit("Cloud sync security test count or result invalid")
           PY
       - name: Verify built APK permissions and absence of local secrets
