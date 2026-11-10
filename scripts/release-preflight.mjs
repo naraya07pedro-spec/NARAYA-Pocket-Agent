@@ -45,6 +45,7 @@ export function readSourceSnapshot(base=root){
     androidGradle:text(base,'android/app/build.gradle.kts'),
     androidCloudClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/CloudSyncClient.kt'),
     androidMainActivity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt'),
+    offdeviceEvidenceGate:text(base,'scripts/offdevice-evidence-gate.mjs'),
     workflows,
   };
 }
@@ -143,6 +144,13 @@ export function auditSource(s){
       s.schedulerSource.includes('COALESCE((SELECT MAX(event_sequence) FROM observations),0)+1') &&
       s.androidCloudClient.includes('item.get("event_sequence")') &&
       s.androidCloudClient.includes('eventSequence >= output.last().eventSequence')),
+    check('owner_evidence_can_never_certify_remote_or_activate',
+      s.offdeviceEvidenceGate.includes("const REMOTE_UNVERIFIED = 'NOT_VERIFIED'") &&
+      s.offdeviceEvidenceGate.includes('remote_acceptance:REMOTE_UNVERIFIED') &&
+      s.offdeviceEvidenceGate.includes('safe_to_activate_scheduler:false') &&
+      s.offdeviceEvidenceGate.includes("requireRemote?2:0") &&
+      s.offdeviceEvidenceGate.includes("owner_supplied_data_not_independently_authenticated") &&
+      s.offdeviceEvidenceGate.includes("raw.byteLength>65_536")),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -157,7 +165,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-M',
+    stage:'P1-N',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -183,7 +191,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-M offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-N offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');
