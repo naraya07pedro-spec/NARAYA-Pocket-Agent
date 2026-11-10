@@ -1,5 +1,27 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-J dual Cron authorization and activation readiness (PR #16; not deployed)
+
+**Source audit finding:** P1-I globally disabled the Worker `scheduled()` handler unless `SCHEDULER_ENABLED='true'`, but mobile signed-user `PATCH ACTIVE` and its `schedulerEligible` response still used only the separate `MOBILE_SCHEDULING_ENABLED` flag. That could result in **HTTP 200 ACTIVE with actual global Cron OFF**, misleading an Android user without triggering an actual task. There was no remote deployment; this is a **source-level bug**, not a real production incident.
+
+**Implemented:**
+- Added shared `worker/src/scheduler-eligibility.ts` predicate for literal **global Cron ON + mobile scheduling ON + valid operator context**, used by signed-user `PATCH ACTIVE`, owner-scoped monitor listings and `GET /v1/me` capability response. No plain truthy flags or token-supplied authority.
+- Added `schedulerBudgetReady` query before `PATCH ACTIVE`: `scheduler_control(id=1)` must exist with valid `budget_window_start` and `budget_claims` columns from migrations 0003–0004. Missing table, missing row or unavailable D1 returns **503 `scheduler_storage_unavailable`**, not a misleading 200. Global/mobile disabled returns **409 `scheduler_disabled`** without mutation.
+- **PAUSED remains allowed** for authenticated, version-matching owner even while global Cron/mobile permission is OFF or budget control missing. Previously active rows retain their stored status after global OFF, but owner-scope list now shows `schedulerEligible:false` immediately. `scheduled:false` still means no proven remote task execution.
+- Corrected historical `GET /v1/me` `monitorSync:false` to `monitorSync:true` because the backend sync contract exists, alongside `mobileActivationConfigured` reflecting dual flags/operator context. These are **backend source capabilities**, not an assurance of deployed Worker, healthy remote D1, Google login or actual Cron.
+- Updated offline release preflight to fail if either dual flag, truthful eligibility mapping or D1 readiness check is removed. Added adversarial Node tests for global kill-switch with stored ACTIVE monitor, two distinct failure forms for missing scheduler control, safe PAUSE, `/v1/me` capability and strict source-gate mutations.
+- Extended existing signed **two-user local workerd/D1** test to call the **actual exported Worker `scheduled()` entrypoint** after JWT-bound HTTP create and versioned PATCH. Stubbed official GitHub GET produces a persistent BASELINE and its owner can read and PAUSE it. This still uses synthetic keys and local D1, **not actual Google tokens or Cloudflare remote Cron**.
+
+**Initial source CI before documentation:** SHA `01da4689a6f0a2f01025f93fb5c6d2fa51c19ddc`, **5/5 workflows SUCCESS**:
+- [Backend offline + preflight 42787134336](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134336): **58/58 PASS**, TypeScript and static preflight PASS, **remote readiness BLOCKED**.
+- [Local Cloudflare workerd/D1 42787134473](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134473): **10/10 PASS**, signed JWT fixture, actual local Worker's scheduled callback, D1 observation and owner PAUSE.
+- [Read-only real GitHub HEAD against local D1 42787134321](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134321): SUCCESS.
+- [Android GitHub adapter 42787134331](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134331) and [Android debug APK 42787134313](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787134313): SUCCESS; **13/13 CloudSyncClientTest run**, 0 errors/failures/skips; debug APK SHA-256 `00b57f74917034d0688b244ec0148623903d76730f91a79f35e4db286871eac5`. Final PR-head source/docs require a **new** 5/5 CI result before merge.
+
+**Limits and next gate:** This stage does **not** deploy Worker/D1/Cron, register OAuth or test a real Google ID token, make a live Cloudflare D1 write, inspect account Free CPU/quotas/billing, benchmark Android memory/battery, or verify monitoring with the phone actually OFF. Both flags remain OFF in checked-in prod/pilot defaults. Independent remote validation still requires explicit owner approval and [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md). Legacy operator API behavior and global quarter-hour D1 quota are unchanged. See [ADR-0011](ADR/0011-dual-scheduler-authorization.md), [EVIDENCE](EVIDENCE.md) and [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
 ## 2026-11-10 | P1-I default-OFF Cron, offline release preflight and owner-only pilot template (PR #15 merged; not deployed)
 
 **Problem and security correction:** The P1-H mobile scheduler gate did not disable the **legacy operator-only** scheduled handler. A Worker deployed with a Cron trigger and an existing ACTIVE operator monitor could attempt GitHub reads even though mobile scheduling was OFF. In addition, `worker/wrangler.jsonc` deliberately has `workers_dev:false`, no routes and no real D1 UUID: source CI was never evidence of an Android-accessible remote Worker.
