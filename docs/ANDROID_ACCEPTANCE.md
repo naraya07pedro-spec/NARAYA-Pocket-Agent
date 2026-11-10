@@ -1,4 +1,4 @@
-# Android acceptance matrix | P1-A history + P1-B active
+# Android acceptance matrix | P1-E source merged, real-device acceptance pending; P1-B history preserved
 
 ## P1-E Android Google identity/cloud manual sync: new acceptance gates (10 November 2026)
 
