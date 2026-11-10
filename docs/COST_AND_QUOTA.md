@@ -30,3 +30,10 @@ The checked-in/CI Android APK has no Google Web Client ID and no Worker origin, 
 Cloud sync is **one selected public repo POST per explicit user click**, not background polling; each fetch has a 6-second connect/read timeout, 16 KiB bounded response, and 4 KiB bounded request. Retries reuse the existing draft UUID and server-side deduplication. Google credentials, provider quotas, OAuth project eligibility and actual Worker/D1 costs are **not checked from any connected account**. Do not equate library availability or CI passing with a free live deployment. Remote Cloudflare remains excluded until an explicit cost/authorization gate is satisfied.
 
 No client secret, Google API access token, user password, OAuth refresh token or operator Worker token is placed in the APK or Gradle properties. Public Google Web Client IDs and Worker origins can be configured at build time only after ownership checks; control that build channel carefully, since a malicious Worker host could receive an ID token.
+
+
+## P1-G public OIDC JWKS Cache API (2026-11-10)
+
+The signed-user backend previously fetched provider JWKS on each valid-looking token request. New code **may reuse public signing keys** via a dedicated Cloudflare Cache API namespace if available and the provider explicitly advertises `Cache-Control: public, max-age=N`. Application TTL is capped at **300 seconds**, with max 64 KiB parsed response. Missing/private/no-store/malformed headers do not cache. Provider or cache failures do not make invalid JWTs valid; an expired set cannot be used on outage.
+
+**No production cost saving is assumed.** Cache API may be unavailable at a deployment host, may be local to a Cloudflare data center, and cold/concurrent requests can still fetch from Google independently. CI uses synthetic tokens and an injected cache; there are **no measured remote hit rates, account quotas, bandwidth, latency, billing or money amounts**. No deployment, paid API or real token occurred during P1-G. Free-tier and domain eligibility must be verified on the actual owner-controlled Cloudflare account before any approval to provision.
