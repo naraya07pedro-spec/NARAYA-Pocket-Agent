@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-G bounded public OIDC JWKS Cache API added via PR #13 (local security/CI verification, no remote deployment), on top of P1-F Android monitor controls, P1-E explicit Google sign-in code and P1-D bounded scheduler. Default Android APK has no Google OAuth client ID or Worker origin and server mobile scheduling stays OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-G bounded public OIDC JWKS Cache API merged via PR #13 (40/40 backend, 7/7 local D1, 13/13 Android security tests on final PR head; no remote deployment), on top of P1-F Android monitor controls, P1-E Google sign-in source code and P1-D bounded scheduler. Default Android APK has no Google OAuth client ID or Worker origin and mobile scheduling remains OFF; no real cloud agent is deployed.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
