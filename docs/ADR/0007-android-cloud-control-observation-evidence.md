@@ -1,7 +1,7 @@
 # ADR-0007: Explicit Android cloud control and server-only observation evidence
 
 Date: 2026-11-10
-Status: IMPLEMENTED in PR #12, CI_VERIFIED_LOCAL candidate; no remote Cloudflare, genuine Google login or device-off acceptance.
+Status: MERGED via PR #12 at `4028d783bd332470e198a6fd0607c2562b0ca726`; final PR HEAD `9bfb371520592ee5afa3297873a9a4b08a8d4c52` passed 5/5 CI workflows, including 13/13 Android JVM tests, 6/6 local D1 tests and 33/33 backend tests. No remote Cloudflare, genuine Google login or device-off acceptance.
 
 ## Context
 
