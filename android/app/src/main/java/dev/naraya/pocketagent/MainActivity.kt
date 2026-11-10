@@ -150,6 +150,82 @@ private fun MonitorDraftScreen(
                     }
                 }
             }
+            item {
+                Card(shape = RoundedCornerShape(18.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Cloud sync · explicit permission", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Google sign-in is required before uploading any public repository draft. " +
+                                "ID tokens stay in memory; no token is saved locally. " +
+                                "Remote cloud execution has NOT been verified.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (!cloudConfigured) {
+                            Text("Cloud sync unavailable in this build. Missing public OAuth/Worker configuration.",
+                                style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            if (!signedIn) {
+                                Button(
+                                    enabled = !cloudBusy,
+                                    onClick = {
+                                        cloudBusy = true
+                                        cloudNotice = "Opening Google sign-in..."
+                                        scope.launch {
+                                            val token = identity.signIn(webClientId)
+                                            signedIn = token != null && session.replace(token)
+                                            cloudNotice = if (signedIn) "Google ID token obtained. Refresh cloud state to verify backend access."
+                                                else "Sign-in unavailable or canceled; no cloud request was made."
+                                            cloudBusy = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Sign in with Google") }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Button(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            cloudBusy = true
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) { cloud.list(session.read()) }
+                                                when (result) {
+                                                    is SyncResult.Listed -> {
+                                                        cloudRows = result.monitors
+                                                        cloudNotice = "Server returned \${result.monitors.size} monitor(s); cloud state refreshed."
+                                                    }
+                                                    is SyncResult.Failed -> {
+                                                        if (result.code == SyncFailure.UNAUTHORIZED) {
+                                                            session.clear()
+                                                            signedIn = false
+                                                            cloudRows = emptyList()
+                                                        }
+                                                        cloudNotice = "Cloud refresh failed: \${result.code}. Local drafts unchanged."
+                                                    }
+                                                    else -> cloudNotice = "Unexpected server response; local drafts unchanged."
+                                                }
+                                                cloudBusy = false
+                                            }
+                                        },
+                                    ) { Text("Refresh cloud state") }
+                                    OutlinedButton(
+                                        enabled = !cloudBusy,
+                                        onClick = {
+                                            session.clear()
+                                            signedIn = false
+                                            cloudRows = emptyList()
+                                            cloudNotice = "Local session cleared."
+                                            scope.launch { identity.signOut() }
+                                        },
+                                    ) { Text("Sign out") }
+                                }
+                                Text("Session exists only in app memory. Reauthentication is required after expiration or restart.",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (cloudNotice.isNotBlank()) Text(cloudNotice, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
             item { Text("Saved on this phone · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium) }
             if (drafts.isEmpty()) {
                 item { Text("No repositories added. Add one above.", style = MaterialTheme.typography.bodyMedium) }
