@@ -64,8 +64,9 @@ The GitHub artifact is a **debug-signed development APK**, not an Android produc
 ## Device acceptance (still required)
 Install the debug APK on a consenting Android device. Add a public repository, use `Check now` while online, note last SHA/timestamp, force-stop the app, reopen without internet, verify snapshot remains, return online, and confirm failure messages keep the previous snapshot intact. Record APK SHA-256, device model/OS/RAM and actual PSS/thermal/battery readings before making efficiency claims.
 
-## Next gate: server-authenticated cloud
-The current Cloudflare Worker requires a high-authority **operator bearer token that must never be embedded in an APK**. Implement a genuine user identity verified server-side, scoped monitor ownership, and explicit consent before any Android-to-Worker writes. Real Cloudflare D1/Cron and phone-off autonomy remain [issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2).
+## Historical P1-B next gate, superseded by P1-E
+
+At the P1-B checkpoint, only an operator-token API existed; since PRs #7/#9/#10 the server supports signed-user OIDC checks, owner-scoped draft synchronization and feature-gated multi-user scheduling, with the operator path kept separate. PR #11 adds Android source for Google sign-in and explicit sync. **Real Google sign-in and remotely deployed Cloudflare are still unverified**, so no powered-off-phone monitoring is claimed. See [issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8) and [issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2).
 
 ## P1-B source CI evidence (2026-11-10)
 
