@@ -42,7 +42,7 @@ Dependency choice: stable AndroidX Credentials 1.6.0 and Google Identity 1.1.1, 
 - A user may remove a local draft while a separate cloud record still exists. Removal must explicitly say **local-only**; remote deletion/cancellation is not implemented and is not implied.
 - Backend mobile monitor remains PAUSED at upload; UI must not suggest phone-off monitoring is enabled. `schedulerEligible` is not execution evidence.
 - A malicious or wrong compiled Worker host could receive a Google token; the operator controls host configuration. A trusted build/deployment and domain ownership check are mandatory before testing with a real account.
-- Google ID token nonce/replay hardening, JWKS key caching/rotation and rate-limit budgeting need production review. Tests use synthetic fixture keys; no login/provider success is claimed.
+- Google ID token nonce/replay hardening, real provider key-rotation acceptance and rate-limit budgeting need production review. P1-G merged bounded **public** JWKS Cache API source in [ADR-0008](0008-request-safe-oidc-jwks-cache.md), but real Google JWKS Cache API behavior, live login and provider success are still NOT_VERIFIED. Synthetic cryptographic fixtures are not live credentials.
 - Real on-device acceptance: consented Android install, Google sign-in configured in OAuth, signed Worker `GET /v1/sync/monitors`, exactly one manual draft upload, controlled retry returning same server ID, 401 reauth, airplane-mode preservation, force-stop/session clearing, offline draft snapshot unchanged. Log only sanitized server IDs, never bearer tokens.
 - Separately verify actual Cloudflare D1/Cron with free-tier account counters and physically powered-off phone under explicit approval. See issues #2/#5/#8.
 
