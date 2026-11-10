@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-P | Atomic first identity+monitor D1 batch and orphan prevention (10 November 2026; PR #22, local only)
+
+| Claim | Evidence classification | Exact source and limits |
+| --- | --- | --- |
+| First valid signed-user POST commits identity and first PAUSED monitor atomically; failed second statement never leaves a durable identity | CI_VERIFIED_NODE_AND_WORKERD_D1 | [Node/source 42813976338](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813976338) **81/81 PASS** and [real local Cloudflare workerd/D1 42813976292](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813976292) **11/11 PASS**, corrected code SHA `48dcd9d19ca057780fa443525c80b73d7e4e50b9`. Local workerd test injects **valid SQL duplicate-key violation after identity INSERT** and verifies zero retained identities/monitors |
+| `INSERT OR IGNORE` yielding zero changes cannot strand an identity with no monitor | CI_VERIFIED_NODE_SQLITE | Same Node 42813976338: inject second-statement `changes:0`, in-batch scoped DELETE removes candidate, API does not claim HTTP 201, no persisted identity or monitor, same draft retries safely |
+| Idempotent retry after a rolled-back transaction can create once and then replay without duplicates | CI_VERIFIED_NODE_SQLITE | Same Node tests: 500 failed insert, 201 after retry and 200 on later same-draft replay, one identity and monitor |
+| Missing/ambiguous D1 batch `meta.changes` cannot be interpreted as successful onboarding | SOURCE_FAIL_CLOSED_WITH_TYPECHECK | `mobile-sync.ts` validates all three changes results are 0/1, else throws; final code TypeScript passes in 42813976338. **No separately injected undefined metadata test yet** |
+| P1-O guarantees survive: no user identity on first GET, malformed JWT/body path, 20-account hard cap, 3-monitor cap and SQL owner isolation | CI_VERIFIED_NODE_AND_WORKERD_D1 | Same source 81/81, local D1 11/11; no production-account observations |
+| First source branch failed TypeScript despite 81 Node tests passing | CI_FAILED_AND_CORRECTED | [PR-head source run 42813671985](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813671985) FAIL TypeScript TS18048/TS2322 on optional D1Result.meta; corrected by fail-closed 0/1 checks. Re-tested corrected SHA 5/5 success |
+| Public real GitHub GET still works through isolated local D1, Android adapter and APK unaffected | CI_VERIFIED_PUBLIC_READ_LOCAL | [Live public GitHub read/local D1 42813976327](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813976327) SUCCESS (`remote_cloudflare:false`); [Android adapter 42813976496](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813976496) SUCCESS; [Android APK 42813976389](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42813976389) SUCCESS, **20/20 Android security JVM cases executed, zero fail/error/skipped**, APK SHA256 `68f13bf9b39de365598c7d60aa61d0def8d4d9e6cca2ecbfba362eda100d7536` |
+| Claimed reduction in Cloudflare D1 bills or actual remote safety in phone-OFF mode | **NOT_VERIFIED** | No remote Cloudflare account/Free CPU/row writes/billing, production OIDC Google token, physically switched-OFF phone, deployed Cron or remote D1. Official D1 docs say batch reduces round trips, **not billed rows** |
+
+**Intermediate corrected source SHA:** `48dcd9d19ca057780fa443525c80b73d7e4e50b9`, **5/5 CI success**, but documentation-final PR-head CI must independently pass before merge. Batch behavior supported by Cloudflare's [D1 transactions documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/) and [rows-written/batching cost caveat](https://developers.cloudflare.com/d1/observability/find-expensive-queries/). [ADR-0017](ADR/0017-atomic-first-monitor-onboarding.md) distinguishes source local evidence from real production account acceptance.
+
+---
+
 ## P1-O | No D1 identity writes on signed-user reads, opt-in registration (10 November 2026; PR #21 MERGED, local only)
 
 | Claim | Evidence class | Exact source verification |
