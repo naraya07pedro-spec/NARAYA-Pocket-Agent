@@ -15,6 +15,7 @@ const EXPECTED_MIGRATIONS=[
   '0002_mobile_identity_sync.sql',
   '0003_scheduler_control.sql',
   '0004_global_scheduler_budget.sql',
+  '0005_observation_event_sequence.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -35,6 +36,8 @@ export function readSourceSnapshot(base=root){
     pilot:json(base,'worker/wrangler.pilot.example.jsonc'),
     migrations,
     migration0004:text(base,'worker/migrations/0004_global_scheduler_budget.sql'),
+    migration0005:text(base,'worker/migrations/0005_observation_event_sequence.sql'),
+    schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
     mobileSync:text(base,'worker/src/mobile-sync.ts'),
@@ -63,7 +66,10 @@ function migrationChainValid(s){
   return s.migrations.length===EXPECTED_MIGRATIONS.length &&
     s.migrations.every((name,i)=>name===EXPECTED_MIGRATIONS[i]) &&
     /\bADD COLUMN budget_window_start\b/.test(s.migration0004) &&
-    /\bADD COLUMN budget_claims\b/.test(s.migration0004);
+    /\bADD COLUMN budget_claims\b/.test(s.migration0004) &&
+    /ADD COLUMN event_sequence INTEGER/.test(s.migration0005) &&
+    /UPDATE observations SET event_sequence = rowid/.test(s.migration0005) &&
+    /UNIQUE INDEX/.test(s.migration0005);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};
@@ -129,8 +135,14 @@ export function auditSource(s){
       s.androidCloudClient.includes('coherentObservationHistory(rows: List<CloudObservation>)') &&
       s.androidCloudClient.includes('newer.previousSha != older.headSha') &&
       s.androidCloudClient.includes('rows.count { it.type == "BASELINE" } > 1') &&
-      s.androidCloudClient.includes('rows.map { it.observedAt }.toSet().size == rows.size') &&
+      s.androidCloudClient.includes('newer.eventSequence <= older.eventSequence') &&
       s.androidCloudClient.includes('if (!coherentObservationHistory(output))')),
+    check('durable_observation_sequence_contract',
+      s.mobileSync.includes('o.event_sequence') &&
+      s.mobileSync.includes('ORDER BY o.event_sequence DESC') &&
+      s.schedulerSource.includes('COALESCE((SELECT MAX(event_sequence) FROM observations),0)+1') &&
+      s.androidCloudClient.includes('item.get("event_sequence")') &&
+      s.androidCloudClient.includes('eventSequence >= output.last().eventSequence')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -145,7 +157,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-L',
+    stage:'P1-M',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -171,7 +183,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-L offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-M offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');
