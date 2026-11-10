@@ -48,7 +48,7 @@ test('valid cryptographic identity and separate read-only endpoint; no owner cre
     response = await worker.fetch(request(await sign(livePayload)),{...settings, OWNER_API_TOKEN:undefined, OWNER_ID:undefined, DB:undefined});
   } finally { globalThis.fetch = originalFetch; }
   assert.equal(response.status,200);
-  assert.deepEqual(await response.json(),{authenticated:true,capabilities:{monitorSync:false}});
+  assert.deepEqual(await response.json(),{authenticated:true,capabilities:{monitorSync:true,mobileActivationConfigured:false}});
   assert.equal(response.headers.get('Cache-Control'),'no-store');
 });
 
