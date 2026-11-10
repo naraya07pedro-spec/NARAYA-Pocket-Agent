@@ -453,7 +453,7 @@ test('mobile ACTIVE fails closed without scheduler_control migration (no acciden
 test('same bounded observation JSON fixture used by Android matches actual owner-scoped Worker HTTP',async()=>{
   const fixture=JSON.parse(readFileSync(
     new URL('../android/app/src/test/resources/mobile-observations-v1.json',import.meta.url),'utf8'));
-  assert.equal(fixture.contractVersion,1);
+  assert.equal(fixture.contractVersion,2);
   assert.equal(fixture.observations.length,3);
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
   const env=makeEnv();
@@ -462,8 +462,10 @@ test('same bounded observation JSON fixture used by Android matches actual owner
     const foreign=await token('contract-fixture-foreign');
     const created=(await(await create(env,owner,uuid())).json()).monitor;
     const dynamicRows=fixture.observations.map(event=>({...event,monitor_id:created.id}));
-    for(const event of dynamicRows){
-      env.DB.connection.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at) VALUES(?,?,?,?,?,?,?)')
+    // Seed oldest first, letting SQLite compute new event_sequence atomically.
+    // Assert that real Worker output matches the shared Android contract JSON.
+    for(const event of dynamicRows.toReversed()){
+      env.DB.connection.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at,event_sequence) VALUES(?,?,?,?,?,?,?,(SELECT COALESCE(MAX(event_sequence),0)+1 FROM observations))')
         .run(event.id,event.monitor_id,uuid(),event.event_type,event.previous_sha,
              event.head_sha,event.observed_at);
     }
@@ -509,6 +511,7 @@ test('actual local scheduler emits a baseline and consecutive SHA-linked changes
     assert.equal(observations[0].previous_sha,observations[1].head_sha);
     assert.equal(observations[1].previous_sha,observations[2].head_sha);
     assert.equal(observations[2].previous_sha,null);
+    assert.deepEqual(observations.map(x=>x.event_sequence),[3,2,1]);
     assert.ok(observations[0].observed_at>observations[1].observed_at);
     assert.ok(observations[1].observed_at>observations[2].observed_at);
   } finally {globalThis.fetch=previous;env.DB.close();}
