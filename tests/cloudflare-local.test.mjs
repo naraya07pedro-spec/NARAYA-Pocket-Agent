@@ -128,7 +128,9 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
   const issuer='https://accounts.google.com';
   const googleAndroidClient='1234567890-approvedandroid.apps.googleusercontent.com';
   const settings={OIDC_ISSUER:issuer,OIDC_AUDIENCE:'1234567890-backendweb.apps.googleusercontent.com',
-    OIDC_JWKS_URL:'https://keys.example.invalid/jwks',
+    // Official Google keys origin is pinned; fetch is intercepted with a
+    // synthetic RSA fixture (no real Google account/key access in this test).
+    OIDC_JWKS_URL:'https://www.googleapis.com/oauth2/v3/certs',
     OIDC_AUTHORIZED_PRESENTERS:googleAndroidClient};
   const pair=await crypto.subtle.generateKey({
     name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
@@ -163,6 +165,13 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
     const androidLegacy=await jwt('test-A','accounts.google.com',googleAndroidClient);
     const body={clientDraftId:id,repository:'python/cpython',intervalMinutes:30};
     const env={DB:platform.env.DB,...settings};
+    // A valid self-signed token with Google iss must NOT be allowed to
+    // register an identity via a wrong, attacker-owned JWKS endpoint.
+    const invalidIssuerKeys={...env,OIDC_JWKS_URL:'https://attacker.invalid/jwks.json'};
+    const denied=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),invalidIssuerKeys);
+    assert.equal(denied.status,503);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM monitors').first()).n,0);
     const first=await worker.fetch(request(a,'POST','/v1/sync/monitors',body),env);
     assert.equal(first.status,201);
     const monitor=(await first.json()).monitor;
