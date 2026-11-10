@@ -80,13 +80,19 @@ test('cloud tick creates a baseline once, persists it and detects true changes',
   try{
     await insert(env);
     const start=monitorRow(env).next_due_at;
-    assert.deepEqual(await runScheduler(env,start,gh(A)),{claimed:1,completed:1,observations:1,deferred:0,skipped:0});
+    const capture={observationIds:[]};
+    assert.deepEqual(await runScheduler(env,start,gh(A),capture),{claimed:1,completed:1,observations:1,deferred:0,skipped:0});
+    assert.deepEqual(capture.observationIds,[observations(env)[0].id]);
     assert.equal(observations(env)[0].event_type,'BASELINE');
     assert.equal(observations(env)[0].head_sha,A);
     assert.equal((await runScheduler(env,start+10,gh(B))).claimed,0);
     const later=start+30*60_000;
-    assert.equal((await runScheduler(env,later,gh(A))).observations,0);
-    assert.equal((await runScheduler(env,later+30*60_000,gh(B))).observations,1);
+    const noChange={observationIds:[]};
+    assert.equal((await runScheduler(env,later,gh(A),noChange)).observations,0);
+    assert.deepEqual(noChange.observationIds,[],'no-change must not log an invented D1 row');
+    const changed={observationIds:[]};
+    assert.equal((await runScheduler(env,later+30*60_000,gh(B),changed)).observations,1);
+    assert.deepEqual(changed.observationIds,[observations(env)[1].id]);
     assert.equal(observations(env).length,2);
     assert.equal(observations(env)[1].event_type,'CHANGE');
     assert.equal(observations(env)[1].previous_sha,A);
@@ -359,6 +365,7 @@ test('Cron true gate reaches scheduler, and explicit mobile flag remains indepen
     await worker.scheduled({}, {...env,SCHEDULER_ENABLED:'true'});
     assert.deepEqual(JSON.parse(logs.at(-1)),{
       event:'scheduled_tick', claimed:0,completed:0,observations:0,deferred:0,skipped:0,
+      observationIds:[],
     });
     // An absent OWNER_ID must still fail closed when scheduler really enabled.
     await assert.rejects(worker.scheduled({},{
