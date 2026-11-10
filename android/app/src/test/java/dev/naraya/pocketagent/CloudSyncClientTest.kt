@@ -214,14 +214,15 @@ class CloudSyncClientTest {
         sha: String = "b".repeat(40),
         whenSeen: Long = 1800000000000L,
         idValue: String = UUID.randomUUID().toString(),
+        eventSequence: Long = 1L,
     ) = JSONObject().put("id", idValue).put("monitor_id", monitorId)
         .put("event_type", kind).put("previous_sha", previous ?: JSONObject.NULL)
-        .put("head_sha", sha).put("observed_at", whenSeen)
+        .put("head_sha", sha).put("observed_at", whenSeen).put("event_sequence", eventSequence)
 
     @Test fun observationReadIsBoundToOneMonitorAndServerProvenance() {
         val rows = JSONArray()
-            .put(observation(kind="CHANGE", previous="a".repeat(40), whenSeen=1800000000000L))
-            .put(observation(kind="BASELINE", sha="a".repeat(40), whenSeen=1799999990000L))
+            .put(observation(kind="CHANGE", previous="a".repeat(40), whenSeen=1800000000000L, eventSequence=2L))
+            .put(observation(kind="BASELINE", sha="a".repeat(40), whenSeen=1799999990000L, eventSequence=1L))
         var calls = 0
         val client = CloudSyncClient(origin, SyncTransport { _, path, method, bearer, body ->
             assertEquals("GET", method)
@@ -275,7 +276,7 @@ class CloudSyncClientTest {
 
     @Test fun sharedWorkerAndroidObservationContractHasContinuousSHAHistory() {
         val fixture = sharedObservationFixture()
-        assertEquals(1, fixture.getInt("contractVersion"))
+        assertEquals(2, fixture.getInt("contractVersion"))
         val id = fixture.getString("monitorId")
         val result = CloudSyncClient(origin, SyncTransport { _, path, method, bearer, body ->
             assertEquals("/v1/sync/observations?monitorId=$id", path)
@@ -286,6 +287,7 @@ class CloudSyncClientTest {
         }).observations(token,id) as SyncResult.Observed
         assertEquals(3,result.observations.size)
         assertEquals(listOf("CHANGE","CHANGE","BASELINE"),result.observations.map { it.type })
+        assertEquals(listOf(3L,2L,1L),result.observations.map { it.eventSequence })
         assertEquals("c".repeat(40),result.observations[0].headSha)
         assertEquals("b".repeat(40),result.observations[0].previousSha)
         assertEquals(result.observations[1].headSha,result.observations[0].previousSha)
@@ -307,7 +309,11 @@ class CloudSyncClientTest {
             { it.getJSONObject(0).put("previous_sha","d".repeat(40)) },
             { it.getJSONObject(0).put("previous_sha","c".repeat(40)) },
             { it.getJSONObject(1).put("event_type","BASELINE").put("previous_sha",JSONObject.NULL) },
-            { it.getJSONObject(2).put("observed_at",1800005400000L) },
+            { it.getJSONObject(2).put("event_sequence",4L) },
+            { it.getJSONObject(0).put("event_sequence",2L) },
+            { it.getJSONObject(0).put("event_sequence","3") },
+            { it.getJSONObject(0).put("event_sequence",3.5) },
+            { it.getJSONObject(0).remove("event_sequence") },
             { it.getJSONObject(0).put("previous_sha",JSONObject.NULL) },
         )
         for(mutation in invalid){
@@ -320,14 +326,23 @@ class CloudSyncClientTest {
         assertTrue(newestOnly is SyncResult.Observed)
         assertEquals(2,(newestOnly as SyncResult.Observed).observations.size)
 
-        // If two events share the same millisecond, the server breaks ties by
-        // random UUID, not commit causality. Do not falsely reject an otherwise
-        // schema-valid response solely from an assumed UUID order.
-        val ties=check { rows ->
+        // Tied timestamps no longer hide broken SHA continuity.
+        val invalidTie=check { rows ->
             rows.getJSONObject(1).put("observed_at",rows.getJSONObject(0).getLong("observed_at"))
             rows.getJSONObject(0).put("previous_sha","d".repeat(40))
         }
-        assertTrue(ties is SyncResult.Observed)
+        assertEquals(SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE),invalidTie)
+        // Sequence, not wall-clock, is the causal order. A clock moving
+        // backward does not invalidate a correctly linked durable history.
+        val timeRegression=check { rows ->
+            rows.getJSONObject(0).put("observed_at",1799990000000L)
+            rows.getJSONObject(1).put("observed_at",1800007200000L)
+        }
+        assertTrue(timeRegression is SyncResult.Observed)
+        val validTie=check { rows ->
+            rows.getJSONObject(1).put("observed_at",rows.getJSONObject(0).getLong("observed_at"))
+        }
+        assertTrue(validTie is SyncResult.Observed)
     }
 
     @Test fun conflict409BodyIsStrictlyMappedToKnownSafeCodes() {
