@@ -23,10 +23,14 @@ export interface PublicJwksCache {
   put(request: Request, response: Response): Promise<void>;
 }
 const MAX_JWKS_CACHE_MS = 300_000;
-function defaultJwksCache(): PublicJwksCache | undefined {
+async function defaultJwksCache(): Promise<PublicJwksCache | undefined> {
+  // A dedicated namespace avoids collisions with regular fetch/CDN caching.
+  // Discover it per invocation; never share a request-bound promise globally.
   try {
-    const runtime = globalThis as unknown as { caches?: { default?: PublicJwksCache } };
-    return runtime.caches?.default;
+    const runtime = globalThis as unknown as {
+      caches?: { open?: (namespace: string) => Promise<PublicJwksCache> };
+    };
+    return await runtime.caches?.open?.('naraya-pocket-agent-public-jwks-v1');
   } catch { return undefined; }
 }
 
@@ -180,7 +184,7 @@ export async function verifyOidcBearer(
   settings: OidcSettings,
   fetcher: Fetcher = fetch,
   nowMs = Date.now(),
-  cache: PublicJwksCache | undefined = defaultJwksCache(),
+  cache?: PublicJwksCache,
 ): Promise<{ issuer: string; subject: string }> {
   // Invalid/missing bearer is rejected before JWKS network activity.
   const authorization = request.headers.get('authorization') ?? '';
@@ -205,7 +209,7 @@ export async function verifyOidcBearer(
       (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || !Number.isSafeInteger(payload.nbf) || payload.nbf > now + 60)) ||
       (payload.azp !== undefined && payload.azp !== audience)) throw new AuthRejected();
 
-  const jwkSet = await getPublicJwks(jwks, fetcher, nowMs, cache);
+  const jwkSet = await getPublicJwks(jwks, fetcher, nowMs, cache ?? await defaultJwksCache());
   const candidates = (jwkSet.keys as unknown[]).filter((key): key is JsonObject =>
     object(key) && key.kid === header.kid && key.kty === 'RSA' &&
     (key.use === undefined || key.use === 'sig') &&
