@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {makeTestDb} from './sqlite-d1.mjs';
 import worker from '../worker/src/index.ts';
 import {runScheduler} from '../worker/src/scheduler.ts';
@@ -445,4 +446,70 @@ test('mobile ACTIVE fails closed without scheduler_control migration (no acciden
     assert.equal(monitors(env)[0].status,'PAUSED');
     assert.equal(monitors(env)[0].version,1);
   }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+
+
+test('same bounded observation JSON fixture used by Android matches actual owner-scoped Worker HTTP',async()=>{
+  const fixture=JSON.parse(readFileSync(
+    new URL('../android/app/src/test/resources/mobile-observations-v1.json',import.meta.url),'utf8'));
+  assert.equal(fixture.contractVersion,1);
+  assert.equal(fixture.observations.length,3);
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try {
+    const owner=await token('contract-fixture-owner');
+    const foreign=await token('contract-fixture-foreign');
+    const created=(await(await create(env,owner,uuid())).json()).monitor;
+    const dynamicRows=fixture.observations.map(event=>({...event,monitor_id:created.id}));
+    for(const event of dynamicRows){
+      env.DB.connection.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at) VALUES(?,?,?,?,?,?,?)')
+        .run(event.id,event.monitor_id,uuid(),event.event_type,event.previous_sha,
+             event.head_sha,event.observed_at);
+    }
+    const response=await request(env,'/v1/sync/observations?monitorId='+created.id,owner);
+    assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{observations:dynamicRows},
+      'Worker must serialize exactly the same JSON keys/types/order read by Android JVM');
+    assert.equal((await request(env,
+      '/v1/sync/observations?monitorId='+created.id,foreign)).status,404);
+    assert.equal((await request(env,
+      '/v1/sync/observations?monitorId='+fixture.monitorId,owner)).status,404);
+    // The fixture is seeded test-only data, NOT proof of a real scheduled GET.
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+test('actual local scheduler emits a baseline and consecutive SHA-linked changes to signed owner',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try {
+    const signed=await token('three-linked-changes');
+    const created=(await(await create(env,signed,uuid())).json()).monitor;
+    assert.equal((await request(env,'/v1/sync/monitors/'+created.id,signed,'PATCH',
+      {status:'ACTIVE',expectedVersion:1})).status,200);
+    const start=Date.now()+1_000;
+    const heads=['a','b','c'].map(char=>char.repeat(40));
+    for(let i=0;i<heads.length;i++){
+      const when=start+i*31*60_000;
+      const report=await runScheduler(env,when,async(url,options)=>{
+        assert.equal(new URL(url).host,'api.github.com');
+        assert.equal(options.method,'GET');
+        return new Response(JSON.stringify([{sha:heads[i]}]),{status:200});
+      });
+      assert.equal(report.claimed,1);
+      assert.equal(report.observations,1);
+    }
+    const response=await request(env,'/v1/sync/observations?monitorId='+created.id,signed);
+    assert.equal(response.status,200);
+    const {observations}=await response.json();
+    assert.equal(observations.length,3);
+    assert.deepEqual(observations.map(e=>e.event_type),['CHANGE','CHANGE','BASELINE']);
+    assert.deepEqual(observations.map(e=>e.head_sha),heads.toReversed());
+    assert.equal(observations[0].previous_sha,observations[1].head_sha);
+    assert.equal(observations[1].previous_sha,observations[2].head_sha);
+    assert.equal(observations[2].previous_sha,null);
+    assert.ok(observations[0].observed_at>observations[1].observed_at);
+    assert.ok(observations[1].observed_at>observations[2].observed_at);
+  } finally {globalThis.fetch=previous;env.DB.close();}
 });
