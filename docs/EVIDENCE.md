@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-G: request-safe public JWKS Cache API (10 November 2026, source CI)
+## P1-G: request-safe public JWKS Cache API (10 November 2026, merged PR #13; no remote deployment)
 
 | Claim | Evidence classification | Exact SHA and proof |
 | --- | --- | --- |
@@ -8,6 +8,8 @@
 | Cloudflare local D1 + two subject isolation with key reuse | CI_VERIFIED_LOCAL_WORKERD | [Cloudflare workerd/D1 CI 42770060770](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060770), same SHA, **7/7 PASS**. Cache API namespace injected locally, real D1 binding, test RSA keys; NOT Google production keys or Cloudflare remote caching |
 | Read-only GitHub provider / Android regressions | CI_VERIFIED | [Worker provider read 42770060997](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060997), [Android adapter 42770061012](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770061012), [Android APK 42770060723](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060723), SUCCESS on same SHA |
 | Real Google OIDC production issuer/audience/cache headers, Cloudflare remote Cache API efficiency, phone-off Cron, account quotas and actual spend | NOT_VERIFIED | No live OAuth account or token, deployed Cloudflare Worker/cache/cron/D1, physical device, account billing data or latency measurements used |
+
+**Final merge gate:** all **5/5** workflow checks SUCCESS on PR HEAD `21bcd3625072f6a57ef4420ff80d73b188d03361`: [backend 42770459491](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770459491) **40/40 tests**, [local D1 42770459535](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770459535) **7/7 tests**, [GitHub Worker live-read 42770459875](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770459875), [Android provider adapter 42770459458](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770459458), [Android APK 42770459499](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770459499) with **13/13 CloudSyncClientTest executed, zero skipped/failures/errors**, APK SHA256 `22d7f1a66c56e825f38dcbe041e673e9f6ea83048a3883a9b0749b690523cf5f`. [PR #13](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/13) merged as `f9f551940f8cc9e83b3d14783dbc41ff63aeefe0`. No exact merged-main SHA CI result is inferred from these PR checks, and no remote cache/provider access was performed.
 
 **Red-team design history:** first candidate `ea5af66ff404c038f72899c3d8d88f8b676c439e` used a module-global WeakMap/in-flight JWKS fetch Promise. After checking Cloudflare current best practices for reused isolates, it was **abandoned and replaced** with a per-request discovery of a dedicated Cache API namespace. No cross-request single-flight guarantee remains. Do not claim the first candidate is running.
 
