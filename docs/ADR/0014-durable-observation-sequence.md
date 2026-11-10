@@ -1,7 +1,7 @@
 # ADR-0014 | Persisted observation sequence instead of clock/UUID ordering
 
 Date: 10 November 2026
-Status: Source implementation in PR #19. No remote Cloudflare release, new owner authorization, paid resource or device test.
+Status: MERGED via PR #19 as `772a075717b290ee990e5f99ec9e7adbd18ceb27`. Exact final PR HEAD `23923987a587ea6844d603ec0797eae7e384b360` passed 5/5 CI (65/65 backend/preflight, 11/11 local workerd/D1, 20/20 Android security JVM). No remote Cloudflare release, new owner authorization, paid resource or device test.
 
 ## Evidence-based problem
 
