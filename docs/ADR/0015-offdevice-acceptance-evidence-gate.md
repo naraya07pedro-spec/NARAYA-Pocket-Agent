@@ -1,7 +1,7 @@
 # ADR-0015 | Offline off-device acceptance evidence is not independent attestation
 
 Date: 10 November 2026
-Status: P1-N implementation in PR #20; final SHA-bound CI and merge pending. No remote cloud or physical-device testing.
+Status: MERGED via PR #20 as `f53627b4eb07d4f0edde76c8b2770c6bc8bd400e`. Exact final PR-head SHA `70f2f40a94b17fc0be4623bc4b4c12b2912931c1` passed 5/5 GitHub Actions (74/74 Node/backend/preflight, 11/11 local workerd/D1, 20/20 Android security JVM). No remote cloud or physical-device testing.
 
 ## Problem and decision
 
