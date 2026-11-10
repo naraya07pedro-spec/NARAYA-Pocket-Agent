@@ -85,6 +85,7 @@ const check=(id,passed)=>({id,status:passed?'PASS':'FAIL'});
 
 export function auditSource(s){
   const d=prodD1(s);
+  const identityAdmitSource=s.mobileSync.split('async function ownerFromVerifiedIdentity(')[1]?.split('function parseSyncInput')[0]??'';
   const checks=[
     check('global_cron_kill_switch',s.workerTypes.includes('SCHEDULER_ENABLED?: string') &&
       /env\.SCHEDULER_ENABLED !== 'true'/.test(s.workerIndex) &&
@@ -153,8 +154,8 @@ export function auditSource(s){
       s.offdeviceEvidenceGate.includes("owner_supplied_data_not_independently_authenticated") &&
       s.offdeviceEvidenceGate.includes("raw.byteLength>65_536")),
     check('signed_user_admission_is_prevalidated_and_existing_users_read_only',
-      s.mobileSync.includes('const existing = await env.DB.prepare') &&
-      s.mobileSync.includes('if (existing) {') &&
+      identityAdmitSource.includes('const existing = await env.DB.prepare') &&
+      identityAdmitSource.includes('if (existing) {') &&
       s.mobileSync.includes('if (!registerOnCreate) return null') &&
       s.mobileSync.includes('if (!ownerId) {') &&
       s.mobileSync.includes('if (listing) return json({monitors:[]})') &&
