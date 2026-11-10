@@ -1,6 +1,16 @@
-# NARAYA Pocket Agent | Android P1-E opt-in Google sign-in + cloud sync
+# NARAYA Pocket Agent | Android P1-F opt-in Google identity, monitor controls and observations
 
 This is a **native Kotlin + Jetpack Compose pilot**, with public read-only GitHub preview and an optional **explicit** signed-in cloud draft sync. **Default CI APK has cloud controls disabled** because no Google Web Client ID and no Cloudflare Worker origin are configured. No real Google auth, real Cloudflare backend, or powered-off phone test has been demonstrated.
+
+## P1-F implemented in Android source (merged PR #12; remote not deployed)
+
+- `Request cloud activation` and `Pause cloud monitor` are user-initiated authenticated PATCH requests. Client requires the correct owner-monitor ID, requested state, server version increment and eligibility flag before displaying any change. On stale version or server-disabled scheduler, it **does not** pretend activation succeeded.
+- Explicit `Read server observations` queries the owner-scoped Worker `GET /v1/sync/observations?monitorId=UUID`, validating 50-record maximum, matching owner-monitor UUID, 40-character Git SHAs and event semantics. UI displays the most recent five events as **server-reported evidence**, not measured Android device-off execution.
+- Fixed HTTPS origin, strict route/method allowlist, rejected redirects, bounds on bodies and strictly allowlisted 409 reason codes. Neither user token nor raw error body appears in UI/logs. 401 wipes in-memory auth and cloud evidence.
+- The Android code has no auto background work; the server must separately opt into `MOBILE_SCHEDULING_ENABLED='true'` before an ACTIVE request can succeed. Default APK has no OAuth Web Client ID or Worker origin and therefore no active controls.
+- **CI verified:** [final PR-head Android run 42765189002](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765189002), `CloudSyncClientTest` **13 tests executed, 0 failures/skips/errors**, debug APK SHA-256 `095d69e1f8edd11fe3e56cec33730c9871980ab8ddecb5705c52b46e0729ab8a`. [Local D1/workerd run 42765188864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42765188864) **6/6 PASS** including cryptographically signed two-user activation→observation→pause. This is not a physical device or remote Cloudflare proof.
+
+See [ADR-0007](../docs/ADR/0007-android-cloud-control-observation-evidence.md) and [latest evidence](../docs/EVIDENCE.md).
 
 ## P1-E implemented in Android source
 
