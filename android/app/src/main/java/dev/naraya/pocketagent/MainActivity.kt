@@ -92,6 +92,8 @@ private fun MonitorDraftScreen(
     var signedIn by remember { mutableStateOf(false) }
     var cloudBusy by remember { mutableStateOf(false) }
     var cloudRows by remember { mutableStateOf<List<CloudMonitor>>(emptyList()) }
+    var observedMonitorId by remember { mutableStateOf<String?>(null) }
+    var remoteObservations by remember { mutableStateOf<List<CloudObservation>>(emptyList()) }
     var cloudNotice by remember { mutableStateOf("") }
     val cloudConfigured = webClientId.isNotBlank() && CloudSyncClient.validOrigin(BuildConfig.CLOUD_API_ORIGIN)
     val scope = rememberCoroutineScope()
@@ -106,13 +108,14 @@ private fun MonitorDraftScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("LIVE GITHUB PREVIEW · NO CLOUD TASKS", color = Color(0xFF6BD6C3),
+                    Text("MANUAL GITHUB PREVIEW · OPT-IN CLOUD CONTROLS", color = Color(0xFF6BD6C3),
                         style = MaterialTheme.typography.labelLarge)
                     Text("Check a public repository", style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Tap Check now for one read-only GitHub request. The last successful commit is saved offline. " +
-                            "No automatic checks, cloud sync or background agent runs yet.",
+                        "Check now reads public GitHub once and saves the latest SHA offline. " +
+                            "Cloud control is optional and disabled without trusted OAuth/Worker configuration; " +
+                            "this Android app never schedules background checks.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -128,7 +131,7 @@ private fun MonitorDraftScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Text("Future cloud interval (not active)", style = MaterialTheme.typography.labelMedium)
+                        Text("Cloud check interval (activation requires separate approval)", style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             for (option in listOf(30, 60, 120)) {
                                 if (interval == option) Button(onClick = { interval = option }) { Text("${option}m") }
@@ -191,6 +194,8 @@ private fun MonitorDraftScreen(
                                                 when (result) {
                                                     is SyncResult.Listed -> {
                                                         cloudRows = result.monitors
+                                                        observedMonitorId = null
+                                                        remoteObservations = emptyList()
                                                         cloudNotice = "Server returned ${result.monitors.size} monitor(s); cloud state refreshed."
                                                     }
                                                     is SyncResult.Failed -> {
@@ -198,6 +203,8 @@ private fun MonitorDraftScreen(
                                                             session.clear()
                                                             signedIn = false
                                                             cloudRows = emptyList()
+                                                            observedMonitorId = null
+                                                            remoteObservations = emptyList()
                                                         }
                                                         cloudNotice = "Cloud refresh failed: ${result.code}. Local drafts unchanged."
                                                     }
@@ -213,6 +220,8 @@ private fun MonitorDraftScreen(
                                             session.clear()
                                             signedIn = false
                                             cloudRows = emptyList()
+                                            observedMonitorId = null
+                                            remoteObservations = emptyList()
                                             cloudNotice = "Local session cleared."
                                             scope.launch { identity.signOut() }
                                         },
@@ -269,6 +278,8 @@ private fun MonitorDraftScreen(
                                                     session.clear()
                                                     signedIn = false
                                                     cloudRows = emptyList()
+                                                    observedMonitorId = null
+                                                    remoteObservations = emptyList()
                                                 }
                                                 cloudNotice = "Cloud upload failed: ${result.code}; local draft and verified SHA preserved."
                                             }
