@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-C experimental server identity verifier on PR #7 + P1-B Android GitHub Live Preview + P0.2-B partial cloud backend.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-C experimental server identity verifier merged via PR #7 + P1-B Android GitHub Live Preview + P0.2-B partial cloud backend.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## Experimental P1-C backend identity boundary (PR #7, not yet main)
+## Experimental P1-C backend identity boundary (merged PR #7; not deployed)
 
 The separate read-only `GET /v1/me` endpoint requires an RS256-signed identity JWT, validated server-side against **operator-configured** `OIDC_ISSUER`, `OIDC_AUDIENCE`, and `OIDC_JWKS_URL` (HTTPS). Without these settings it fails closed. The issuer must exactly match the token; the JWKS URL is never taken from token headers. Response on verified identity: `{"authenticated":true,"capabilities":{"monitorSync":false}}`.
 
