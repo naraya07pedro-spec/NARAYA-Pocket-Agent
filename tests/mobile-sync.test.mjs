@@ -198,3 +198,137 @@ test('same draft concurrent retry stores one identity mapping and one monitor',a
     assert.equal(monitors(env).length,1);
   } finally {globalThis.fetch=previous;env.DB.close();}
 });
+
+
+test('mobile activation requires explicit scheduler flag, owner match and current version',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try {
+    const a=await token('activation-A'),b=await token('activation-B');
+    const first=await(await create(env,a,uuid())).json();
+    const id=first.monitor.id;
+    const patch=(t,status,expectedVersion)=>request(env,'/v1/sync/monitors/'+id,t,'PATCH',{status,expectedVersion});
+    assert.equal((await patch(a,'ACTIVE',1)).status,409);
+    assert.equal((await patch(b,'PAUSED',1)).status,404);
+    env.MOBILE_SCHEDULING_ENABLED='true';
+    assert.equal((await patch(a,'ACTIVE',99)).status,409);
+    const enabled=await patch(a,'ACTIVE',1);
+    assert.equal(enabled.status,200);
+    assert.equal((await enabled.json()).schedulerEligible,true);
+    assert.equal((await patch(b,'ACTIVE',1)).status,404);
+    assert.equal((await patch(a,'PAUSED',1)).status,409);
+    assert.equal((await patch(a,'PAUSED',2)).status,200);
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    env.MOBILE_SCHEDULING_ENABLED=undefined;
+    assert.equal((await patch(a,'ACTIVE',3)).status,409);
+    assert.equal((await patch(a,'PAUSED',3)).status,200);
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+test('scheduler preserves opt-in default-off and rotates due owners under global 3-call budget',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try {
+    const repositories=['python/cpython','nodejs/node','microsoft/vscode','cloudflare/workers-sdk'];
+    const owners=await Promise.all(['a','b','c','d'].map(s=>token('fair-'+s)));
+    const ids=[];
+    for(let i=0;i<4;i++) {
+      const monitor=(await(await create(env,owners[i],uuid(),repositories[i])).json()).monitor;
+      ids.push(monitor.id);
+    }
+    let calls=[];
+    const fake=async(url,opts)=>{
+      calls.push(new URL(url).pathname);
+      assert.equal(opts.method,'GET');
+      assert.equal(opts.redirect,'error');
+      return new Response(JSON.stringify([{sha:'a'.repeat(40)}]),{status:200});
+    };
+    const when=Date.now()+10000;
+    const disabled=await runScheduler(env,when,fake);
+    assert.equal(disabled.claimed,0);
+    assert.equal(calls.length,0);
+    env.MOBILE_SCHEDULING_ENABLED='true';
+    for(let i=0;i<4;i++){
+      const r=await request(env,'/v1/sync/monitors/'+ids[i],owners[i],'PATCH',{status:'ACTIVE',expectedVersion:1});
+      assert.equal(r.status,200);
+    }
+    const first=await runScheduler(env,when,fake);
+    assert.equal(first.claimed,3);
+    assert.equal(first.completed,3);
+    assert.equal(first.observations,3);
+    assert.equal(calls.length,3);
+    assert.equal(new Set(calls).size,3);
+    const unvisited=repositories.find(repo=>!calls.some(path=>path.includes('/'+repo+'/')));
+    assert.ok(unvisited,'one owner must be unvisited under three-call budget');
+    calls=[];
+    const later=when+30*60_000+1000;
+    const second=await runScheduler(env,later,fake);
+    assert.equal(second.claimed,3);
+    assert.equal(calls.length,3);
+    assert.ok(calls[0].includes('/'+unvisited+'/'),'rotation cursor starts with previously unvisited owner');
+    const counts=env.DB.connection.prepare('SELECT m.owner_id,COUNT(*) AS n FROM observations o JOIN monitors m ON m.id=o.monitor_id GROUP BY m.owner_id').all();
+    assert.equal(counts.length,4,'four separate owners must eventually be served');
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+test('global mobile active cap of 9 prevents unbounded external reads and permits replacement',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  try {
+    const users=await Promise.all(['m0','m1','m2','m3'].map(s=>token(s)));
+    const ids=[];
+    for(let i=0;i<4;i++) {
+      for(const repo of ['python/cpython','nodejs/node','microsoft/vscode']) {
+        const monitor=(await(await create(env,users[i],uuid(),repo)).json()).monitor;
+        ids.push({id:monitor.id,t:users[i]});
+      }
+    }
+    for(let i=0;i<9;i++)
+      assert.equal((await request(env,'/v1/sync/monitors/'+ids[i].id,ids[i].t,'PATCH',{status:'ACTIVE',expectedVersion:1})).status,200);
+    assert.equal((await request(env,'/v1/sync/monitors/'+ids[9].id,ids[9].t,'PATCH',{status:'ACTIVE',expectedVersion:1})).status,409);
+    assert.equal(env.DB.connection.prepare("SELECT COUNT(*) AS n FROM monitors WHERE status='ACTIVE'").get().n,9);
+    assert.equal((await request(env,'/v1/sync/monitors/'+ids[0].id,ids[0].t,'PATCH',{status:'PAUSED',expectedVersion:2})).status,200);
+    assert.equal((await request(env,'/v1/sync/monitors/'+ids[9].id,ids[9].t,'PATCH',{status:'ACTIVE',expectedVersion:1})).status,200);
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+test('bounded pilot identity creation rejects 21st identity, but existing account remains usable',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try {
+    const first=await token('registered-0');
+    for(let i=0;i<20;i++) {
+      const t=i===0?first:await token('registered-'+i);
+      assert.equal((await request(env,'/v1/sync/monitors',t)).status,200);
+    }
+    const beyond=await token('registered-20');
+    const rejected=await request(env,'/v1/sync/monitors',beyond);
+    assert.equal(rejected.status,429);
+    assert.deepEqual(await rejected.json(),{error:'pilot_identity_limit'});
+    assert.equal(identities(env).length,20);
+    assert.equal((await request(env,'/v1/sync/monitors',first)).status,200);
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+test('pausing mobile task during upstream request rejects stale worker completion',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();env.MOBILE_SCHEDULING_ENABLED='true';
+  try {
+    const a=await token('pause-worker');
+    const created=(await(await create(env,a,uuid())).json()).monitor;
+    assert.equal((await request(env,'/v1/sync/monitors/'+created.id,a,'PATCH',{status:'ACTIVE',expectedVersion:1})).status,200);
+    let started,release;
+    const entered=new Promise(r=>started=r);
+    const gate=new Promise(r=>release=r);
+    const when=Date.now()+5000;
+    const running=runScheduler(env,when,async()=>{started();await gate;return new Response(JSON.stringify([{sha:'a'.repeat(40)}]),{status:200})});
+    await entered;
+    const row=env.DB.connection.prepare('SELECT version FROM monitors WHERE id=?').get(created.id);
+    assert.equal((await request(env,'/v1/sync/monitors/'+created.id,a,'PATCH',{status:'PAUSED',expectedVersion:row.version})).status,200);
+    release();
+    const outcome=await running;
+    assert.equal(outcome.skipped,1);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,0);
+    assert.equal(monitors(env)[0].status,'PAUSED');
+  } finally {globalThis.fetch=previous;env.DB.close();}
+});
