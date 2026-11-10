@@ -17,6 +17,7 @@ export interface Env {
   OIDC_AUDIENCE?: string;
   OIDC_JWKS_URL?: string;
   MOBILE_SCHEDULING_ENABLED?: string;
+  SCHEDULER_ENABLED?: string;
 }
 export interface Monitor {
   id: string;
