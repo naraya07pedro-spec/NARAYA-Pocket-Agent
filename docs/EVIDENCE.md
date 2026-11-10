@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-M | Durable D1 event sequence, exact Worker/Android contract (10 November 2026; PR #19 source only)
+## P1-M | Durable D1 event sequence, exact Worker/Android contract (10 November 2026; PR #19 MERGED, not remotely deployed)
 
 | Claim | Evidence classification | Evidence and limitation |
 | --- | --- | --- |
@@ -13,6 +13,8 @@
 | Remote D1 backfill, real Free CPU/account usage, actual Google OAuth on Android and autonomous remote Cron while phone completely OFF | **NOT_VERIFIED** | No remote Cloudflare configuration, D1 migration, real Google-issued ID token, phone hardware or billing/CPU readings. Offline source preflight explicitly returns `remote_readiness: BLOCKED` |
 
 **Source gate prior to documentation:** exact SHA `ca7ead938b081a4f1e64583eaae2cab96e2ebc63`, 5/5 CI SUCCESS; [Android APK SHA256 `304758be50ef71ffd3b9a76df5dedfc7026ff7cd120690f0c84a46a774c1dee4`](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869210). Final docs PR HEAD requires separate 5/5 verification. No provider writes, external deployment or charges initiated.
+
+**FINAL exact PR-head CI and merge:** source `23923987a587ea6844d603ec0797eae7e384b360`, **5/5 SUCCESS** after final documentation: [Node/preflight 42800618205](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42800618205) **65/65 PASS, source PASS / remote BLOCKED**; [Cloudflare local workerd/D1 42800618086](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42800618086) **11/11 PASS**; [real public GitHub GET using local D1 42800617743](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42800617743) SUCCESS; [Android provider adapter 42800617611](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42800617611) SUCCESS; [Android debug APK 42800617648](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42800617648) **20/20 CloudSyncClientTest security JVM tests executed/0 failures/errors/skips**, APK SHA-256 `2fd9281494d4693e423dfeacb2509da99b152942496b26f658309c2d9253d95f`. [PR #19](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/19) merged as `772a075717b290ee990e5f99ec9e7adbd18ceb27`. Merge and post-merge docs-only SHAs do **not** have independently verified CI in this checkpoint. Real Cloudflare/Google/phone-OFF remain NOT VERIFIED.
 
 **Source authority:** SQLite [ROWID allocation and reuse documentation](https://www.sqlite.org/autoinc.html); Cloudflare [D1 SQLite SQL compatibility](https://developers.cloudflare.com/d1/sql-api/sql-statements/). Backfill is an additive **source-tested** migration, not a signed append-only audit log. IDs can be reused after manual deletion of latest event(s); full cryptographic provenance is not established.
 
