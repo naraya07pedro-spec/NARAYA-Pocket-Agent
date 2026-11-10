@@ -261,12 +261,9 @@ private fun MonitorDraftScreen(
                                                 when (outcome) {
                                                     is SyncResult.StatusChanged -> {
                                                         cloudRows = cloudRows.map { previous ->
-                                                            if (previous.id == outcome.monitorId) previous.copy(
-                                                                status = outcome.status,
-                                                                version = outcome.version,
-                                                                schedulerEligible = outcome.schedulerEligible,
-                                                                scheduled = false,
-                                                            ) else previous
+                                                            if (previous.id == outcome.monitorId)
+                                                                previous.withConfirmedStatus(outcome) ?: previous
+                                                            else previous
                                                         }
                                                         cloudNotice = if (outcome.status == "ACTIVE")
                                                             "Server accepted activation eligibility. Cron and phone-off execution NOT verified."
