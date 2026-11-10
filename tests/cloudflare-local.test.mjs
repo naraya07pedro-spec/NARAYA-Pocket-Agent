@@ -9,7 +9,8 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const schema = readFileSync(new URL('../worker/migrations/0001_initial.sql', import.meta.url), 'utf8');
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql'];
+const schema = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8')).join('\n');
 async function applySchema(DB) {
   // D1.exec splits on newlines and cannot execute SQL migration files that
   // contain multiline CREATE statements. Execute complete statements instead.
