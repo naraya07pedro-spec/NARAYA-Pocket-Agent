@@ -155,16 +155,26 @@ export function auditSource(s){
       s.offdeviceEvidenceGate.includes("raw.byteLength>65_536")),
     check('signed_user_admission_is_prevalidated_and_existing_users_read_only',
       identityAdmitSource.includes('const existing = await env.DB.prepare') &&
-      identityAdmitSource.includes('if (existing) {') &&
-      s.mobileSync.includes('if (!registerOnCreate) return null') &&
+      identityAdmitSource.includes('return existing?.id ?? null;') &&
+      !identityAdmitSource.includes('INSERT INTO user_identities') &&
       s.mobileSync.includes('if (!ownerId) {') &&
       s.mobileSync.includes('if (listing) return json({monitors:[]})') &&
       s.mobileSync.includes('const createInput = creating ? parseSyncInput(await boundedJson(request)) : null') &&
       s.mobileSync.includes('const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null') &&
       s.mobileSync.indexOf('const createInput = creating ?') <
-        s.mobileSync.lastIndexOf('const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating)') &&
+        s.mobileSync.lastIndexOf('const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env)') &&
       s.mobileSync.includes("if (reading && (!id || !UUID.test(id)))") &&
       s.mobileSync.includes('const {issuer,subject} = await verifyOidcBearer(request, env)')),
+    check('first_monitor_identity_and_monitor_are_one_d1_transaction',
+      s.mobileSync.includes('const [identityWrite,monitorWrite,rollbackUnused] = await env.DB.batch([') &&
+      s.mobileSync.includes('INSERT INTO user_identities(id,issuer,subject,created_at)') &&
+      s.mobileSync.includes('ON CONFLICT(issuer,subject) DO NOTHING') &&
+      s.mobileSync.includes('INSERT OR IGNORE INTO monitors(') &&
+      s.mobileSync.includes('DELETE FROM user_identities') &&
+      s.mobileSync.includes('AND NOT EXISTS (SELECT 1 FROM monitors WHERE owner_id=?)') &&
+      s.mobileSync.includes('if (rollbackUnused.meta.changes===1) {') &&
+      s.mobileSync.includes('if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject)')),
+
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -179,7 +189,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-O',
+    stage:'P1-P',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -205,7 +215,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-O offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-P offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');
