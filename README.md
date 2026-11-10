@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-Q GET-only Cloudflare account inventory prepared in PR #23 (code checkpoint 89/89 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI; final PR-head CI tracked separately). P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-Q GET-only Cloudflare account inventory MERGED via PR #23 (final tested PR HEAD 89/89 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI). P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-Q read-only Cloudflare account readiness preparation (PR #23; still no cloud account access)
+## P1-Q read-only Cloudflare account readiness preparation (PR #23 MERGED; still no cloud account access)
 
 Before requesting approval for Cloudflare migration/deploy, the owner can run `npm run cloudflare:inspect-offline` to see a **NO NETWORK / BLOCKED** status. With an owner-created least-privilege token held only in local environment variables, the explicit `npm run cloudflare:inspect-live` makes strictly allowlisted Cloudflare API **GET** requests for targeted Worker/D1/Cron metadata. The inspector never runs in CI against a real account, emits no token/account ID/D1 UUID, and can never mark release or remote acceptance safe. Seven new mocked-fetch adversarial tests pass at the source code checkpoint, bringing Node to **89/89**. This does **not** verify actual Free CPU/billing/usage, D1 remote migrations, Google OAuth or a physically powered-OFF Android. See [ADR-0018](docs/ADR/0018-cloudflare-readonly-account-inventory.md), [EVIDENCE](docs/EVIDENCE.md), and [remote owner-only instructions](docs/REMOTE_PILOT_READINESS.md).
 
