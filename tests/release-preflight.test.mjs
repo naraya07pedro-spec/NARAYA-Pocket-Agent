@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,14);
+  assert.equal(result.checks.length,15);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -44,7 +44,7 @@ test('preflight detects accidental public routes and schedule expansion',()=>{
 });
 
 test('preflight refuses missing/reordered migrations and forged local D1 fixture',()=>{
-  const a=clone();a.migrations=a.migrations.filter(x=>!x.startsWith('0004_'));
+  const a=clone();a.migrations=a.migrations.filter(x=>!x.startsWith('0005_'));
   assert.ok(failures(audit(a)).includes('additive_schema_chain'));
   const b=clone();b.migration0004=b.migration0004.replace('ADD COLUMN budget_claims','ADD COLUMN not_budget');
   assert.ok(failures(audit(b)).includes('additive_schema_chain'));
@@ -162,10 +162,26 @@ test('P1-L preflight rejects removed observation SHA linkage or unsafe tie assum
     s=>{s.androidCloudClient=s.androidCloudClient.replace(
       'rows.count { it.type == "BASELINE" } > 1','false');},
     s=>{s.androidCloudClient=s.androidCloudClient.replace(
-      'rows.map { it.observedAt }.toSet().size == rows.size','true');},
+      'newer.eventSequence <= older.eventSequence','false');},
   ];
   for(const mutate of sources){
     const snapshot=clone();mutate(snapshot);
     assert.ok(failures(audit(snapshot)).includes('android_observation_timeline_chain_guard'));
+  }
+});
+
+
+test('P1-M preflight rejects missing migration or faked durable event ordering',()=>{
+  const mutators=[
+    s=>{s.migration0005=s.migration0005.replace('UPDATE observations SET event_sequence = rowid','');},
+    s=>{s.migration0005=s.migration0005.replace('CREATE UNIQUE INDEX','CREATE INDEX');},
+    s=>{s.mobileSync=s.mobileSync.replace('ORDER BY o.event_sequence DESC','ORDER BY o.observed_at DESC');},
+    s=>{s.schedulerSource=s.schedulerSource.replace('COALESCE((SELECT MAX(event_sequence) FROM observations),0)+1','NULL');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace('item.get("event_sequence")','item.get("observed_at")');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace('eventSequence >= output.last().eventSequence','false');},
+  ];
+  for(const mutation of mutators){
+    const s=clone();mutation(s);
+    assert.equal(audit(s).source_safety,'FAIL');
   }
 });
