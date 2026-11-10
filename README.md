@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-R Cloudflare D1 inventory pagination/stream-bounds fix MERGED via PR #24 (final PR HEAD 100/100 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI). P1-Q is MERGED via PR #23. P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-S owner Billing Read preflight MERGED via PR #25 (PR HEAD 114/114 Node, 11/11 local D1, 20/20 Android JVM, 5/5 CI; actual Cloudflare billing and Free plan NOT_VERIFIED). P1-R Cloudflare D1 inventory pagination/stream-bounds fix MERGED via PR #24 (final PR HEAD 100/100 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI). P1-Q is MERGED via PR #23. P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-S Cloudflare owner billing risk review (PR #25, code/CI only)
+## P1-S Cloudflare owner billing risk review (PR #25 MERGED, source/CI only)
 
 The P1-S milestone adds an **offline-default**, owner-triggered [Billing Read-only inspector](scripts/cloudflare-billing-readonly.mjs) for account subscriptions and paginated history. It requires a **separate scoped Billing Read API token** in the owner's private local environment; it makes **GET-only** Cloudflare API requests, with bounded responses and sanitized output (no invoice/customer/account details or monetary amounts). Fourteen new adversarial mock tests target false Free-plan assumptions, unreadable/incomplete history, secret redaction and response-size limits. Even a successful read produces **no Free-plan, estimated cost, usage quota, Workers CPU, account bill or phone-OFF proof**, and **cannot authorize deployment or Cron**. See [ADR-0020](docs/ADR/0020-owner-cloudflare-billing-readonly-preflight.md), [owner runbook](docs/REMOTE_PILOT_READINESS.md) and [PROGRESS](docs/PROGRESS.md). **No Cloudflare owner account was accessed**, no resource created and no new fees triggered.
 
