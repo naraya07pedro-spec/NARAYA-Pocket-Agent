@@ -47,7 +47,7 @@ function config(settings: OidcSettings): { issuer: string; audience: string; jwk
       if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.hash ||
           url.port || url.search) throw new AuthUnavailable();
     }
-    if (issuerUrl.toString().replace(/\/$/, '') !== issuer.replace(/\\/$/, '') || keysUrl.toString() !== jwks) throw new AuthUnavailable();
+    if (issuerUrl.toString().replace(/\/$/, '') !== issuer.replace(/\/$/, '') || keysUrl.toString() !== jwks) throw new AuthUnavailable();
   } catch { throw new AuthUnavailable(); }
   return { issuer, audience, jwks };
 }
