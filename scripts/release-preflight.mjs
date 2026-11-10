@@ -172,7 +172,8 @@ export function auditSource(s){
       s.mobileSync.includes('INSERT OR IGNORE INTO monitors(') &&
       s.mobileSync.includes('DELETE FROM user_identities') &&
       s.mobileSync.includes('AND NOT EXISTS (SELECT 1 FROM monitors WHERE owner_id=?)') &&
-      s.mobileSync.includes('if (rollbackUnused.meta.changes===1) {') &&
+      s.mobileSync.includes('if (cleanupChanges===1) {') &&
+      s.mobileSync.includes("throw new Error('onboarding_batch_metadata_unavailable')") &&
       s.mobileSync.includes('if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject)')),
 
     check('android_public_configuration_off_by_default',
