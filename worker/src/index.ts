@@ -1,5 +1,6 @@
 import { boundedJson, InputError, json, ownerId, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { runScheduler } from './scheduler.ts';
+import { mobileSchedulerConfigured } from './scheduler-eligibility.ts';
 import { mobileSync, IdentityCapacityError } from './mobile-sync.ts';
 import { AuthRejected, AuthUnavailable, verifyOidcBearer } from './oidc.ts';
 import type { Env, Monitor } from './types.ts';
@@ -76,7 +77,10 @@ export default {
       if (pathname === '/health' && request.method === 'GET') return json({ service: 'naraya-pocket-agent', status: 'pilot' });
       if (pathname === '/v1/me' && request.method === 'GET') {
         await verifyOidcBearer(request, env);
-        return json({ authenticated: true, capabilities: { monitorSync: false } });
+        return json({ authenticated: true, capabilities: {
+          monitorSync: true,
+          mobileActivationConfigured: mobileSchedulerConfigured(env),
+        } });
       }
       if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations' || /^\/v1\/sync\/monitors\/[0-9a-f-]{36}$/i.test(pathname)) {
         return await mobileSync(request,env,pathname);
