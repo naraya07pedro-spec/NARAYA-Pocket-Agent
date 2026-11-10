@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-N | Offline owner-supplied phone-OFF evidence structural gate (10 November 2026; PR #20, source/local only)
+## P1-N | Offline owner-supplied phone-OFF evidence structural gate (10 November 2026; PR #20 MERGED, source/local only)
 
 | Claim | Evidence class | Verified evidence / limitations |
 | --- | --- | --- |
@@ -14,6 +14,8 @@
 | Real deployed Cloudflare Cron/D1 logs, account quota/CPU/billing, signed-in Google Android, independent powered-OFF phone proof | **NOT_VERIFIED** | No cloud resource/account, deployed Worker, Google-issued ID token, owner-approved migration, physical phone, paid action or real remote Cron was accessed. Owner-supplied JSON, even when matching all timestamps/SHA fields, remains **unauthenticated input** |
 
 **Intermediate exact source checkpoint:** `dde12473a80589ee510f38b9050c42ace170f33a` passed 5/5 GitHub Actions; the later documentation/Android status-guide changes require another exact-final-head 5/5 CI. [ADR-0015](ADR/0015-offdevice-acceptance-evidence-gate.md) defines the nonattestation contract. No new remote resource or external mutation performed.
+
+**FINAL exact PR-head proof:** `70f2f40a94b17fc0be4623bc4b4c12b2912931c1`, **5/5 GitHub Actions SUCCESS**: [Node/preflight 42804438016](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42804438016) **74/74, source PASS / remote BLOCKED**; [Cloudflare local workerd/D1 42804438307](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42804438307) **11/11**; [public live GitHub GET/local D1 42804438059](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42804438059) SUCCESS; [Android provider adapter 42804438111](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42804438111) SUCCESS; [Android debug APK 42804438362](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42804438362) SUCCESS, **20/20 Android security JVM cases actually executed with zero skipped/failures/errors**, SHA-256 `755fec6813b7b649e2d0efa362a3aee257399bda71ea20de61761a3bee265b31`. [PR #20](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/20) merged as `f53627b4eb07d4f0edde76c8b2770c6bc8bd400e`. No separate CI proof is claimed for merge or later post-merge documentation-only SHA; no actual provider, Cloudflare remote, Google OAuth phone, or hardware powered-OFF evidence was accessed.
 
 **Critical inference guard:** A Cron log with `scheduled_tick` counts is not linked cryptographically to a D1 observation ID; a time match within 60 seconds is **only a plausibility check**. A user-supplied `deviceEvidenceRef` does not prove the device was powered OFF. An observed GitHub SHA typed into a manifest is not a direct authorized API fetch. The owner and an independent reviewer must verify original external evidence before remote acceptance can ever be considered.
 
