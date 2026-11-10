@@ -1,6 +1,6 @@
 # Progress ledger | NARAYA Pocket Agent
 
-## 2026-11-10 | P1-U exact scheduled-Cron log -> persisted D1 observation ID (PR #27, source/local)
+## 2026-11-10 | P1-U exact scheduled-Cron log -> persisted D1 observation ID (PR #27 MERGED; remote still BLOCKED)
 
 **Finding:** prior Worker `scheduled_tick` log had only aggregate counts. The P1-N owner evidence gate matched Cron and D1 observations by timestamps within 60 seconds, which cannot distinguish coincidental Cron executions from the one that wrote the specific row. This is a **source/evidence linkage weakness**, **not** a demonstrated live Cloudflare failure.
 
@@ -12,6 +12,8 @@
 - Account/plan/billing/CPU/Google OAuth/live remote Cron and phone-OFF remain **NOT_VERIFIED**. No Cloudflare credentials or remote writes; no new resources, deployments, migrations, Cron activation or bills.
 
 **CODE checkpoint `7a9da2028303afa5f5de32b8cf05fec937cd2547`:** [Node CI 42846349118](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846349118) **127/127 tests PASS**, [real local workerd/D1 42846347842](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846347842) **11/11 PASS** and [public GitHub GET/local D1 42846347869](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846347869) SUCCESS. Android workflow statuses at that snapshot were pending; **do not infer code checkpoint 5/5 until verified**, and do not infer final documentation HEAD status from it.
+
+**FINAL PR #27 MERGED:** `201c7fbd6609a30219ed91cbeed60e20106a93d3`. Exact full source/documentation HEAD `fafec731585a0ae27221c8ab963665b295b14e8c` independently passed **5/5 GitHub Actions branch-push workflows**: [Node/source 42847072148](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42847072148) **127/127 PASS**, [real local workerd/D1 42847072543](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42847072543) **11/11 PASS**, [public GitHub GET/local D1 42847072265](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42847072265) SUCCESS, [Android native adapter 42847072539](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42847072539) SUCCESS, [Android debug APK/security JVM 42847072523](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42847072523) SUCCESS **20/20** executed, zero fail/error/skip. Debug APK SHA256 `e44ece133a4d295beff0b8a2e195c9167584ed86376224b39d643a181995edef`. These checks cover that exact **PR branch HEAD**, not automatically the merge SHA or docs-only `main`. No Cloudflare account or physical device inspected.
 
 **Evidence limitation:** even an exact observation ID printed in a log is not independent origin verification, since the owner-supplied evidence JSON is not authenticated. Actual source logs and remote D1 row must be retrieved and compared by an authorized operator, with real device-OFF and cloud/billing proof. See [ADR-0022](ADR/0022-cron-d1-observation-id-correlation.md), [EVIDENCE](EVIDENCE.md), [runbook](REMOTE_PILOT_READINESS.md) and [PR #27](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/27).
 
