@@ -146,6 +146,10 @@ async function schedulerBudgetReady(env: Env): Promise<boolean> {
     const control = await env.DB.prepare(`SELECT budget_window_start,budget_claims
       FROM scheduler_control WHERE id=1`)
       .first<{budget_window_start:number;budget_claims:number}>();
+    // Migration 0005 is mandatory before any new mobile ACTIVE ACK.
+    // A successful SELECT on an empty observations table still validates
+    // existence of the durable sequence column. Never call the provider here.
+    await env.DB.prepare('SELECT event_sequence FROM observations LIMIT 1').all();
     return !!control &&
       Number.isSafeInteger(control.budget_window_start) && control.budget_window_start >= 0 &&
       Number.isSafeInteger(control.budget_claims) &&
