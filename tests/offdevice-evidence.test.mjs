@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -145,6 +145,18 @@ test('the gate validates chronology using event_sequence, not the potentially re
   assert.equal(report.remote_acceptance,'NOT_VERIFIED');
   v.cloudflare.observations[0].event_sequence=0;
   assert.ok(failing(v).includes('d1_observation_record_shapes'));
+});
+
+
+test('documented synthetic example matches the executable schema but never asserts remote acceptance',()=>{
+  const example=JSON.parse(readFileSync(
+    new URL('../docs/examples/offdevice-evidence-synthetic.example.json',import.meta.url),'utf8'));
+  const report=assessOffDeviceEvidence(example);
+  assert.equal(report.structural_consistency,'PASS');
+  assert.equal(report.remote_acceptance,'NOT_VERIFIED');
+  assert.equal(report.safe_to_activate_scheduler,false);
+  assert.equal(example.evidenceClass,'OWNER_SUPPLIED_UNVERIFIED');
+  assert.ok(example.release.approvalRef.startsWith('SYNTHETIC_'));
 });
 
 test('CLI is read-only, silent about secrets, bounded, and require-remote ALWAYS blocks',()=>{
