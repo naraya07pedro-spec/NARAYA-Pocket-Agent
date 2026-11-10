@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-D opt-in bounded multi-user cloud scheduling merged via PR #10 (local CI, not deployed), on top of P1-C scoped server sync and P1-B Android manual GitHub preview.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-E optional Android Google Credential Manager sign-in and manual authenticated draft-sync source in PR #11 (CI candidate, no real OAuth/backend deployment); P1-D feature-gated multi-user scheduler and P1-C scoped backend sync are merged but not deployed. Default Android build keeps cloud controls disabled without public OAuth/Worker configuration.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,12 @@
 - 12 SQLite/Node regression cases plus 2 separate local Cloudflare `workerd`/D1 integration tests, covering persistence after restart, stale-worker fencing, ownership hardening, and malformed upstream responses.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-E Android signed-in cloud bridge, disabled by default
+
+PR #11 adds Google Credential Manager explicit sign-in, in-memory only Google ID token, owner-scoped backend monitor reconciliation, one-draft idempotent cloud POST, and typed offline/401/409/429 failure handling. Public `narayaGoogleWebClientId` and `narayaApiOrigin` Gradle properties must be explicitly configured by the operator; both are **empty by default**. The Android app never contains the legacy `OWNER_API_TOKEN` and never stores the user ID token in SharedPreferences.
+
+**CI-only status**: Android APK and JVM test build succeeded after pinning an SDK compatible with the existing Kotlin toolchain. Real Google OAuth registration, Android login with a genuine token, remotely deployed Cloudflare Worker/D1/Cron, and powered-off phone execution are all **not verified**. Sync creates a **PAUSED** cloud monitor; this version does not provide an activation UI or automatic phone-side polling. See [ADR-0006](docs/ADR/0006-android-google-identity-manual-sync.md), [Android README](android/README.md), [Evidence](docs/EVIDENCE.md), and [Android acceptance](docs/ANDROID_ACCEPTANCE.md).
 
 ## Experimental P1-C backend identity boundary (merged PR #7; not deployed)
 
