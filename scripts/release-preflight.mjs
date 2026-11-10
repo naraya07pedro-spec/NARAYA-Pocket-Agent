@@ -131,7 +131,8 @@ export function auditSource(s){
       // the last-known execution eligibility, not just one of them.
       s.androidMainActivity.split('remote.executionSummary()').length === 3 &&
       s.androidMainActivity.includes('previous.withConfirmedStatus(outcome)') &&
-      s.androidMainActivity.includes('SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE')),
+      s.androidMainActivity.includes('SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE') &&
+      s.androidMainActivity.includes('migrations 0001–0005')),
     check('android_observation_timeline_chain_guard',
       s.androidCloudClient.includes('coherentObservationHistory(rows: List<CloudObservation>)') &&
       s.androidCloudClient.includes('newer.previousSha != older.headSha') &&
