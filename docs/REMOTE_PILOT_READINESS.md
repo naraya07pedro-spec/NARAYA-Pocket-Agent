@@ -1,5 +1,28 @@
 # P1-T release readiness gate | Owner-approved remote pilot ONLY
 
+## P1-U | Exact Cron-to-D1 ID proof for a future authorized phone-OFF pilot
+
+The owner-supplied **private** offline evidence manifest is now **v2**, replacing the historical P1-N v1 synthetic example. A real `scheduled_tick` Worker log will include `observationIds`, **only** for new D1 observations inserted in that tick. An ordinary check with no GitHub SHA change reports an empty array; a successful change reports the UUID of the corresponding D1 `observations.id` row. Up to three IDs may appear per 15-minute tick under the existing provider dispatch cap.
+
+**Later, only after separate explicit approval for remote deployment and Cron activation**, the authorized owner should independently inspect:
+1. Actual Cloudflare Worker Cron invocation history plus Workers Logs custom `scheduled_tick` entry for a run inside the verified physically powered-OFF interval. Cloudflare [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) supports custom `console.log()`; confirm logging is available on the *actual* account and do not add a paid Tail Worker for this.
+2. A read-only query/export from **the actual owner-approved remote D1** of the same observation ID: match `scheduled_tick.observationIds[*]` to `observations.id` exactly, then inspect `monitor_id`, `event_sequence`, `previous_sha`, `head_sha` and `observed_at`. Do not export bearer/Google/owner account secrets.
+3. After physically powering on Android, a real Google-issued signed mobile read must retrieve that very ID, and a live public GitHub HEAD check must corroborate the SHA. Independent device power-OFF confirmation and account billing/Workers CPU/D1 quotas remain separate requirements.
+
+The v2 manifest's Cron record requires **exactly** `{recordedAt,event,completed,observations,observationIds}`, with `observationIds` containing unique UUIDs and count equal to `observations`. Schema-v1 packages **do not pass v2**, since mere timestamp coincidence is not an acceptable ID link. The [updated sample](examples/offdevice-evidence-synthetic.example.json) is entirely **SYNTHETIC**. Test locally, with no network:
+
+```sh
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --json
+# structural_consistency can PASS; remote_acceptance ALWAYS NOT_VERIFIED
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --require-remote
+# Always exits 2 if structurally valid; NEVER approves deployment or remote acceptance
+```
+
+Never upload owner evidence JSON, Cloudflare account IDs, tokens, full logs or D1 private exports to GitHub/CI or the chat. Identical UUIDs in *owner-supplied* JSON still are not independent provenance. Cloudflare billing, Free-tier eligibility, Workers CPU, D1 rows read/written, Google OAuth on phone and physical device-OFF observations remain **NOT VERIFIED**. See [ADR-0022](ADR/0022-cron-d1-observation-id-correlation.md).
+
+---
+
+
 ## P1-T owner interpretation: historic billing evidence never disappears on later failures
 
 P1-T corrects two **source-level** blind spots in P1-S's optional Cloudflare Billing Read inspector. A `Provisioned` subscription that reports non-free `rate_plan.id` (such as `pro` or `business`) but no top-level `price`, or status `AwaitingPayment`, now raises **`POTENTIAL_PAID_SUBSCRIPTION_PRESENT`**. A missing price and ambiguous subscription state returns **`SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN`**, never a Free-tier conclusion.

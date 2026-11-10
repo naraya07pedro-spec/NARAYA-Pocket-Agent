@@ -16,7 +16,7 @@ const START=1_800_000_000_000,END=START+40*60_000,CHANGED=START+20*60_000;
 
 function fixture(){
   return {
-    schemaVersion:1,
+    schemaVersion:2,
     evidenceClass:'OWNER_SUPPLIED_UNVERIFIED',
     monitorId:monitor,
     release:{
@@ -26,7 +26,7 @@ function fixture(){
     },
     device:{powerOffAt:START,powerOnAt:END,evidenceRef:'DEVICE_OFF_001'},
     cloudflare:{
-      cronEvents:[{recordedAt:CHANGED+8000,event:'scheduled_tick',completed:1,observations:1}],
+      cronEvents:[{recordedAt:CHANGED+8000,event:'scheduled_tick',completed:1,observations:1,observationIds:[changeId]}],
       observations:[
         {id:changeId,monitor_id:monitor,event_type:'CHANGE',previous_sha:SHA_A,
           head_sha:SHA_B,observed_at:CHANGED,event_sequence:2},
@@ -120,6 +120,11 @@ test('red team: Cron outside phone-off, D1 outside off, late/absent signed sync 
     v=>{v.cloudflare.cronEvents[0].observations=0;},
     v=>{v.cloudflare.cronEvents[0].completed=5;},
     v=>{v.cloudflare.cronEvents[0].completed=0;},
+    v=>{v.cloudflare.cronEvents[0].observationIds=[baselineId];},
+    v=>{v.cloudflare.cronEvents[0].observationIds=[changeId,changeId];},
+    v=>{v.cloudflare.cronEvents[0].observationIds=['invalid-id'];},
+    v=>{v.cloudflare.cronEvents[0].observationIds=[];},
+    v=>{delete v.cloudflare.cronEvents[0].observationIds;},
     v=>{v.cloudflare.cronEvents[0].recordedAt=CHANGED+90_000;},
     v=>{v.cloudflare.observations[0].observed_at=v.device.powerOnAt+1;},
     v=>{v.cloudflare.observations[0].observed_at=v.device.powerOffAt;},
@@ -198,4 +203,39 @@ test('CLI is read-only, silent about secrets, bounded, and require-remote ALWAYS
     const wrong=spawnSync(process.execPath,[cli,'--execute-deploy'],{encoding:'utf8',timeout:10000});
     assert.equal(wrong.status,64);
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('P1-U timestamp-only coincidences do not pass without exact committed D1 observation ID',()=>{
+  const v=fixture();
+  assert.equal(assessOffDeviceEvidence(v).structural_consistency,'PASS');
+  v.cloudflare.cronEvents[0].observationIds=[baselineId]; // plausible times, wrong ID
+  const report=assessOffDeviceEvidence(v);
+  assert.equal(report.structural_consistency,'FAIL');
+  assert.ok(report.checks.some(x=>x.id==='cron_d1_exact_observation_id_correlation'&&x.status==='FAIL'));
+  assert.ok(report.checks.some(x=>x.id==='cron_and_d1_timestamps_plausibly_align'&&x.status==='FAIL'));
+  assert.equal(report.remote_acceptance,'NOT_VERIFIED');
+});
+
+test('P1-U a copied tick ID in a second Cron event is not considered independent origin proof',()=>{
+  const v=fixture();
+  v.cloudflare.cronEvents.push({
+    recordedAt:CHANGED+9000,event:'scheduled_tick',completed:1,observations:1,
+    observationIds:[changeId],
+  });
+  // A duplicated log can be structurally self-consistent, but NEVER authentic
+  // Cloudflare or physical power-off proof. Independent provider review remains.
+  const result=assessOffDeviceEvidence(v);
+  assert.equal(result.remote_acceptance,'NOT_VERIFIED');
+  assert.equal(result.independent_origin_verification,'NOT_PERFORMED');
+  assert.equal(result.physical_device_verification,'NOT_PERFORMED');
+  assert.equal(result.safe_to_activate_scheduler,false);
+});
+
+test('P1-U previous manifest schema must not be misinterpreted as v2 ID correlation',()=>{
+  const v=fixture();
+  v.schemaVersion=1;
+  assert.ok(failing(v).includes('declared_unverified_source'));
+  const noId=fixture();
+  delete noId.cloudflare.cronEvents[0].observationIds;
+  assert.ok(failing(noId).includes('cron_log_record_shapes'));
 });

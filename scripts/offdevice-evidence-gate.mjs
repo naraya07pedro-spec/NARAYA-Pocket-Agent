@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P1-N: OFFLINE ONLY, no network, secret access, scheduling or cloud writes.
+ * P1-U: OFFLINE ONLY, no network, secret access, scheduling or cloud writes.
  * Checks internal consistency of an owner-supplied observation package.
  * It NEVER authenticates Cloudflare, Google, device power state or GitHub.
  * Structured, self-reported evidence CANNOT qualify as remote acceptance.
@@ -22,7 +22,7 @@ const exact = (v,keys) => plain(v) &&
 const positiveTime = v => Number.isSafeInteger(v) && v > 0;
 const nonNegativeInt = v => Number.isSafeInteger(v) && v >= 0;
 const result = checks => ({
-  schema:'offdevice-evidence-v1',
+  schema:'offdevice-evidence-v2',
   structural_consistency:checks.every(c=>c.status==='PASS')?'PASS':'FAIL',
   remote_acceptance:REMOTE_UNVERIFIED,
   independent_origin_verification:'NOT_PERFORMED',
@@ -32,7 +32,7 @@ const result = checks => ({
   checks,
   // Do not echo any source identifiers, timestamps, paths or user-provided text.
   limitations:['owner_supplied_data_not_independently_authenticated',
-    'cron_log_and_d1_row_correlation_is_heuristic',
+    'owner_supplied_cron_and_d1_id_correlation_is_not_authenticated',
     'no_cloudflare_oauth_or_physical_device_access'],
 });
 
@@ -44,7 +44,7 @@ export function assessOffDeviceEvidence(bundle) {
     'cloudflare','postRestart','github',
   ]));
   if(!plain(bundle))return result(checks);
-  add('declared_unverified_source',bundle.schemaVersion===1 &&
+  add('declared_unverified_source',bundle.schemaVersion===2 &&
     bundle.evidenceClass==='OWNER_SUPPLIED_UNVERIFIED');
   add('monitor_uuid',typeof bundle.monitorId==='string' && UUID.test(bundle.monitorId));
   const release=bundle.release,device=bundle.device,cloud=bundle.cloudflare;
@@ -81,10 +81,15 @@ export function assessOffDeviceEvidence(bundle) {
   const cron=Array.isArray(cloud?.cronEvents)?cloud.cronEvents:[];
   const observations=Array.isArray(cloud?.observations)?cloud.observations:[];
   add('cron_log_record_shapes',cron.length>0 && cron.every(x=>
-    exact(x,['recordedAt','event','completed','observations']) &&
+    exact(x,['recordedAt','event','completed','observations','observationIds']) &&
     positiveTime(x.recordedAt) && x.event==='scheduled_tick' &&
     nonNegativeInt(x.completed) && x.completed<=3 &&
-    nonNegativeInt(x.observations) && x.observations<=x.completed));
+    nonNegativeInt(x.observations) && x.observations<=x.completed &&
+    // The Worker logs exactly the IDs of D1 rows confirmed inserted in
+    // this tick. This is a correlation field, NOT an authentication proof.
+    Array.isArray(x.observationIds) && x.observationIds.length===x.observations &&
+    x.observationIds.every(id=>typeof id==='string' && UUID.test(id)) &&
+    new Set(x.observationIds).size===x.observationIds.length));
   add('d1_observation_record_shapes',observations.length>=2 && observations.every(x=>
     exact(x,['id','monitor_id','event_type','previous_sha','head_sha','observed_at','event_sequence']) &&
     typeof x.id==='string' && UUID.test(x.id) &&
@@ -117,8 +122,13 @@ export function assessOffDeviceEvidence(bundle) {
     x.recordedAt>start && x.recordedAt<end && x.event==='scheduled_tick' &&
     x.completed>=1 && x.observations>=1);
   add('cron_log_during_off_window',offCron.length>0);
+  add('cron_d1_exact_observation_id_correlation',changesDuringOff.length>0 &&
+    changesDuringOff.every(obs=>offCron.some(t=>
+      Array.isArray(t.observationIds) && t.observationIds.includes(obs.id))));
   add('cron_and_d1_timestamps_plausibly_align',changesDuringOff.some(obs=>
-    offCron.some(t=>Math.abs(obs.observed_at-t.recordedAt)<=60_000)));
+    offCron.some(t=>Array.isArray(t.observationIds) &&
+      t.observationIds.includes(obs.id) &&
+      Math.abs(obs.observed_at-t.recordedAt)<=60_000)));
   add('release_and_recovery_timing',positiveTime(synced)&&offWindow &&
     synced>end && positiveTime(release?.accountReviewAt) &&
     release.accountReviewAt<start && positiveTime(release?.oauthReviewAt) &&

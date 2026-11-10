@@ -383,10 +383,17 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
     assert.equal(report.completed,1);
     assert.equal(report.observations,1);
     assert.equal(actualProviderReads,1);
+    assert.ok(Array.isArray(report.observationIds));
+    assert.equal(report.observationIds.length,1);
     const read=await worker.fetch(req(a,'/v1/sync/observations?monitorId='+first.id),env);
     assert.equal(read.status,200);
     const events=(await read.json()).observations;
     assert.equal(events.length,1);
+    assert.deepEqual(report.observationIds,[events[0].id],
+      'real local D1 row ID must match the only logged Cron observation ID');
+    assert.equal(Object.hasOwn(report,'lease_token'),false);
+    assert.equal(Object.hasOwn(report,'owner_id'),false);
+    assert.equal(Object.hasOwn(report,'monitor_id'),false);
     assert.equal(events[0].monitor_id,first.id);
     assert.equal(events[0].event_type,'BASELINE');
     assert.equal(events[0].previous_sha,null);

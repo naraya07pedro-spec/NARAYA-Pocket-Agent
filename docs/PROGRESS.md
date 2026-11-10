@@ -1,5 +1,23 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-U exact scheduled-Cron log -> persisted D1 observation ID (PR #27, source/local)
+
+**Finding:** prior Worker `scheduled_tick` log had only aggregate counts. The P1-N owner evidence gate matched Cron and D1 observations by timestamps within 60 seconds, which cannot distinguish coincidental Cron executions from the one that wrote the specific row. This is a **source/evidence linkage weakness**, **not** a demonstrated live Cloudflare failure.
+
+**Implemented:**
+- `saveSuccess` passes back the existing `observations.id` UUID only when its D1 batch confirms a durable insertion. The exported scheduled handler logs a bounded (0–3) `observationIds` list beside `scheduled_tick` counts. No monitor/owner identity, GitHub SHA, lease, token or other private values in this log.
+- **No D1 schema migration** or Android API change. Existing migrations **0001–0005** remain mandatory for a later separately approved remote deployment.
+- Upgraded strictly offline `offdevice-evidence-gate.mjs` manifest to **v2**: each Cron record must include an exact set of successfully inserted D1 observation UUIDs. A matching timestamp alone no longer passes correlation; malformed/mismatched/repeated IDs fail. Synthetic example updated to v2. The gate still only checks self-reported structure and **can never certify real remote execution or physical phone OFF**.
+- Added Node red-team tests for timestamp-only false matches and old-schema rejection, plus Node scheduler tests for real persisted vs no-change IDs. Real local workerd/D1 test compares an exported `worker.scheduled()` log ID with the actual signed-user D1 observation row ID. Existing global budget, lease fencing, owner isolation and API remain unchanged.
+- Account/plan/billing/CPU/Google OAuth/live remote Cron and phone-OFF remain **NOT_VERIFIED**. No Cloudflare credentials or remote writes; no new resources, deployments, migrations, Cron activation or bills.
+
+**CODE checkpoint `7a9da2028303afa5f5de32b8cf05fec937cd2547`:** [Node CI 42846349118](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846349118) **127/127 tests PASS**, [real local workerd/D1 42846347842](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846347842) **11/11 PASS** and [public GitHub GET/local D1 42846347869](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846347869) SUCCESS. Android workflow statuses at that snapshot were pending; **do not infer code checkpoint 5/5 until verified**, and do not infer final documentation HEAD status from it.
+
+**Evidence limitation:** even an exact observation ID printed in a log is not independent origin verification, since the owner-supplied evidence JSON is not authenticated. Actual source logs and remote D1 row must be retrieved and compared by an authorized operator, with real device-OFF and cloud/billing proof. See [ADR-0022](ADR/0022-cron-d1-observation-id-correlation.md), [EVIDENCE](EVIDENCE.md), [runbook](REMOTE_PILOT_READINESS.md) and [PR #27](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/27).
+
+---
+
+
 ## 2026-11-10 | P1-T prevent suppressed billing evidence and undetected paid rate plans (PR #26 MERGED; remote blocked)
 
 **Why:** audit against the [official Cloudflare subscription API](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/) found that P1-S's Billing Read inspector checked only a positive top-level `price` or `state:Paid`. `price` is optional; the provider also returns `rate_plan.id` and `AwaitingPayment`. Therefore a `Provisioned` subscription with a known non-free rate plan and absent price could be incorrectly reported as no positive paid-state signal. Separately, an earlier validated positive billing history amount was **erased from the summary** when a later history page failed. **Both findings are source-level risks, not real charges or live Cloudflare incidents.**
