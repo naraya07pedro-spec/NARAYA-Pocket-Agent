@@ -1,7 +1,7 @@
 # ADR-0004: P1-C secure Android-to-cloud synchronization contract
 
 Date: 2026-11-10
-Status: PARTIALLY IMPLEMENTED (server-only RS256 identity probe on PR #7; synthetic CI verification, no deployment)
+Status: PARTIALLY IMPLEMENTED (server-only RS256 identity probe merged via PR #7; synthetic CI verification, no deployment)
 Baseline: main `e1e0dd7034d85500d3e7ab4474b7bc853a8ef7d1`
 
 ## Decision and scope
@@ -63,4 +63,4 @@ F. Manual acceptance: sign in, sync one existing draft, create cloud monitor, ob
 
 ## Evidence gate
 
-An initial server-side RS256/JWKS verifier and read-only `GET /v1/me` probe now exist on PR #7, with source SHA-linked synthetic tests (see EVIDENCE.md). **OAuth sign-in flow, subject-to-user mapping, SQL user isolation, cloud sync, JWKS caching/rotation, remote D1, phone-off demo and device benchmarks remain unimplemented/unverified.** The next engineering gate is owner-scoped SQL isolation and idempotent sync, not a claim of end-to-end Android login.
+An initial server-side RS256/JWKS verifier and read-only `GET /v1/me` probe now exist on main (merged PR #7), with source SHA-linked synthetic tests (see EVIDENCE.md). **OAuth sign-in flow, subject-to-user mapping, SQL user isolation, cloud sync, JWKS caching/rotation, remote D1, phone-off demo and device benchmarks remain unimplemented/unverified.** The next engineering gate is owner-scoped SQL isolation and idempotent sync, not a claim of end-to-end Android login.
