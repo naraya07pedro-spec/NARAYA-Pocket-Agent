@@ -75,8 +75,9 @@ function config(settings: OidcSettings): {
   issuer: string; audience: string; jwks: string; authorizedPresenters: ReadonlySet<string>
 } {
   const issuer = settings.OIDC_ISSUER, audience = settings.OIDC_AUDIENCE, jwks = settings.OIDC_JWKS_URL;
-  if (!issuer || !audience || !jwks || issuer.length > 200 || audience.length > 200 ||
-      !/^[A-Za-z0-9._:-]{1,200}$/.test(audience)) throw new AuthUnavailable();
+  // Preserve generic OIDC audience support (some client IDs are URIs).
+  // The new restricted syntax applies ONLY to additional authorized parties.
+  if (!issuer || !audience || !jwks || issuer.length > 200 || audience.length > 200) throw new AuthUnavailable();
   const configured = settings.OIDC_AUTHORIZED_PRESENTERS;
   if (configured !== undefined &&
       (typeof configured !== 'string' || configured.length > 600)) throw new AuthUnavailable();
