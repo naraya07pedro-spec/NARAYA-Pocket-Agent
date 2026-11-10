@@ -1,8 +1,26 @@
-# P1-M release readiness gate | Owner-approved remote pilot ONLY
+# P1-N release readiness gate | Owner-approved remote pilot ONLY
 
 Date checked: 10 November 2026. Code status: **offline preflight and global Cron kill-switch implemented; no remote deployment**.
 
 This is a **human-authorized release procedure**, not a script that creates cloud resources. GitHub Actions must not deploy Workers, create remote D1, apply remote migrations, change triggers, publish Android APKs or register Google OAuth projects. A source test passing is **not** approval to execute the commands described here.
+
+## P1-N owner-supplied phone-OFF evidence: offline sanity check is NOT remote acceptance
+
+P1-N provides `scripts/offdevice-evidence-gate.mjs`, a **local-only and network-free** pre-review of an owner's **private, explicitly unauthenticated** acceptance-evidence bundle. It does **not** gather Cloudflare logs, inspect account costs, mint Google tokens, start Cron, deploy D1 or control an Android phone. A structured manifest is just another assertion until an authorized reviewer checks actual external sources.
+
+The sample [offdevice-evidence-synthetic.example.json](examples/offdevice-evidence-synthetic.example.json) is entirely invented. It is not a real Cloudflare export. Test the safe CLI:
+
+```sh
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --json
+# "structural_consistency": "PASS" only checks internal consistency.
+# "remote_acceptance": "NOT_VERIFIED", "safe_to_activate_scheduler": false.
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --require-remote
+# Exit 2 even for coherent evidence. Independent proof is still missing.
+```
+
+For a later **owner-approved** live pilot, retain genuine Cloudflare Cron run records, **read-only** remote D1 observation rows with `event_sequence`, verified GitHub commit references, a real physical power-OFF interval and owner-authenticated Android post-restart read. The CLI expects a bounded, strict JSON structure with matching declared times and SHA transitions; the maximum input is 65,536 bytes. **Keep private evidence outside the repository, screenshots/attachments in public issues and GitHub Actions artifacts. Never include bearer tokens, account secrets, Google ID tokens, or private D1 exports.** The CLI never echoes the input file contents.
+
+Even after a structural PASS, a human reviewer must independently verify **account/provider provenance, Free-plan CPU/quotas and billing, migration 0001–0005, Google OAuth on real Android, and actual powered-OFF phone state**. The existing generic `scheduled_tick` log is not cryptographically linked to a specific D1 observation; a matching timestamp is only a heuristic. Real deployment remains **BLOCKED without explicit owner approval**. See [ADR-0015](ADR/0015-offdevice-acceptance-evidence-gate.md).
 
 ## P1-M mandatory migration and order-of-operations (10 November 2026)
 
