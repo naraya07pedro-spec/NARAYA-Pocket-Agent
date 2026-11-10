@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-U | Exact Cron log ID -> D1 observation identity (10 November 2026)
+
+| Claim | Evidence class | Exact evidence and limitations |
+| --- | --- | --- |
+| Existing `scheduled_tick` log lacked exact observation ID; P1-N used a 60-second heuristic | SOURCE_AUDIT | [worker/src/index.ts](../worker/src/index.ts) previously printed only aggregate tick counts; [offline evidence gate](../scripts/offdevice-evidence-gate.mjs) previously compared `observed_at` and `recordedAt` without row identity. Potential correlation ambiguity, **no live incident observed** |
+| Observations IDs are now generated once and logged only after corresponding D1 batch INSERT reports success | SOURCE_AND_NODE_CI_VERIFIED | [Scheduler](../worker/src/scheduler.ts), [scheduled handler](../worker/src/index.ts), [Node 127/127 42846349118](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846349118) at code checkpoint `7a9da2028303afa5f5de32b8cf05fec937cd2547`. No-change checks yield no observation ID |
+| Actual local Cloudflare D1 stored row ID matches emitted Cron `observationIds[]` | REAL_LOCAL_WORKERD_D1_TEST | [Workerd/D1 test 42846347842](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846347842), **11/11 PASS**; test reads local D1 via signed-user API after exported `worker.scheduled()` and compares UUIDs. **Local**, not remote D1 |
+| Owner-supplied gate v2 requires ID matching and rejects timestamp-only coincidences | OFFLINE_MOCKED_OWNER_DATA | [Owner evidence tests](../tests/offdevice-evidence.test.mjs), [v2 synthetic example](examples/offdevice-evidence-synthetic.example.json), [source run 42846349118](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42846349118). Even perfectly matching synthetic package returns `remote_acceptance:NOT_VERIFIED`, `safe_to_activate_scheduler:false` |
+| Real Cloudflare logs + remote D1 correlation, Workers CPU/quota/billing, Google OIDC login and physically OFF Android | **NOT_VERIFIED** | No actual Cloudflare provider data, remote deployment, real phone or owner Cloudflare token used. New log ID improves correlation but is **not cryptographic proof** or independent attribution |
+| Final PR HEAD / merge / final main workflows | **PENDING_FINAL_VERIFICATION** | Verify final PR SHA across five workflows, then merge only after 5/5, and separately verify any subsequent docs-only `main` SHA |
+
+**No additional provider writes, data migrations or expenses.** [ADR-0022](ADR/0022-cron-d1-observation-id-correlation.md) · [PR #27](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/27).
+
+---
+
+
 ## P1-T | Monotonic billing history evidence + non-free rate plan detection | 10 November 2026
 
 | Claim | Evidence class | Exact evidence / limitations |
