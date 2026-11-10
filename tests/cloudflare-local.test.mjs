@@ -290,11 +290,15 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
       const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(input));
       return input+'.'+Buffer.from(signature).toString('base64url');
     };
+    let actualProviderReads=0;
     globalThis.fetch=async (url,options)=>{
-      assert.equal(url,jwks);
       assert.equal(options.method,'GET');
       assert.equal(options.redirect,'error');
-      return new Response(JSON.stringify({keys:[key]}));
+      if(url===jwks)return new Response(JSON.stringify({keys:[key]}));
+      assert.equal(new URL(url).hostname,'api.github.com');
+      assert.equal(new URL(url).pathname,'/repos/python/cpython/commits');
+      actualProviderReads++;
+      return new Response(JSON.stringify([{sha:headA}]),{status:200});
     };
     const env={
       DB,OWNER_ID:owner,OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:jwks,
@@ -319,15 +323,29 @@ test('Cloudflare local D1: signed two-user mobile status and observation contrac
     assert.equal((await worker.fetch(req(b,path,'PATCH',{status:'PAUSED',expectedVersion:1}),env)).status,404);
     assert.equal((await worker.fetch(req(b,'/v1/sync/observations?monitorId='+first.id),env)).status,404);
     env.MOBILE_SCHEDULING_ENABLED='true';
+    const halfEnabled=await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env);
+    assert.equal(halfEnabled.status,409,'mobile flag alone cannot bypass global Cron kill-switch');
+    assert.deepEqual(await halfEnabled.json(),{error:'scheduler_disabled'});
+    assert.equal((await DB.prepare('SELECT status,version FROM monitors WHERE id=?').bind(first.id).first()).version,1);
+    env.SCHEDULER_ENABLED='true';
     const accepted=await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env);
     assert.equal(accepted.status,200);
     const ack=await accepted.json();
     assert.deepEqual(ack,{id:first.id,status:'ACTIVE',version:2,schedulerEligible:true});
     assert.equal((await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env)).status,409);
-    const report=await runScheduler(env,Date.now()+1000,fakeGithub(headA));
+    // Exercise the actual exported Worker scheduled entrypoint (not only the
+    // test-injected runScheduler), with separately verified RSA user identity.
+    const oldLog=console.log,lines=[];
+    try {
+      console.log=line=>lines.push(String(line));
+      await worker.scheduled({scheduledTime:Date.now()},env);
+    }finally{console.log=oldLog;}
+    const report=JSON.parse(lines.at(-1));
+    assert.equal(report.event,'scheduled_tick');
     assert.equal(report.claimed,1);
     assert.equal(report.completed,1);
     assert.equal(report.observations,1);
+    assert.equal(actualProviderReads,1);
     const read=await worker.fetch(req(a,'/v1/sync/observations?monitorId='+first.id),env);
     assert.equal(read.status,200);
     const events=(await read.json()).observations;
