@@ -1,8 +1,14 @@
-# P1-I release readiness gate | Owner-approved remote pilot ONLY
+# P1-M release readiness gate | Owner-approved remote pilot ONLY
 
 Date checked: 10 November 2026. Code status: **offline preflight and global Cron kill-switch implemented; no remote deployment**.
 
 This is a **human-authorized release procedure**, not a script that creates cloud resources. GitHub Actions must not deploy Workers, create remote D1, apply remote migrations, change triggers, publish Android APKs or register Google OAuth projects. A source test passing is **not** approval to execute the commands described here.
+
+## P1-M mandatory migration and order-of-operations (10 November 2026)
+
+**Supersedes the older migration 0001–0004 checklists below:** any future owner-approved remote pilot MUST apply, back up and validate additive D1 migrations **0001→0002→0003→0004→0005**, in that order, **before deploying the P1-M Worker or a P1-M-configured Android client**. Migration 0005 adds a durable observation event sequence, backfills **each existing observation row**, and creates indexes. Even if the source is additive, these are **remote D1 writes** that can use account-specific Free quota/CPU and require a verified backup, an inspection of row counts, explicit authorization and a rollback/stop plan. No commands were executed remotely in P1-M.
+
+A 0004-only database must fail closed: mobile `PATCH ACTIVE` returns `503 scheduler_storage_unavailable`, while `runScheduler()` aborts before reservation/provider requests; owner PAUSE remains available. Inspect old ACTIVE monitors and actual Cron activation flags before the separate operator-approved rollout. Once migrated, verify `SELECT event_sequence FROM observations ORDER BY event_sequence DESC LIMIT 5` on the owner-approved database read-only, confirm historical IDs/head SHAs stayed unchanged and new events have greater sequence than retained rows. Validate actual remote D1 costs/CPU separately before enabling Cron. SQLite ROWID backfill does not provide cryptographic provenance. [ADR-0014](ADR/0014-durable-observation-sequence.md).
 
 ## What the source can prove automatically
 

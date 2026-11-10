@@ -1,5 +1,23 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-M | Durable D1 event sequence, exact Worker/Android contract (10 November 2026; PR #19 source only)
+
+| Claim | Evidence classification | Evidence and limitation |
+| --- | --- | --- |
+| Migration 0005 backfills historical rowid order into durable `event_sequence`, preserving prior data and local `VACUUM` sequence; new insert allocates next retained number even if clock regresses | CI_VERIFIED_NODE_SQLITE | [Source CI 42799869520](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869520) **65/65 PASS**, exact code SHA `ca7ead938b081a4f1e64583eaae2cab96e2ebc63`. This is SQLite local, not remote account D1 migration |
+| Real Cloudflare local workerd/D1 writes three changes at identical synthetic millisecond and persistent sequence 1→2→3 survives Worker restart | CI_VERIFIED_LOCAL_WORKERD_D1 | [workerd/D1 42799869627](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869627) **11/11 PASS**; fake GitHub SHA responses, local D1 binding and process recreation |
+| Signed-owner Worker response and Android JVM parse exact same fixture with `event_sequence`; Android rejects duplicate/noninteger/order-tampered or SHA-invalid events with tied/backward clock | CI_VERIFIED_CROSS_RUNTIME_SYNTHETIC | [Node 42799869520](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869520) **65/65**, [Android APK/JVM 42799869210](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869210) **20/20 executed/0 fail/skip/errors**. Contract test file `android/app/src/test/resources/mobile-observations-v1.json`, version 2. No actual Google identity used |
+| Missing 0005 blocks mobile ACTIVE and legacy Cron before GitHub reads; owner may PAUSE | CI_VERIFIED_FAIL_CLOSED_LOCAL | [Node 42799869520](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869520) tests 0004-only schema and validates 503 mobile response, no provider GET |
+| Public live GitHub commit can still be verified by shipped adapter and local D1 with all migrations | CI_VERIFIED_PUBLIC_GET_LOCAL_D1 | [Live provider CI 42799869300](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869300) SUCCESS, **remote_cloudflare:false**. [Native Android adapter 42799869463](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869463) SUCCESS |
+| Earlier failed live-read fixture and partial-migration/assertion test coverage | CI_FAILED_AND_CORRECTED | [Live-read 42799108517](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799108517) FAILED due 0004-only fixture; [Node 42799632268](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799632268) 64 PASS/1 FAIL from null-prototype comparison; [workerd/D1 42799632187](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799632187) 10 PASS/1 FAIL from legacy migration fixture; fixed and rerun SHA `ca7ead9...` 5/5 PASS |
+| Remote D1 backfill, real Free CPU/account usage, actual Google OAuth on Android and autonomous remote Cron while phone completely OFF | **NOT_VERIFIED** | No remote Cloudflare configuration, D1 migration, real Google-issued ID token, phone hardware or billing/CPU readings. Offline source preflight explicitly returns `remote_readiness: BLOCKED` |
+
+**Source gate prior to documentation:** exact SHA `ca7ead938b081a4f1e64583eaae2cab96e2ebc63`, 5/5 CI SUCCESS; [Android APK SHA256 `304758be50ef71ffd3b9a76df5dedfc7026ff7cd120690f0c84a46a774c1dee4`](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869210). Final docs PR HEAD requires separate 5/5 verification. No provider writes, external deployment or charges initiated.
+
+**Source authority:** SQLite [ROWID allocation and reuse documentation](https://www.sqlite.org/autoinc.html); Cloudflare [D1 SQLite SQL compatibility](https://developers.cloudflare.com/d1/sql-api/sql-statements/). Backfill is an additive **source-tested** migration, not a signed append-only audit log. IDs can be reused after manual deletion of latest event(s); full cryptographic provenance is not established.
+
+---
+
 ## P1-L | Shared observation contract and bounded SHA-chain validation (10 November 2026, PR #18 merged; source/local only)
 
 | Claim | Evidence class | Exact verified proof |

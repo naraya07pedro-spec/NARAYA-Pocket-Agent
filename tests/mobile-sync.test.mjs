@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
 import {makeTestDb} from './sqlite-d1.mjs';
 import worker from '../worker/src/index.ts';
 import {runScheduler} from '../worker/src/scheduler.ts';
@@ -453,7 +454,7 @@ test('mobile ACTIVE fails closed without scheduler_control migration (no acciden
 test('same bounded observation JSON fixture used by Android matches actual owner-scoped Worker HTTP',async()=>{
   const fixture=JSON.parse(readFileSync(
     new URL('../android/app/src/test/resources/mobile-observations-v1.json',import.meta.url),'utf8'));
-  assert.equal(fixture.contractVersion,1);
+  assert.equal(fixture.contractVersion,2);
   assert.equal(fixture.observations.length,3);
   const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
   const env=makeEnv();
@@ -462,8 +463,10 @@ test('same bounded observation JSON fixture used by Android matches actual owner
     const foreign=await token('contract-fixture-foreign');
     const created=(await(await create(env,owner,uuid())).json()).monitor;
     const dynamicRows=fixture.observations.map(event=>({...event,monitor_id:created.id}));
-    for(const event of dynamicRows){
-      env.DB.connection.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at) VALUES(?,?,?,?,?,?,?)')
+    // Seed oldest first, letting SQLite compute new event_sequence atomically.
+    // Assert that real Worker output matches the shared Android contract JSON.
+    for(const event of dynamicRows.toReversed()){
+      env.DB.connection.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at,event_sequence) VALUES(?,?,?,?,?,?,?,(SELECT COALESCE(MAX(event_sequence),0)+1 FROM observations))')
         .run(event.id,event.monitor_id,uuid(),event.event_type,event.previous_sha,
              event.head_sha,event.observed_at);
     }
@@ -509,7 +512,72 @@ test('actual local scheduler emits a baseline and consecutive SHA-linked changes
     assert.equal(observations[0].previous_sha,observations[1].head_sha);
     assert.equal(observations[1].previous_sha,observations[2].head_sha);
     assert.equal(observations[2].previous_sha,null);
+    assert.deepEqual(observations.map(x=>x.event_sequence),[3,2,1]);
     assert.ok(observations[0].observed_at>observations[1].observed_at);
     assert.ok(observations[1].observed_at>observations[2].observed_at);
   } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+
+test('migration 0005 durably backfills preexisting observation insertion order without changing prior data',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON');
+    for(const name of ['0001_initial.sql','0002_mobile_identity_sync.sql',
+      '0003_scheduler_control.sql','0004_global_scheduler_budget.sql']) {
+      db.exec(readFileSync(new URL('../worker/migrations/'+name,import.meta.url),'utf8'));
+    }
+    const id=uuid();
+    db.prepare('INSERT INTO monitors(id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(id,'historical-owner','python','cpython','ACTIVE',30,10,10,10);
+    const oldIds=[uuid(),uuid()];
+    const insert=db.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at) VALUES(?,?,?,?,?,?,?)');
+    insert.run(oldIds[0],id,uuid(),'BASELINE',null,'a'.repeat(40),100);
+    insert.run(oldIds[1],id,uuid(),'CHANGE','a'.repeat(40),'b'.repeat(40),100);
+    const before=db.prepare('SELECT id,event_type,head_sha,observed_at FROM observations ORDER BY rowid').all();
+    db.exec(readFileSync(new URL('../worker/migrations/0005_observation_event_sequence.sql',import.meta.url),'utf8'));
+    let after=db.prepare('SELECT id,event_type,head_sha,observed_at,event_sequence FROM observations ORDER BY event_sequence').all();
+    assert.deepEqual(after.map(x=>x.event_sequence),[1,2]);
+    assert.deepEqual(after.map(({event_sequence,...rest})=>rest),before.map(row=>({...row})));
+    // Explicitly copied sequence is stable across a local VACUUM.
+    db.exec('VACUUM');
+    after=db.prepare('SELECT id,event_sequence FROM observations ORDER BY event_sequence').all();
+    assert.deepEqual(after.map(x=>x.event_sequence),[1,2]);
+    db.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at,event_sequence) VALUES(?,?,?,?,?,?,?,(SELECT COALESCE(MAX(event_sequence),0)+1 FROM observations))')
+      .run(uuid(),id,uuid(),'CHANGE','b'.repeat(40),'c'.repeat(40),99);
+    const latest=db.prepare('SELECT head_sha,event_sequence,observed_at FROM observations WHERE monitor_id=? ORDER BY event_sequence DESC').all(id);
+    assert.deepEqual(latest.map(x=>x.event_sequence),[3,2,1]);
+    assert.deepEqual(latest.map(x=>x.head_sha),['c','b','a'].map(v=>v.repeat(40)));
+    assert.equal(latest[0].observed_at,99);
+    assert.equal(latest[1].observed_at,100);
+  }finally{db.close();}
+});
+
+
+test('missing migration 0005 fails closed before mobile activation or operator provider GET',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.MOBILE_SCHEDULING_ENABLED='true';env.SCHEDULER_ENABLED='true';
+  try {
+    // Recreate the old 0004-only observations schema without fake provider data.
+    env.DB.connection.exec('DROP INDEX observations_event_sequence_unique; DROP INDEX observations_monitor_sequence; ALTER TABLE observations DROP COLUMN event_sequence;');
+    const t=await token('needs-migration-five');
+    const newRow=(await(await create(env,t,uuid())).json()).monitor;
+    const target='/v1/sync/monitors/'+newRow.id;
+    const denied=await request(env,target,t,'PATCH',{status:'ACTIVE',expectedVersion:1});
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const bearer=env.OWNER_API_TOKEN;
+    const created=await request(env,'/v1/monitors',bearer,'POST',{repository:'nodejs/node',intervalMinutes:30});
+    assert.equal(created.status,201);
+    let providerCalls=0;
+    await assert.rejects(runScheduler(env,Date.now()+1000,async()=>{
+      providerCalls++;return new Response(JSON.stringify([{sha:'a'.repeat(40)}]));
+    }),/no such column|event_sequence/i);
+    assert.equal(providerCalls,0,'missing sequence migration must not consume a GitHub provider request');
+    const paused=await request(env,target,t,'PATCH',{status:'PAUSED',expectedVersion:1});
+    assert.equal(paused.status,200,'owner can still safely PAUSE during migration outage');
+  }finally{globalThis.fetch=previous;env.DB.close();}
 });

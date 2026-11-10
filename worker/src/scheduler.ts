@@ -37,8 +37,9 @@ async function refundUnclaimedSlot(env: Env, windowStart: number): Promise<void>
 async function saveSuccess(env: Env, monitor: Monitor, lease: string, headSha: string, now: number): Promise<number> {
   const db = env.DB;
   const rows = await db.batch([
-    db.prepare(`INSERT INTO observations(id, monitor_id, lease_token, event_type, previous_sha, head_sha, observed_at)
-      SELECT ?, id, ?, CASE WHEN last_sha IS NULL THEN 'BASELINE' ELSE 'CHANGE' END, last_sha, ?, ?
+    db.prepare(`INSERT INTO observations(id, monitor_id, lease_token, event_type, previous_sha, head_sha, observed_at, event_sequence)
+      SELECT ?, id, ?, CASE WHEN last_sha IS NULL THEN 'BASELINE' ELSE 'CHANGE' END, last_sha, ?, ?,
+        COALESCE((SELECT MAX(event_sequence) FROM observations),0)+1
       FROM monitors WHERE id=? AND owner_id=? AND lease_token=? AND status='ACTIVE'
       AND (last_sha IS NULL OR last_sha<>?)`)
       .bind(crypto.randomUUID(), lease, headSha, now, monitor.id, monitor.owner_id, lease, headSha),
@@ -77,6 +78,9 @@ export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLik
   const owner = ownerId(env.OWNER_ID); // Fail closed if operator context is misconfigured.
   if (!Number.isSafeInteger(now) || now < 0) throw new Error('scheduler_clock_invalid');
   const windowStart = Math.floor(now / DISPATCH_WINDOW_MS) * DISPATCH_WINDOW_MS;
+  // Fail before a lease reservation or external GitHub GET if a release
+  // skipped additive migration 0005. Local and cloud use the same D1 schema.
+  await env.DB.prepare('SELECT event_sequence FROM observations LIMIT 1').all();
   const mobileEnabled = env.MOBILE_SCHEDULING_ENABLED === 'true';
   let results: Monitor[];
   if (mobileEnabled) {

@@ -1,4 +1,14 @@
-# Android acceptance matrix | P1-L linked observation contract; physical phone and remote Cron still unverified
+# Android acceptance matrix | P1-M durable event sequence; physical phone and remote Cron still unverified
+
+## P1-M explicit persistent observation ordering (source and local workerd verified)
+
+The signed-user server now returns **positive integer `event_sequence`** for every observation, sorted descending. It is a persisted D1 insertion order, unlike timestamps or UUIDs. Android refuses missing/string/fractional/duplicate/decreasing-in-the-wrong-direction sequences and validates every adjacent `CHANGE.previous_sha → older head_sha` link, including **same-millisecond observations and backward wall-clock shifts**. It permits 50-row history truncation that omits the original baseline.
+
+The JSON fixture shared by Android and Worker is now contract version **2** with explicit event sequences. Migration **0005** is mandatory for future cloud use; it backfills historical observations and indexes their durable order. Without it, mobile ACTIVE returns 503 `scheduler_storage_unavailable` and Cron aborts before GitHub GET; PAUSE is still permitted.
+
+Local-only proof before final docs: exact corrected source SHA `ca7ead938b081a4f1e64583eaae2cab96e2ebc63`, [Node 42799869520](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869520) **65/65 PASS**, [Cloudflare local workerd/D1 42799869627](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869627) **11/11 PASS**, [Android APK/JVM 42799869210](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42799869210) **20/20 security tests actually executed with zero errors/failures/skips**. Tests include three identical-time Cron observations surviving local D1 restart. **None proves** installed Android, live Google-issued token, remote D1/Cron, Cloudflare Free CPU viability, or a physically powered-OFF phone. [ADR-0014](ADR/0014-durable-observation-sequence.md).
+
+---
 
 ## P1-L SHA-linked observation timeline: source-only validation
 

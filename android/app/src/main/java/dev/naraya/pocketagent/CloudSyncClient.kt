@@ -55,6 +55,7 @@ internal data class CloudObservation(
     val previousSha: String?,
     val headSha: String,
     val observedAt: Long,
+    val eventSequence: Long,
 )
 
 internal sealed interface SyncResult {
@@ -366,22 +367,20 @@ internal class CloudSyncClient(
      * This is NOT proof that a remote Cron actually ran or that timestamps
      * originated outside the server. The 50-row page can omit old BASELINEs.
      *
-     * Distinct timestamps give a total order, so every newer CHANGE must
-     * reference the immediately older event's head. When timestamps tie,
-     * server ordering breaks ties by random UUID; do not reject valid history
-     * by inventing a chronological ordering from those UUIDs.
+     * eventSequence is a persisted D1 insertion order, not a wall-clock
+     * timestamp or a cryptographic remote execution attestation. This lets
+     * us validate every adjacent SHA predecessor even when clocks tie or
+     * move backward. A bounded 50-row page may omit older history.
      */
     private fun coherentObservationHistory(rows: List<CloudObservation>): Boolean {
         if (rows.count { it.type == "BASELINE" } > 1) return false
         if (rows.any { it.type == "CHANGE" && it.previousSha == it.headSha }) return false
-        val baseline = rows.firstOrNull { it.type == "BASELINE" }
-        if (baseline != null && rows.any { it.observedAt < baseline.observedAt }) return false
-        if (rows.map { it.observedAt }.toSet().size == rows.size) {
-            for (index in 0 until rows.size - 1) {
-                val newer = rows[index]
-                val older = rows[index + 1]
-                if (newer.type != "CHANGE" || newer.previousSha != older.headSha) return false
-            }
+        if (rows.any { it.type == "BASELINE" } && rows.lastOrNull()?.type != "BASELINE") return false
+        for (index in 0 until rows.size - 1) {
+            val newer = rows[index]
+            val older = rows[index + 1]
+            if (newer.eventSequence <= older.eventSequence ||
+                newer.type != "CHANGE" || newer.previousSha != older.headSha) return false
         }
         return true
     }
@@ -411,14 +410,23 @@ internal class CloudSyncClient(
                 val previous = if (item.isNull("previous_sha") || !item.has("previous_sha")) null
                     else item.getString("previous_sha")
                 val observedAt = item.getLong("observed_at")
+                // No JSONObject.getLong coercion: a string, floating point,
+                // missing or forged order value cannot establish causality.
+                val rawSequence = item.get("event_sequence")
+                val eventSequence = when (rawSequence) {
+                    is Int -> rawSequence.toLong()
+                    is Long -> rawSequence
+                    else -> return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
+                }
                 if (eventId in seen || eventMonitorId != id || type !in listOf("BASELINE", "CHANGE") ||
                     !shaPattern.matches(sha) || (previous != null && !shaPattern.matches(previous)) ||
-                    observedAt <= 0L || (output.isNotEmpty() && observedAt > output.last().observedAt) ||
+                    observedAt <= 0L || eventSequence <= 0L ||
+                    (output.isNotEmpty() && eventSequence >= output.last().eventSequence) ||
                     (type == "BASELINE" && previous != null) || (type == "CHANGE" && previous == null)) {
                     return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)
                 }
                 seen.add(eventId)
-                output.add(CloudObservation(eventId, id, type, previous, sha, observedAt))
+                output.add(CloudObservation(eventId, id, type, previous, sha, observedAt, eventSequence))
             }
             if (!coherentObservationHistory(output))
                 return SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE)

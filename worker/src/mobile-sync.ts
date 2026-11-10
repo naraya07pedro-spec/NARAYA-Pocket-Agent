@@ -127,10 +127,10 @@ async function listSyncObservations(request: Request, env: Env, ownerId: string)
     WHERE owner_id=? AND id=? AND client_draft_id IS NOT NULL`)
     .bind(ownerId,id).first();
   if (!monitor) return json({error:'not_found'},404);
-  const result = await env.DB.prepare(`SELECT o.id,o.monitor_id,o.event_type,o.previous_sha,o.head_sha,o.observed_at
+  const result = await env.DB.prepare(`SELECT o.id,o.monitor_id,o.event_type,o.previous_sha,o.head_sha,o.observed_at,o.event_sequence
     FROM observations o JOIN monitors m ON m.id=o.monitor_id
     WHERE m.owner_id=? AND m.client_draft_id IS NOT NULL AND o.monitor_id=?
-    ORDER BY o.observed_at DESC,o.id DESC LIMIT 50`)
+    ORDER BY o.event_sequence DESC LIMIT 50`)
     .bind(ownerId,id).all();
   return json({observations:result.results});
 }
@@ -146,6 +146,10 @@ async function schedulerBudgetReady(env: Env): Promise<boolean> {
     const control = await env.DB.prepare(`SELECT budget_window_start,budget_claims
       FROM scheduler_control WHERE id=1`)
       .first<{budget_window_start:number;budget_claims:number}>();
+    // Migration 0005 is mandatory before any new mobile ACTIVE ACK.
+    // A successful SELECT on an empty observations table still validates
+    // existence of the durable sequence column. Never call the provider here.
+    await env.DB.prepare('SELECT event_sequence FROM observations LIMIT 1').all();
     return !!control &&
       Number.isSafeInteger(control.budget_window_start) && control.budget_window_start >= 0 &&
       Number.isSafeInteger(control.budget_claims) &&
