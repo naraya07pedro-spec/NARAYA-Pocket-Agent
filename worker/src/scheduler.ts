@@ -34,15 +34,18 @@ async function refundUnclaimedSlot(env: Env, windowStart: number): Promise<void>
     .bind(windowStart).run();
 }
 
-async function saveSuccess(env: Env, monitor: Monitor, lease: string, headSha: string, now: number): Promise<number> {
+async function saveSuccess(env: Env, monitor: Monitor, lease: string, headSha: string, now: number): Promise<{count:number; id:string|null}> {
   const db = env.DB;
+  // Generate ID once and emit it ONLY after the D1 batch says INSERT committed.
+  // This joins the owner-visible Cron log to the durable D1 observation row.
+  const observationId = crypto.randomUUID();
   const rows = await db.batch([
     db.prepare(`INSERT INTO observations(id, monitor_id, lease_token, event_type, previous_sha, head_sha, observed_at, event_sequence)
       SELECT ?, id, ?, CASE WHEN last_sha IS NULL THEN 'BASELINE' ELSE 'CHANGE' END, last_sha, ?, ?,
         COALESCE((SELECT MAX(event_sequence) FROM observations),0)+1
       FROM monitors WHERE id=? AND owner_id=? AND lease_token=? AND status='ACTIVE'
       AND (last_sha IS NULL OR last_sha<>?)`)
-      .bind(crypto.randomUUID(), lease, headSha, now, monitor.id, monitor.owner_id, lease, headSha),
+      .bind(observationId, lease, headSha, now, monitor.id, monitor.owner_id, lease, headSha),
     db.prepare(`INSERT INTO audit_events(id,monitor_id,event_type,code,recorded_at)
       SELECT ?,id,'CHECK_COMPLETED','PROVIDER_HEAD_READ',? FROM monitors
       WHERE id=? AND owner_id=? AND lease_token=? AND status='ACTIVE'`)
@@ -52,7 +55,11 @@ async function saveSuccess(env: Env, monitor: Monitor, lease: string, headSha: s
       WHERE id=? AND owner_id=? AND lease_token=? AND status='ACTIVE'`)
       .bind(headSha, now, now + monitor.interval_minutes * 60_000, now, monitor.id, monitor.owner_id, lease),
   ]);
-  return changes(rows[2]) ? changes(rows[0]) : -1;
+  if (changes(rows[2]) !== 1) return {count:-1,id:null};
+  const count = changes(rows[0]);
+  // No-change checks must never emit an ID for an observation that does not exist.
+  if (count !== 0 && count !== 1) throw new Error('observation_write_metadata_invalid');
+  return {count,id:count === 1 ? observationId : null};
 }
 
 async function saveFailure(env: Env, monitor: Monitor, lease: string, code: string, now: number): Promise<boolean> {
@@ -73,7 +80,10 @@ async function saveFailure(env: Env, monitor: Monitor, lease: string, code: stri
   return changes(rows[1]) === 1;
 }
 
-export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLike = fetch): Promise<TickReport> {
+export async function runScheduler(
+  env: Env, now = Date.now(), fetcher: FetchLike = fetch,
+  evidence?: { observationIds: string[] },
+): Promise<TickReport> {
   const report: TickReport = { claimed: 0, completed: 0, observations: 0, deferred: 0, skipped: 0 };
   const owner = ownerId(env.OWNER_ID); // Fail closed if operator context is misconfigured.
   if (!Number.isSafeInteger(now) || now < 0) throw new Error('scheduler_clock_invalid');
@@ -133,8 +143,10 @@ export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLik
     try {
       const sha = await readDefaultBranchHead(candidate.repo_owner, candidate.repo_name, fetcher);
       const observation = await saveSuccess(env, candidate, lease, sha, now);
-      if (observation >= 0) { report.completed++; report.observations += observation; }
-      else report.skipped++; // Paused/reclaimed while the HTTP call was in flight.
+      if (observation.count >= 0) {
+        report.completed++; report.observations += observation.count;
+        if (observation.id && evidence) evidence.observationIds.push(observation.id);
+      } else report.skipped++; // Paused/reclaimed while the HTTP call was in flight.
     } catch (error) {
       const code = error instanceof GithubReadError ? error.code : 'INTERNAL_ERROR';
       const written = await saveFailure(env, candidate, lease, code, now);
