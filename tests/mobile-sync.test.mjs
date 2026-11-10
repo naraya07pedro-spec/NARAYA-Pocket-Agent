@@ -404,3 +404,45 @@ test('verified identity probe advertises implemented source capability without c
     assert.equal(identities(env).length,0,'read-only capability probe must not onboard identity');
   }finally{globalThis.fetch=original;env.DB.close();}
 });
+
+
+test('mobile ACTIVE fails closed when shared Cron budget row is absent, and PAUSE still works',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try{
+    const t=await token('missing-budget-row');
+    const monitor=(await(await create(env,t,uuid())).json()).monitor;
+    env.DB.connection.exec('DELETE FROM scheduler_control');
+    const denied=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'ACTIVE',expectedVersion:1,
+    });
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+    const paused=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'PAUSED',expectedVersion:1,
+    });
+    assert.equal(paused.status,200);
+    assert.equal(monitors(env)[0].version,2);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('mobile ACTIVE fails closed without scheduler_control migration (no accidental 200)',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  env.SCHEDULER_ENABLED='true';env.MOBILE_SCHEDULING_ENABLED='true';
+  try{
+    const t=await token('missing-budget-table');
+    const monitor=(await(await create(env,t,uuid())).json()).monitor;
+    env.DB.connection.exec('DROP TABLE scheduler_control');
+    const denied=await request(env,'/v1/sync/monitors/'+monitor.id,t,'PATCH',{
+      status:'ACTIVE',expectedVersion:1,
+    });
+    assert.equal(denied.status,503);
+    assert.deepEqual(await denied.json(),{error:'scheduler_storage_unavailable'});
+    assert.equal(monitors(env)[0].status,'PAUSED');
+    assert.equal(monitors(env)[0].version,1);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
