@@ -1,7 +1,7 @@
 # ADR-0008: Request-safe, bounded OIDC public JWKS caching
 
 Date: 2026-11-10
-Status: P1-G implementation on PR #13; CI-verified source, not remotely deployed.
+Status: MERGED via PR #13 as `f9f551940f8cc9e83b3d14783dbc41ff63aeefe0`; 5/5 final PR-head CI successful at `21bcd3625072f6a57ef4420ff80d73b188d03361`, not remotely deployed.
 
 ## Problem and security threat model
 
