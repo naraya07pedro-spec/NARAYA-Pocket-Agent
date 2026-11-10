@@ -1,7 +1,7 @@
 # ADR-0011 | Dual permission and D1 readiness for mobile monitor activation
 
 Date: 10 November 2026
-Status: P1-J source implementation in PR #16, pending exact final-head CI and merge. Not deployed.
+Status: MERGED via PR #16 at `4832bce90714ad366434b9c4657bc2d1258b9848`. Final PR-head SHA `7aa9726f2070da16aa6bef578d42d2648426e2a5` passed 5/5 CI (58/58 backend, 10/10 local D1, 13/13 Android security tests). Not remotely deployed.
 
 ## Incident class: false-positive activation, caught by source audit before remote use
 
