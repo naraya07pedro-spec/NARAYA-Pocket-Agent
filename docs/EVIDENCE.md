@@ -10,7 +10,8 @@
 | Public real OIDC provider login | NOT_VERIFIED | No real Google/Firebase/OIDC credential or issuer integration |
 | Mobile secure token storage and account-scoped data | NOT_IMPLEMENTED | No server user mapping, SQL owner isolation for OIDC identities, or Android login/cloud sync |
 | Remote Cloudflare + powered-off phone | NOT_VERIFIED | Issue #2 stays open |
-| Final PR docs/merge SHA | PENDING | CI above covers source SHA before subsequent documentation commits |
+| Final PR HEAD | CI_VERIFIED | 5/5 workflows SUCCESS at `cc42f084ed61ccb7f7cffd5cf9f2b69f8508307b`: [backend](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42748123959), [D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42748123925), [GitHub GET](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42748123934), [Android build](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42748123872), [Android adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42748123994) |
+| Merge into main | MERGED / MAIN_CI_UNVERIFIED | [PR #7](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/7) merged, commit `cd2298a6b91392af9024afa4bd7ba42d8bdc6be3`; no separate main-commit CI evidence recorded yet |
 
 **Observed failure/correction:** source run 42747699679 failed one integration assertion on SHA `24c83e393424f6582daa16dae1ea545929432272`: test referenced synthetic JWKS hostname without a fetch fixture, causing 503. Fixed test stub only; source run 42747877456 then passed. This is test infrastructure evidence, not a live-provider outage.
 
