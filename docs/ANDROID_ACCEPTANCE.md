@@ -1,4 +1,14 @@
-# Android acceptance matrix | P1-M durable event sequence; physical phone and remote Cron still unverified
+# Android acceptance matrix | P1-N offline acceptance evidence gate; real phone and remote Cron still unverified
+
+## P1-N physical phone-OFF acceptance remains a separate, independent milestone
+
+The new Node `offdevice-evidence-gate.mjs` can check the **internal consistency** of owner-supplied declarations: physical OFF/ON times, an observation in D1 during that declared window, plausible Cron timestamps, strict `event_sequence`/SHA history, GitHub commit corroboration and authenticated post-boot read claims. This does **not** authenticate any of those external facts. A fully synthetic manifest passes structural checks but still produces `remote_acceptance: NOT_VERIFIED` and `safe_to_activate_scheduler:false`.
+
+Actual Android acceptance still requires an installed app with live Google-issued ID token and correct trusted Worker origin, a real phone physically powered OFF during independent Cloudflare Cron/D1 activity, followed by signed owner-scoped post-boot reconciliation. None of these have been measured. The debug APK and JVM tests cannot substitute for device evidence. Private manifests must remain outside git/CI, and no credential or raw D1 export should enter source control.
+
+P1-N also updates the in-app server error guidance for missing D1 schema: the required migration chain is now **0001–0005**, not merely 0001–0004. [ADR-0015](ADR/0015-offdevice-acceptance-evidence-gate.md) · [Owner-approved release runbook](REMOTE_PILOT_READINESS.md).
+
+---
 
 ## P1-M explicit persistent observation ordering (source and local workerd verified)
 
