@@ -265,3 +265,94 @@ test('Cloudflare workerd/D1: fair mobile dispatcher, persisted owner cursor and 
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+test('Cloudflare local D1: signed two-user mobile status and observation contract end-to-end', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-mobile-status-'));
+  const originalFetch=globalThis.fetch;
+  let platform;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const issuer='https://login.example.invalid',jwks='https://keys.example.invalid/jwks';
+    const audience='pocket-agent-status-contract';
+    const pair=await crypto.subtle.generateKey({
+      name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+      publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+    },true,['sign','verify']);
+    const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'status-contract',alg:'RS256',use:'sig'};
+    const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+    const signed=async sub=>{
+      const current=Math.floor(Date.now()/1000);
+      const input=encode({alg:'RS256',typ:'JWT',kid:'status-contract'})+'.'+
+        encode({iss:issuer,aud:audience,sub,iat:current-20,exp:current+1000});
+      const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(input));
+      return input+'.'+Buffer.from(signature).toString('base64url');
+    };
+    globalThis.fetch=async (url,options)=>{
+      assert.equal(url,jwks);
+      assert.equal(options.method,'GET');
+      assert.equal(options.redirect,'error');
+      return new Response(JSON.stringify({keys:[key]}));
+    };
+    const env={
+      DB,OWNER_ID:owner,OIDC_ISSUER:issuer,OIDC_AUDIENCE:audience,OIDC_JWKS_URL:jwks,
+    };
+    const a=await signed('android-A'),b=await signed('android-B');
+    const req=(t,path,method='GET',body)=>new Request(base+path,{
+      method,headers:{authorization:'Bearer '+t,...(body?{'content-type':'application/json'}:{})},
+      body:body?JSON.stringify(body):undefined,
+    });
+    const draft=crypto.randomUUID();
+    const create=await worker.fetch(req(a,'/v1/sync/monitors','POST',{
+      clientDraftId:draft,repository:'python/cpython',intervalMinutes:30,
+    }),env);
+    assert.equal(create.status,201);
+    const first=(await create.json()).monitor;
+    assert.equal(first.status,'PAUSED');
+    assert.equal(first.clientDraftId,draft);
+    const path='/v1/sync/monitors/'+first.id;
+    const denied=await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env);
+    assert.equal(denied.status,409);
+    assert.equal((await denied.json()).error,'scheduler_disabled');
+    assert.equal((await worker.fetch(req(b,path,'PATCH',{status:'PAUSED',expectedVersion:1}),env)).status,404);
+    assert.equal((await worker.fetch(req(b,'/v1/sync/observations?monitorId='+first.id),env)).status,404);
+    env.MOBILE_SCHEDULING_ENABLED='true';
+    const accepted=await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env);
+    assert.equal(accepted.status,200);
+    const ack=await accepted.json();
+    assert.deepEqual(ack,{id:first.id,status:'ACTIVE',version:2,schedulerEligible:true});
+    assert.equal((await worker.fetch(req(a,path,'PATCH',{status:'ACTIVE',expectedVersion:1}),env)).status,409);
+    const report=await runScheduler(env,Date.now()+1000,fakeGithub(headA));
+    assert.equal(report.claimed,1);
+    assert.equal(report.completed,1);
+    assert.equal(report.observations,1);
+    const read=await worker.fetch(req(a,'/v1/sync/observations?monitorId='+first.id),env);
+    assert.equal(read.status,200);
+    const events=(await read.json()).observations;
+    assert.equal(events.length,1);
+    assert.equal(events[0].monitor_id,first.id);
+    assert.equal(events[0].event_type,'BASELINE');
+    assert.equal(events[0].previous_sha,null);
+    assert.equal(events[0].head_sha,headA);
+    assert.ok(events[0].observed_at>0);
+    const list=await worker.fetch(req(a,'/v1/sync/monitors'),env);
+    assert.equal(list.status,200);
+    const latest=(await list.json()).monitors[0];
+    assert.equal(latest.id,first.id);
+    assert.equal(latest.status,'ACTIVE');
+    assert.equal(latest.lastSha,headA);
+    const paused=await worker.fetch(req(a,path,'PATCH',{status:'PAUSED',expectedVersion:latest.version}),env);
+    assert.equal(paused.status,200);
+    assert.deepEqual(await paused.json(),{
+      id:first.id,status:'PAUSED',version:latest.version+1,schedulerEligible:false,
+    });
+    assert.equal((await runScheduler(env,Date.now()+40*60000,fakeGithub(headB))).claimed,0);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,1);
+  } finally {
+    globalThis.fetch=originalFetch;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
