@@ -1,7 +1,7 @@
 # ADR-0010 | Global Cron kill-switch and offline release gate
 
 Date: 10 November 2026
-Status: Implemented in PR #15, pending final exact-head source CI and merge. No Cloudflare remote deployment.
+Status: MERGED via PR #15 as `0a344f334ccbc4ca6881b2d2cf7d91aef134c990`. Final exact PR-head source SHA `1f1ff9006853a535ee6e4a312afd2abc9d906e07` passed 5/5 CI (53/53 backend, 10/10 local D1, 13/13 Android security JVM). No Cloudflare remote deployment.
 
 ## Problem
 
