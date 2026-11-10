@@ -45,3 +45,8 @@ Earlier PR-head run `c7312e712f695283a1108f1ac73e7c5965690765` failed due to mal
 ## Exit criteria
 
 Feature flag off => only legacy operator can run; feature flag on => mobile owners may be activated by their own verified credentials and receive at most three global GitHub GET attempts per tick, with durable per-owner rotation, no cross-user observation leak, and no fabricated success under timeout/pause. Claims must name CI SHA and test environment.
+
+
+## Historical scope supplement: P1-H global quota (10 November 2026)
+
+This ADR described the **P1-D** per-invocation limit and fairness cursor. P1-H adds [ADR-0009](0009-d1-global-cron-budget.md): a single D1-backed quota of **3 reserved GitHub provider attempts per fixed UTC 15-minute window**, shared by overlapping Cron invocations in **both** operator-only and mobile-enabled modes. It requires additive migration 0004 after migration 0003. The budget uses atomic SQL; the fairness cursor is still updated separately and exact overlapping remote fairness is not proved. This is a **source/local CI upgrade**, not a remotely deployed Worker or phone-off acceptance.
