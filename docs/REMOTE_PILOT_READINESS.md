@@ -23,6 +23,12 @@ npm run typecheck
 
 `npm run preflight:require-remote` returns exit code **2** (BLOCKED) in the current source. It does **not** deploy anything. Machine-readable status is available with `--json`, so no green source test can be presented as a completed remote pilot.
 
+## P1-J activation prerequisite: no half-armed cloud monitors
+
+As a source-level safeguard, Android-signed `PATCH ACTIVE` must not succeed merely because the mobile permission is ON. The server requires **both** independently configured `SCHEDULER_ENABLED='true'` and `MOBILE_SCHEDULING_ENABLED='true'`, a valid `OWNER_ID`, and the **actual D1 `scheduler_control` row with migration 0004 budget fields**. Missing flags produce HTTP 409 `scheduler_disabled`; missing/invalid D1 control produces HTTP 503 `scheduler_storage_unavailable`. Operators must apply all migrations and confirm the control state **before** opening the final activation gate. Signed-owner PAUSE is always permitted with Cron OFF.
+
+An already ACTIVE monitor may retain its stored status when the global Cron permission is disabled for maintenance, but its server `schedulerEligible` value must be false and **no Cron provider calls** should occur. Re-enabling global permission could make previously ACTIVE monitors due again; inspect/PAUSE them before separately approving activation. This is a local source contract, not evidence of a deployed Cloudflare trigger. [ADR-0011](ADR/0011-dual-scheduler-authorization.md).
+
 ## Specific blockers in today's checked-in configuration
 
 - **Worker inaccessible to Android:** `worker/wrangler.jsonc` has `workers_dev:false` and no public route/custom domain. It is intentionally not a public HTTPS API endpoint.
