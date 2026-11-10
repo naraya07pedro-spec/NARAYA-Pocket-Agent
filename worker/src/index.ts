@@ -1,5 +1,6 @@
 import { boundedJson, InputError, json, ownerId, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { runScheduler } from './scheduler.ts';
+import { mobileSync } from './mobile-sync.ts';
 import { AuthRejected, AuthUnavailable, verifyOidcBearer } from './oidc.ts';
 import type { Env, Monitor } from './types.ts';
 
@@ -76,6 +77,9 @@ export default {
       if (pathname === '/v1/me' && request.method === 'GET') {
         await verifyOidcBearer(request, env);
         return json({ authenticated: true, capabilities: { monitorSync: false } });
+      }
+      if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations') {
+        return await mobileSync(request,env,pathname);
       }
       if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
           !env.OWNER_ID || !/^[A-Za-z0-9_-]{1,64}$/.test(env.OWNER_ID)) {
