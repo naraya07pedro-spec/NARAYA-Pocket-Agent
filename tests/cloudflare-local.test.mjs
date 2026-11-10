@@ -526,3 +526,45 @@ test('Cloudflare local D1: additive 0004 migration retains legacy cursor and ope
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+
+test('Cloudflare local D1: default-off Cron handler does not claim, reserve, or call GitHub', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-cron-off-'));
+  let platform, providerCalls=0, logged=[];
+  const originalFetch=globalThis.fetch, originalLog=console.log;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const now=Date.now(),id=crypto.randomUUID();
+    await DB.prepare(
+      "INSERT INTO monitors(id,owner_id,repo_owner,repo_name,interval_minutes,next_due_at,created_at,updated_at) "+
+      "VALUES(?,?,?,?,30,?,?,?)"
+    ).bind(id,owner,'python','cpython',now-1000,now,now).run();
+    globalThis.fetch=async()=>{providerCalls++;throw new Error('unexpected-provider-call')};
+    console.log=(line)=>logged.push(String(line));
+    for(const schedulerFlag of [undefined,'false','TRUE','true ','1']){
+      await worker.scheduled({scheduledTime:now},{
+        DB,OWNER_ID:owner,SCHEDULER_ENABLED:schedulerFlag,MOBILE_SCHEDULING_ENABLED:'true',
+      });
+    }
+    assert.equal(providerCalls,0);
+    assert.equal(logged.length,5);
+    for(const line of logged)assert.deepEqual(JSON.parse(line),{event:'scheduled_disabled'});
+    const monitor=await DB.prepare('SELECT status,lease_token,version,last_sha FROM monitors WHERE id=?')
+      .bind(id).first();
+    assert.equal(monitor.status,'ACTIVE');
+    assert.equal(monitor.lease_token,null);
+    assert.equal(monitor.last_sha,null);
+    assert.equal(monitor.version,1);
+    const budget=await DB.prepare('SELECT budget_claims FROM scheduler_control WHERE id=1').first();
+    assert.equal(budget.budget_claims,0);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,0);
+  } finally {
+    globalThis.fetch=originalFetch;
+    console.log=originalLog;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
