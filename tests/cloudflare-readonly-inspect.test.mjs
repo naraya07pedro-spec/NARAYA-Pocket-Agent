@@ -107,8 +107,8 @@ test('P1-Q regression: total_count greater than short first page must fetch next
   const report=await inspectReadOnly({accountId,token,fetchImpl:async(url)=>{
     visited.push(url);
     if(url.includes('/d1/database?')) {
-      if(url.includes('page=1'))return d1Page([{name:'other-database',uuid:otherUuid}],2,1);
-      if(url.includes('page=2'))return d1Page([{name:'naraya-pocket-agent',uuid}],2,2);
+      if(new URL(url).searchParams.get('page')==='1')return d1Page([{name:'other-database',uuid:otherUuid}],2,1);
+      if(new URL(url).searchParams.get('page')==='2')return d1Page([{name:'naraya-pocket-agent',uuid}],2,2);
       throw Error('wrong page');
     }
     return fixture(new URL(url).pathname+new URL(url).search);
@@ -150,7 +150,7 @@ test('provider contradictory per_page, page number or total_count fail closed',a
       if(url.includes('/d1/database?')) {
         if(caseName==='bad-page')return d1Page([{name:'naraya-pocket-agent',uuid}],1,2);
         if(caseName==='bad-size')return d1Page([{name:'naraya-pocket-agent',uuid}],1,1,{per_page:20});
-        if(url.includes('page=1'))return d1Page([{name:'other',uuid:otherUuid}],2,1);
+        if(new URL(url).searchParams.get('page')==='1')return d1Page([{name:'other',uuid:otherUuid}],2,1);
         return d1Page([{name:'naraya-pocket-agent',uuid}],3,2);
       }
       return json([]);
@@ -164,7 +164,7 @@ test('provider contradictory per_page, page number or total_count fail closed',a
 test('repeated D1 UUID across pages refuses apparent completion',async()=>{
   const report=await inspectReadOnly({accountId,token,fetchImpl:async(url)=>{
     if(url.includes('/d1/database?')) {
-      const page=url.includes('page=1')?1:2;
+      const page=new URL(url).searchParams.get('page')==='1'?1:2;
       return d1Page([{name:'other',uuid}],2,page);
     }
     return json([]);
@@ -176,8 +176,8 @@ test('repeated D1 UUID across pages refuses apparent completion',async()=>{
 
 test('partial pages do not turn an unseen target into a verified absence',async()=>{
   const report=await inspectReadOnly({accountId,token,fetchImpl:async(url)=>{
-    if(url.includes('page=1'))return d1Page([{name:'other',uuid}],2);
-    if(url.includes('page=2'))throw Error('NETWORK_SECRET');
+    if(new URL(url).searchParams.get('page')==='1')return d1Page([{name:'other',uuid}],2);
+    if(new URL(url).searchParams.get('page')==='2')throw Error('NETWORK_SECRET');
     return json([]);
   }});
   assert.equal(report.target_d1_present,'UNKNOWN');
