@@ -1,4 +1,4 @@
-# P1-P release readiness gate | Owner-approved remote pilot ONLY
+# P1-Q release readiness gate | Owner-approved remote pilot ONLY
 
 ## P1-Q: Account inventory read-only preparation (NO DEPLOYMENT)
 
