@@ -536,6 +536,13 @@ test('Cloudflare local D1: additive 0004 migration retains legacy cursor and ope
     assert.equal(monitor.status,'ACTIVE');
     assert.equal(monitor.version,1);
     const env={DB,OWNER_ID:owner};
+    // P1-M must refuse provider I/O with schema only up to 0004.
+    let fetches=0;
+    await assert.rejects(runScheduler(env,now+1000,async()=>{
+      fetches++;return fakeGithub(headA)();
+    }),/no such column|event_sequence/i);
+    assert.equal(fetches,0);
+    await applyStatements(DB,migrationSql[4]);
     const report=await runScheduler(env,now+1000,fakeGithub(headA));
     assert.equal(report.claimed,1);
     assert.equal((await DB.prepare('SELECT budget_claims FROM scheduler_control WHERE id=1').first()).budget_claims,1);
