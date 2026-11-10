@@ -1,5 +1,32 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-R accurate paginated D1 account inventory (PR #24, source CI-VERIFIED; remote still BLOCKED)
+
+**Why P1-R:** source-level audit of [P1-Q inspector](../scripts/cloudflare-readonly-inspect.mjs) against [official D1 List API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/) found a trust-boundary error: the inspector could call a short first page complete despite `result_info.total_count` indicating additional unseen databases, because `total_pages` was missing. This could mark an unseen target database falsely absent. **No actual Cloudflare incident was observed.**
+
+**Implemented:**
+- Revised D1 inventory to validate `result_info.total_count`, `page`, `per_page`, optional `count` and consistent totals across GET-only page reads. At most **10 pages x 100 databases**. A target not observed in an incomplete result remains `UNKNOWN`, never an asserted absence. Repeated D1 UUID, contradictory metadata, failed second page, and multiple target matches fail closed.
+- Corrected Worker-script inventory to follow its documented **SinglePage** contract, rather than assuming a false page-size boundary of 20. If future metadata indicates missing results, completeness is not claimed. D1 detailed size is accepted only after exact UUID/name read-back, and Cron schedule JSON must have valid shape.
+- Bounded upstream response **while streaming** to 262,144 bytes with strict UTF-8 decoding and a bounded request timeout; the previous `response.text()` followed by size check could not bound memory consumption while downloading.
+- Expanded [inspector tests](../tests/cloudflare-readonly-inspect.test.mjs) from seven to **18**, including the first-page total_count regression, malformed results, ten-page stop, duplicate IDs, untrusted URL, and oversize streamed response. Node repository test total becomes **100**.
+- No new Cloudflare permission, account access, token capture, D1 SQL, migrations, Worker deployment, Cron activation, Android permission, paid service or customer data. Default offline path stays network-free; `remote_acceptance:BLOCKED`, `safe_to_deploy:false` and `safe_to_activate_scheduler:false` remain immutable.
+
+**Failure and correction retained:** initial PR code HEAD `6cd409c0f11156eb46152b6398b56787e1db72a2` had [source CI 42829222639](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829222639) **99/100 PASS, 1 FAIL**. Root cause was the NEW fixture matching `url.includes('page=1')`, which accidentally matched `per_page=100` in second-page requests, not an actual provider or Worker failure. Changed fixtures to URLSearchParams.
+
+**Corrected CODE SHA `b84437385dffb91b4f1f8d3b7dcda41c19f82216`** passed **5/5 GitHub Actions workflows**:
+- [Node source/typecheck/preflight 42829389113](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389113): **100/100 Node** PASS, TypeScript PASS, source safety PASS and remote BLOCKED.
+- [Local Cloudflare workerd/D1 42829389170](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389170): **11/11 PASS**.
+- [Public GitHub GET on isolated local D1 42829389108](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389108): SUCCESS, **not remote Cloudflare**.
+- [Android native adapter 42829389279](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389279): SUCCESS.
+- [Android debug APK + security JVM 42829389235](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42829389235): SUCCESS, **20/20 actual JVM**, 0 failures/errors/skips. APK debug SHA-256 `af048f7c6a3e973a77179a2e9edb4b3afcd40357af5d53b4f6f4a8ec9bbbdc49`.
+
+**Evidence class:** local synthetic/mock + source CI verified **only for that exact corrected code SHA**; additional documentation commits require an independent final PR HEAD check. The account-specific Cloudflare Free plan, billing, row usage, CPU and real D1/Worker/Cron, Google OAuth Android, physical phone OFF and post-restart mobile retrieval remain **NOT VERIFIED**. No network call to the actual account was made. No automatic deployment or cost.
+
+[PR #24](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/24) · [ADR-0019](ADR/0019-d1-account-inventory-pagination-and-bounded-fetch.md) · [EVIDENCE](EVIDENCE.md) · [Owner pilot](REMOTE_PILOT_READINESS.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+---
+
+
 ## 2026-11-10 | P1-Q read-only Cloudflare account inventory and safety gate (PR #23 MERGED)
 
 **Purpose:** reduce the real Cloudflare acceptance blocker without adding unapproved cloud state. Previous P1-P source/local D1 tests do not prove account billing, remote deployment, Google OAuth or a physically OFF Android.
