@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,10);
+  assert.equal(result.checks.length,11);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -87,4 +87,20 @@ test('CLI default is offline-safe, --json machine readable and --require-remote 
   assert.match(remote.stdout,/BLOCKED/);
   const bad=spawnSync(process.execPath,[bin,'--execute-deploy'],{encoding:'utf8',timeout:10000});
   assert.equal(bad.status,64);
+});
+
+
+
+test('pilot template is inert and no future change can silently activate Cron or contain real D1',()=>{
+  for(const mutate of [
+    p=>p.triggers.crons.push('*/1 * * * *'),
+    p=>p.vars.SCHEDULER_ENABLED='true',
+    p=>p.vars.MOBILE_SCHEDULING_ENABLED='true',
+    p=>p.d1_databases[0].database_id='11111111-1111-4111-8111-111111111111',
+    p=>p.name='real-worker-name',
+  ]){
+    const s=clone();
+    mutate(s.pilot);
+    assert.ok(failures(audit(s)).includes('inert_approval_only_pilot_template'));
+  }
 });
