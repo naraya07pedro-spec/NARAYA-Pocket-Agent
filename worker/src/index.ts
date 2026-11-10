@@ -1,5 +1,6 @@
 import { boundedJson, InputError, json, ownerId, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { runScheduler } from './scheduler.ts';
+import { AuthRejected, AuthUnavailable, verifyOidcBearer } from './oidc.ts';
 import type { Env, Monitor } from './types.ts';
 
 async function authorized(request: Request, secret?: string): Promise<boolean> {
@@ -72,6 +73,10 @@ export default {
     try {
       const { pathname } = new URL(request.url);
       if (pathname === '/health' && request.method === 'GET') return json({ service: 'naraya-pocket-agent', status: 'pilot' });
+      if (pathname === '/v1/me' && request.method === 'GET') {
+        await verifyOidcBearer(request, env);
+        return json({ authenticated: true, capabilities: { monitorSync: false } });
+      }
       if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
           !env.OWNER_ID || !/^[A-Za-z0-9_-]{1,64}$/.test(env.OWNER_ID)) {
         return json({ error: 'owner_auth_not_configured' }, 503);
@@ -84,6 +89,8 @@ export default {
       if (pathname === '/v1/observations' && request.method === 'GET') return await listObservations(request, env);
       return json({ error: 'not_found' }, 404);
     } catch (error) {
+      if (error instanceof AuthRejected) return json({ error: 'unauthorized' }, 401);
+      if (error instanceof AuthUnavailable) return json({ error: 'identity_provider_unavailable' }, 503);
       if (error instanceof InputError) return json({ error: error.message }, error.message === 'payload_too_large' ? 413 : 400);
       return json({ error: 'internal_error' }, 500);
     }
