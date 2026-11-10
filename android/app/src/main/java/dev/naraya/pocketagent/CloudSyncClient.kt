@@ -225,6 +225,8 @@ internal class CloudSyncClient(
                 401, 403 -> RawFailure(SyncFailure.UNAUTHORIZED)
                 404 -> RawFailure(SyncFailure.NOT_FOUND)
                 409 -> {
+                    if (response.body.toByteArray(StandardCharsets.UTF_8).size > 2_048)
+                        return RawFailure(SyncFailure.INVALID_SERVER_RESPONSE)
                     // Only server-defined finite error codes are surfaced; never echo raw upstream text.
                     val code = try { JSONObject(response.body).optString("error") } catch (_: Exception) { "" }
                     RawFailure(when (code) {
@@ -236,6 +238,8 @@ internal class CloudSyncClient(
                 }
                 429 -> RawFailure(SyncFailure.RATE_LIMITED)
                 503 -> {
+                    if (response.body.toByteArray(StandardCharsets.UTF_8).size > 2_048)
+                        return RawFailure(SyncFailure.UNAVAILABLE)
                     // Only a fixed, server-owned error code may be surfaced.
                     // Raw remote diagnostics, bearer data or arbitrary bodies
                     // are never added to UI-visible messages.
