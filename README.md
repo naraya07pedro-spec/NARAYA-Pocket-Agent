@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-M persistent observation insertion sequence, additive migration 0005 and cross-runtime SHA-chain checks MERGED via PR #19 (65/65 backend, 11/11 local D1, 20/20 Android security JVM, 5/5 final PR-head CI SUCCESS; no remote deployment).** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-N offline owner-supplied phone-OFF evidence review gate implemented in PR #20 (74/74 initial corrected source tests, 11/11 local D1, 20/20 Android JVM; final documentation-head CI pending). No remote deployment or real device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -14,6 +14,19 @@
 - Automated Node/SQLite, real **local** Cloudflare workerd/D1, JVM Android, Android debug APK and public GitHub GET verification on GitHub Actions. Exact current test counts, SHAs and environment distinctions are in [EVIDENCE](docs/EVIDENCE.md), rather than historical figures.
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
+
+## P1-N honest offline phone-OFF evidence review (PR #20, source/local CI only)
+
+A real cloud pilot will need independent evidence that Cloudflare Cron produced a D1 observation while Android was **physically switched OFF**, followed by authenticated sync after restart. Passing GitHub Actions or entering a plausible JSON timeline does **not** prove that. P1-N adds an entirely offline, no-network **structural evidence verifier** that checks a declared OFF/ON interval, Cron/D1 timestamps, monotonic D1 `event_sequence`, SHA predecessors, GitHub corroboration and post-restart observation IDs.
+
+Run a clearly fictional example to understand its safe behavior:
+
+```sh
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --json
+node scripts/offdevice-evidence-gate.mjs --file docs/examples/offdevice-evidence-synthetic.example.json --require-remote
+```
+
+The first may return `structural_consistency:PASS` (only an internal consistency check). The second **always exits 2** because `remote_acceptance` is permanently `NOT_VERIFIED`; no user-supplied manifest can authorize deployment, change Cron permissions, or authenticate a real provider. Keep any future private evidence **outside GitHub, git commits and CI artifacts**, do not include Google tokens or Cloudflare secrets. Android's D1 failure guidance and the owner-only migration checklist now correctly require **0001–0005**. See [ADR-0015](docs/ADR/0015-offdevice-acceptance-evidence-gate.md), [EVIDENCE](docs/EVIDENCE.md), [REMOTE_PILOT_READINESS](docs/REMOTE_PILOT_READINESS.md).
 
 ## P1-M durable observation sequence (PR #19 merged; source CI, no cloud deployment)
 

@@ -279,7 +279,7 @@ private fun MonitorDraftScreen(
                                                         }
                                                         cloudNotice = if (outcome.code == SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE)
                                                             "Activation blocked: server D1 scheduler budget is unavailable. " +
-                                                                "No task was activated; an operator must check migrations 0001–0004. " +
+                                                                "No task was activated; an operator must check migrations 0001–0005. " +
                                                                 "Refresh server state after it is repaired."
                                                         else "Status request failed: " + outcome.code +
                                                             ". No success assumed. Refresh server state before retrying."
