@@ -25,11 +25,14 @@ internal data class CloudMonitor(
     val version: Int,
     val lastSha: String?,
     val lastCheckedAt: Long?,
+    // These are last-response source assertions, NOT verified remote execution.
+    val schedulerEligible: Boolean,
+    val scheduled: Boolean,
 )
 
 internal enum class SyncFailure {
     NOT_CONFIGURED, SIGN_IN_REQUIRED, UNAUTHORIZED, RATE_LIMITED, CONFLICT, NOT_FOUND,
-    SCHEDULER_DISABLED, STALE_VERSION, ACTIVE_LIMIT,
+    SCHEDULER_DISABLED, SCHEDULER_STORAGE_UNAVAILABLE, STALE_VERSION, ACTIVE_LIMIT,
     UNAVAILABLE, INVALID_SERVER_RESPONSE, NETWORK_ERROR
 }
 
@@ -81,7 +84,7 @@ internal object WorkerSyncTransport : SyncTransport {
                 connection.outputStream.use { it.write(jsonBody!!.toByteArray(StandardCharsets.UTF_8)) }
             }
             val status = connection.responseCode
-            if (status == 409) {
+            if (status == 409 || status == 503) {
                 val stream = connection.errorStream ?: return SyncHttpResponse(status, "")
                 if (connection.contentLengthLong > 2_048) return SyncHttpResponse(status, "")
                 val bytes = stream.use { readBounded(it, 2_048) }
@@ -153,7 +156,9 @@ internal class CloudSyncClient(
             val clientDraftId = uuid(obj.getString("clientDraftId")) ?: return null
             val repo = RepoRules.normalize(obj.getString("repository")) ?: return null
             val interval = obj.getInt("intervalMinutes")
-            if (interval !in listOf(30, 60, 120, 240, 1440)) return null
+            // The server permits every 15-minute increment from 30 to 1440.
+            // UI-created local drafts still intentionally offer fewer presets.
+            if (interval !in 30..1440 || interval % 15 != 0) return null
             val status = obj.getString("status")
             if (status !in listOf("ACTIVE", "PAUSED")) return null
             val version = obj.getInt("version")
@@ -163,7 +168,15 @@ internal class CloudSyncClient(
             val checkedAt = if (obj.isNull("lastCheckedAt") || !obj.has("lastCheckedAt"))
                 null else obj.getLong("lastCheckedAt")
             if (checkedAt != null && checkedAt <= 0L) return null
-            CloudMonitor(id, clientDraftId, repo, interval, status, version, head, checkedAt)
+            // org.json.getBoolean accepts strings like "true"; reject those.
+            // Missing or malformed server flags cannot be silently guessed.
+            val eligibility = obj.get("schedulerEligible")
+            val scheduling = obj.get("scheduled")
+            if (eligibility !is Boolean || scheduling !is Boolean) return null
+            if (status == "PAUSED" && (eligibility || scheduling)) return null
+            if (scheduling && !eligibility) return null
+            CloudMonitor(id, clientDraftId, repo, interval, status, version, head, checkedAt,
+                eligibility, scheduling)
             } catch (_: Exception) { null }
         }
     }
@@ -197,6 +210,15 @@ internal class CloudSyncClient(
                     })
                 }
                 429 -> RawFailure(SyncFailure.RATE_LIMITED)
+                503 -> {
+                    // Only a fixed, server-owned error code may be surfaced.
+                    // Raw remote diagnostics, bearer data or arbitrary bodies
+                    // are never added to UI-visible messages.
+                    val code = try { JSONObject(response.body).optString("error") }
+                        catch (_: Exception) { "" }
+                    RawFailure(if (code == "scheduler_storage_unavailable")
+                        SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE else SyncFailure.UNAVAILABLE)
+                }
                 else -> RawFailure(SyncFailure.UNAVAILABLE)
             }
         } catch (_: InvalidProviderBody) {
