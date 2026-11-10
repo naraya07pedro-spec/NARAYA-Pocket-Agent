@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,17);
+  assert.equal(result.checks.length,18);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -214,7 +214,7 @@ test('P1-O source guard rejects regressed identity registration before path/body
     s=>{s.mobileSync=s.mobileSync.replace(
       'const existing = await env.DB.prepare','const unused = await env.DB.prepare');},
     s=>{s.mobileSync=s.mobileSync.replace(
-      'if (existing) {','if (false) {');},
+      'return existing?.id ?? null;','return null;');},
     s=>{s.mobileSync=s.mobileSync.replace(
       'const createInput = creating ? parseSyncInput(await boundedJson(request)) : null',
       'const createInput = null');},
@@ -228,5 +228,27 @@ test('P1-O source guard rejects regressed identity registration before path/body
   for(const mutate of bad){
     const s=clone();mutate(s);
     assert.ok(failures(audit(s)).includes('signed_user_admission_is_prevalidated_and_existing_users_read_only'));
+  }
+});
+
+
+test('P1-P static guard refuses splitting identity registration from its first monitor',()=>{
+  const bad=[
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'const [identityWrite,monitorWrite,rollbackUnused] = await env.DB.batch([',
+      'const [identityWrite,monitorWrite,rollbackUnused] = await Promise.all([');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'DELETE FROM user_identities','SELECT * FROM user_identities');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'if (rollbackUnused.meta.changes===1) {','if (false) {');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'if (creating) return createFirstSyncMonitor(createInput!,env,issuer,subject)',
+      'if (creating) return json({error:"pretend_created"},201)');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'AND NOT EXISTS (SELECT 1 FROM monitors WHERE owner_id=?)','AND 1=1');},
+  ];
+  for(const mutate of bad){
+    const snap=clone();mutate(snap);
+    assert.ok(failures(audit(snap)).includes('first_monitor_identity_and_monitor_are_one_d1_transaction'));
   }
 });
