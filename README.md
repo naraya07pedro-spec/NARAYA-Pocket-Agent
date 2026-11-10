@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-C server-side OIDC identity and idempotent scoped monitor-sync API under verification (PR #9), plus P1-B Android manual GitHub preview and P0.2-B partial cloud backend.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-C server-side OIDC identity and idempotent scoped monitor-sync API merged via PR #9 (not deployed), plus P1-B Android manual GitHub preview and P0.2-B partial cloud backend.** The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -21,7 +21,7 @@ The separate read-only `GET /v1/me` endpoint requires an RS256-signed identity J
 
 **This is not a completed Android login.** CI verifies generated test RSA signatures and synthetic JWKS only. No live OIDC provider login, Android OAuth flow, token storage, per-user DB authorization, monitor synchronization, remote Cloudflare or actual phone-off autonomy is claimed. Legacy owner bearer must NEVER be placed in the mobile app. See [ADR-0004](docs/ADR/0004-secure-android-cloud-sync.md), [evidence](docs/EVIDENCE.md), and [progress](docs/PROGRESS.md). Do not enable a production identity endpoint before subject mapping, caching/rotation and provider verification are reviewed.
 
-## P1-C developer-only server-side mobile sync (PR #9)
+## P1-C developer-only server-side mobile sync (merged PR #9; not deployed)
 
 Separate OIDC bearer-protected routes (not the old operator token):
 - `POST /v1/sync/monitors`: one bounded object `{"clientDraftId":"<UUID>","repository":"python/cpython","intervalMinutes":30}`. On first insert returns 201 with a PAUSED monitor; exact replay returns 200 with the **same** ID; modified replay returns 409. Per-owner limit 3.
