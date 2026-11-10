@@ -1,7 +1,7 @@
 # ADR-0006: opt-in Android Google identity and manual cloud-sync bridge
 
 Date: 2026-11-10
-Status: P1-E IMPLEMENTATION CANDIDATE, source CI gate and real-provider/device acceptance separate.
+Status: MERGED via PR #11 at `a1b86a3a95895c8516d3be766379ec6b42faee17`. 5/5 final PR-head CI SUCCESS at `e1dc90816ecc85df064fa379bda114c35541e967`; real-provider/device/cloud acceptance separate.
 
 ## Decision
 
