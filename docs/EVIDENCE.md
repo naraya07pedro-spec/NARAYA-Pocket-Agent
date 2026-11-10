@@ -13,7 +13,7 @@
 | Multi-user scheduled execution | NOT_IMPLEMENTED | Mobile monitors created PAUSED, legacy scheduler scoped to OWNER_ID |
 | Remote Cloudflare D1/Cron + phone off | NOT_VERIFIED | No deployed resource or device-off test. See issue #2 |
 
-All above CI links refer to **source SHA `633ccda10beda76d864a1ee9cd1303e284bf8268`**. No cloud resource provisioning, live OIDC token, external writes or free-tier accounting was performed. Review final HEAD and merged main separately.
+The above development-source CI links refer to **source SHA `633ccda10beda76d864a1ee9cd1303e284bf8268`**. In addition, **all 5/5 workflow checks SUCCESS on final PR HEAD `fc39f66343048a8dfdbae887035bef25d9ddca63`**: [source](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750920672), [local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750920480), [live GitHub GET](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750920518), [Android live adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750920679), [Android APK](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42750920423). [PR #9](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/9) merged as `778a8cbb42fca71074d9800607c7f5b358e51242`. Separate CI on the merge/main and later documentation commits has not been claimed. No cloud resource provisioning, live OIDC token, external writes or free-tier accounting was performed. Review final HEAD and merged main separately.
 
 ---
 
