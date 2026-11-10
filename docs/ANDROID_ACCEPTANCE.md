@@ -1,4 +1,12 @@
-# Android acceptance matrix | P1-E source merged, real-device acceptance pending; P1-B history preserved
+# Android acceptance matrix | P1-F source merged, real-device and remote Cron acceptance pending
+
+## P1-F owner-scoped remote controls and server observations (10 November 2026)
+
+**Implemented, source-CI verified:** 13/13 Android JVM security tests and 6/6 local workerd/D1 tests at PR #12 final HEAD `9bfb371520592ee5afa3297873a9a4b08a8d4c52`. These tests exercise signed two-user owner isolation, default-off scheduler, versioned PATCH, official GitHub read-only SHA baseline, owner observations, PAUSED fencing, invalid forged response rejection, typed 409 errors and fixed-path bounds. See [ADR-0007](ADR/0007-android-cloud-control-observation-evidence.md).
+
+**Still required for real-device/cloud acceptance:** operator-verified Google issuer/audience/JWKS and Android OAuth signing configuration; trusted deployed HTTPS Worker and D1 with verified free-tier limits; one mobile account can sync, explicitly request activation, receive positive server ACK and authentic timestamps for observed baseline/change; another user gets 404 for foreign monitor; manual pause prevents new claims; expired token/401 clears state; network failure preserves cached local SHA; then physically power Android OFF, show independently timestamped remote Cron + D1 observations and inspect charges. No step in that sequence was performed on a real phone or remote Cloudflare in this PR. Do not claim measured battery/RAM or powered-off-device success until device test is actually executed.
+
+---
 
 ## P1-E Android Google identity/cloud manual sync: new acceptance gates (10 November 2026)
 
