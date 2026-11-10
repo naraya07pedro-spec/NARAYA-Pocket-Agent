@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-L | Shared observation contract and bounded SHA-chain validation (10 November 2026, PR #18; source/local only)
+## P1-L | Shared observation contract and bounded SHA-chain validation (10 November 2026, PR #18 merged; source/local only)
 
 | Claim | Evidence class | Exact verified proof |
 | --- | --- | --- |
@@ -11,6 +11,8 @@
 | Real Google OAuth token, cloud-side D1/Cron with powered-OFF phone, billed/Free CPU evidence | NOT_VERIFIED | No remote Worker, actual Cloudflare D1 migration, real Google identity, physical Android, signed-in app, real Cron task, usage/account read or fee was involved |
 
 **First source gate:** exact SHA `8e1c90df378a2848b511031317bcc097de395a51` **5/5 workflows SUCCESS**. Later documentation commits require a new final exact-head verification. Source preflight reports `source_safety: PASS`, `remote_readiness: BLOCKED`. The shared JSON is a **nonsecret synthetic contract fixture** and not an event exported from the actual Cloudflare service.
+
+**Final exact PR HEAD after documentation:** source `68763a31860bdd831606037644f478b384996c33`, **5/5 GitHub Actions SUCCESS**: [Node/preflight 42795318464](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42795318464) **62/62, source PASS / remote BLOCKED**, [Cloudflare local workerd/D1 42795318640](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42795318640) **10/10**, [real public GitHub GET/local D1 42795318233](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42795318233), [Android provider 42795318278](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42795318278), [Android debug APK 42795318331](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42795318331): SUCCESS with **20/20 executed JVM tests, 0 skipped/failures/errors**, SHA256 `8e857d042baf90ca5cc39fec1b313fb1ffd9620eed5a3e5074e9173738c74860`. [PR #18](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/18) merged as `a9303f8635c271180f3764c52fb64b7b082ab7c5`. The post-merge `main` commit SHA and later docs-only SHA **have not been independently CI-verified** by these runs. No production/remote Cloudflare or actual Android phone-off execution evidence.
 
 **Important limitation:** when multiple returned events share an `observed_at` millisecond, ordering by event UUID is not causal. Kotlin intentionally skips cross-event SHA linkage in that case, so this milestone **cannot guarantee** that every tied-time history is internally consistent; individual event validity is still checked. This trade-off is documented in [ADR-0013](ADR/0013-observation-history-cross-runtime-contract.md). A 50-event limit can exclude the original baseline, which is therefore not required on every page.
 
