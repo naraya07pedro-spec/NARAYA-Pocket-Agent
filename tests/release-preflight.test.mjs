@@ -268,3 +268,21 @@ test('P1-V preflight blocks removal of explicit Android presenter or Google cano
     assert.ok(failures(audit(snap)).includes('oidc_google_presenter_explicit_and_issuer_canonical'));
   }
 });
+
+
+test('P1-W offline preflight fails if Google issuer can use arbitrary HTTPS JWKS',()=>{
+  for(const edit of [
+    x=>{x.oidcSource=x.oidcSource.replace(
+      "if (issuer === GOOGLE_ISSUER && jwks !== GOOGLE_JWKS) throw new AuthUnavailable();",
+      "if (false) throw new AuthUnavailable();");},
+    x=>{x.oidcSource=x.oidcSource.replace(
+      "const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs';",
+      "const GOOGLE_JWKS = 'https://untrusted.invalid/keys';");},
+    x=>{x.oidcSource=x.oidcSource.replace(
+      'jwks !== GOOGLE_JWKS','false');},
+  ]){
+    const v=clone();edit(v);
+    assert.ok(failures(audit(v)).includes('oidc_google_presenter_explicit_and_issuer_canonical'),
+      'JWKS trust-boundary mutation must fail preflight');
+  }
+});
