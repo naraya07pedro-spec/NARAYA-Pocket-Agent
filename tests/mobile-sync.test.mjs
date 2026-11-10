@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
 import {makeTestDb} from './sqlite-d1.mjs';
 import worker from '../worker/src/index.ts';
 import {runScheduler} from '../worker/src/scheduler.ts';
@@ -515,4 +516,39 @@ test('actual local scheduler emits a baseline and consecutive SHA-linked changes
     assert.ok(observations[0].observed_at>observations[1].observed_at);
     assert.ok(observations[1].observed_at>observations[2].observed_at);
   } finally {globalThis.fetch=previous;env.DB.close();}
+});
+
+
+test('migration 0005 durably backfills preexisting observation insertion order without changing prior data',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON');
+    for(const name of ['0001_initial.sql','0002_mobile_identity_sync.sql',
+      '0003_scheduler_control.sql','0004_global_scheduler_budget.sql']) {
+      db.exec(readFileSync(new URL('../worker/migrations/'+name,import.meta.url),'utf8'));
+    }
+    const id=uuid();
+    db.prepare('INSERT INTO monitors(id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(id,'historical-owner','python','cpython','ACTIVE',30,10,10,10);
+    const oldIds=[uuid(),uuid()];
+    const insert=db.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at) VALUES(?,?,?,?,?,?,?)');
+    insert.run(oldIds[0],id,uuid(),'BASELINE',null,'a'.repeat(40),100);
+    insert.run(oldIds[1],id,uuid(),'CHANGE','a'.repeat(40),'b'.repeat(40),100);
+    const before=db.prepare('SELECT id,event_type,head_sha,observed_at FROM observations ORDER BY rowid').all();
+    db.exec(readFileSync(new URL('../worker/migrations/0005_observation_event_sequence.sql',import.meta.url),'utf8'));
+    let after=db.prepare('SELECT id,event_type,head_sha,observed_at,event_sequence FROM observations ORDER BY event_sequence').all();
+    assert.deepEqual(after.map(x=>x.event_sequence),[1,2]);
+    assert.deepEqual(after.map(({event_sequence,...rest})=>rest),before);
+    // Explicitly copied sequence is stable across a local VACUUM.
+    db.exec('VACUUM');
+    after=db.prepare('SELECT id,event_sequence FROM observations ORDER BY event_sequence').all();
+    assert.deepEqual(after.map(x=>x.event_sequence),[1,2]);
+    db.prepare('INSERT INTO observations(id,monitor_id,lease_token,event_type,previous_sha,head_sha,observed_at,event_sequence) VALUES(?,?,?,?,?,?,?,(SELECT COALESCE(MAX(event_sequence),0)+1 FROM observations))')
+      .run(uuid(),id,uuid(),'CHANGE','b'.repeat(40),'c'.repeat(40),99);
+    const latest=db.prepare('SELECT head_sha,event_sequence,observed_at FROM observations WHERE monitor_id=? ORDER BY event_sequence DESC').all(id);
+    assert.deepEqual(latest.map(x=>x.event_sequence),[3,2,1]);
+    assert.deepEqual(latest.map(x=>x.head_sha),['c','b','a'].map(v=>v.repeat(40)));
+    assert.equal(latest[0].observed_at,99);
+    assert.equal(latest[1].observed_at,100);
+  }finally{db.close();}
 });
