@@ -1,6 +1,6 @@
 import { boundedJson, InputError, json, ownerId, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { runScheduler } from './scheduler.ts';
-import { mobileSync } from './mobile-sync.ts';
+import { mobileSync, IdentityCapacityError } from './mobile-sync.ts';
 import { AuthRejected, AuthUnavailable, verifyOidcBearer } from './oidc.ts';
 import type { Env, Monitor } from './types.ts';
 
@@ -78,7 +78,7 @@ export default {
         await verifyOidcBearer(request, env);
         return json({ authenticated: true, capabilities: { monitorSync: false } });
       }
-      if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations') {
+      if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations' || /^\/v1\/sync\/monitors\/[0-9a-f-]{36}$/i.test(pathname)) {
         return await mobileSync(request,env,pathname);
       }
       if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
@@ -93,6 +93,7 @@ export default {
       if (pathname === '/v1/observations' && request.method === 'GET') return await listObservations(request, env);
       return json({ error: 'not_found' }, 404);
     } catch (error) {
+      if (error instanceof IdentityCapacityError) return json({error:'pilot_identity_limit'},429);
       if (error instanceof AuthRejected) return json({ error: 'unauthorized' }, 401);
       if (error instanceof AuthUnavailable) return json({ error: 'identity_provider_unavailable' }, 503);
       if (error instanceof InputError) return json({ error: error.message }, error.message === 'payload_too_large' ? 413 : 400);

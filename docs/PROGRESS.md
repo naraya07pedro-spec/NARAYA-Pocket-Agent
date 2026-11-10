@@ -1,5 +1,21 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-D server-side bounded multi-user scheduler (PR #10, not deployed)
+
+**Implemented:** feature-gated (`MOBILE_SCHEDULING_ENABLED==='true'`) multi-user GitHub read-only scheduled execution, verified-owner status PATCH with optimistic `expectedVersion`, max 20 identities in pilot, max 9 ACTIVE mobile monitors, global 3 GitHub requests/tick and 1 due monitor/owner/tick. D1 migration `0003_scheduler_control.sql` persists a rotating owner cursor. Feature flag absent => legacy operator-only scheduler; no Android credentials, cloud provisioning, paid API, or external write.
+
+**Tested at source SHA `1d7640417a7bbae9435098cd71fcc45c5418957a`:**
+- [Backend CI 42755265080](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265080): **33/33 tests passing**, pinned TypeScript typecheck SUCCESS. Includes disabled-by-default, versioned PAUSE/ACTIVE, A/B IDOR, fairness across four owners, max-active enrollment, identity limit, stale-worker after pause, regression.
+- [workerd/D1 local CI 42755265299](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265299): **5/5 tests passing**, includes true local D1 persisted round-robin cursor after Worker restart and owner fairness under global cap.
+- [Live read-only GitHub GET CI 42755265084](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265084), [Android adapter CI 42755265417](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265417), [Android debug APK CI 42755265184](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265184): **SUCCESS** (Android runtime tests are JVM/CI; no physical device).
+- Early HEAD `c7312e712f695283a1108f1ac73e7c5965690765` failed due to malformed mobile route parser syntax and did not exercise scheduler behavior; fixed on `1d7640417a7bbae9435098cd71fcc45c5418957a`. Failed runs remain inspectable.
+
+**Evidence boundary:** server-side implementation + simulated provider identities + local Cloudflare D1/workerd; **NOT** verified Google/Firebase login, Android UI sync, remote Cloudflare Cron, powered-off phone, physical RAM/battery, actual account pricing, concurrent remote Cron invocations, or fairness SLA. `MOBILE_SCHEDULING_ENABLED` has not been configured in any deployed environment. The response `schedulerEligible` is a local authority/scheduling gate, not provider execution confirmation; success remains tied to observations. A separate exact-SHA PR-head run and merge/main run are required before claiming verification of those commits.
+
+**Blocked / next evidence gate:** real OIDC provider configuration, secure Android token/opt-in sync, separate owner-approved real Cloudflare free-tier D1/Cron experiment, device-off acceptance. Review [ADR-0005](ADR/0005-bounded-fair-mobile-scheduler.md) and [issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8). No production deployment or cost-bearing side effects occurred.
+
+---
+
 ## 2026-11-10 | P1-C owner isolation and idempotent mobile-sync API (PR #9 merged; not deployed)
 
 **Implemented and merged on PR #9, merge SHA `778a8cbb42fca71074d9800607c7f5b358e51242`:

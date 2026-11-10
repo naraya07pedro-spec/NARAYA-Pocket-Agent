@@ -9,7 +9,7 @@ import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
   // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
@@ -206,6 +206,60 @@ test('Cloudflare local D1: upgrading 0001 -> 0002 preserves prior operator monit
     assert.equal(after.sync_request_digest,null);
     assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
     assert.equal((await(await worker.fetch(new Request(base+'/v1/monitors',{headers:auth}),env)).json()).monitors.length,1);
+  } finally {
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+
+test('Cloudflare workerd/D1: fair mobile dispatcher, persisted owner cursor and global budget', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-fair-'));
+  let platform;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const now=Date.now();
+    const repositories=['python/cpython','nodejs/node','microsoft/vscode','cloudflare/workers-sdk'];
+    for(let i=0;i<4;i++) {
+      const id=crypto.randomUUID(),ownerId=crypto.randomUUID();
+      await DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)`)
+        .bind(ownerId,'https://identity.test','user-'+i,now).run();
+      await DB.prepare(`INSERT INTO monitors(id,owner_id,repo_owner,repo_name,status,interval_minutes,next_due_at,
+        created_at,updated_at,client_draft_id,sync_request_digest)
+        VALUES(?,?,?,?,'ACTIVE',30,?,?,?,?,?)`)
+        .bind(id,ownerId,...repositories[i].split('/'),now,now,now,crypto.randomUUID(),'synthetic').run();
+    }
+    const config={DB,OWNER_ID:owner,MOBILE_SCHEDULING_ENABLED:'true'};
+    let calls=[];
+    const fake=async (url,options)=>{
+      assert.equal(options.method,'GET');
+      assert.equal(new URL(url).hostname,'api.github.com');
+      calls.push(new URL(url).pathname);
+      return new Response(JSON.stringify([{sha:headA}]),{status:200});
+    };
+    const disabled=await runScheduler({...config,MOBILE_SCHEDULING_ENABLED:undefined},now+2000,fake);
+    assert.equal(disabled.claimed,0);
+    const first=await runScheduler(config,now+2000,fake);
+    assert.equal(first.claimed,3);
+    assert.equal(first.observations,3);
+    assert.equal(calls.length,3);
+    const untouched=repositories.find(repo=>!calls.some(path=>path.includes('/'+repo+'/')));
+    assert.ok(untouched);
+    const cursorBefore=(await DB.prepare('SELECT last_owner_id FROM scheduler_control WHERE id=1').first()).last_owner_id;
+    assert.ok(cursorBefore);
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const restarted=platform.env.DB;
+    assert.equal((await restarted.prepare('SELECT last_owner_id FROM scheduler_control WHERE id=1').first()).last_owner_id,cursorBefore);
+    calls=[];
+    const second=await runScheduler({...config,DB:restarted},now+30*60_000+3000,fake);
+    assert.equal(second.claimed,3);
+    assert.ok(calls[0].includes('/'+untouched+'/'));
+    const served=await restarted.prepare(`SELECT COUNT(DISTINCT m.owner_id) AS n FROM observations o
+      JOIN monitors m ON m.id=o.monitor_id`).first();
+    assert.equal(served.n,4);
   } finally {
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});

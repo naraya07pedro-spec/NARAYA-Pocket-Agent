@@ -14,3 +14,10 @@ Official references (must be rechecked at deploy time):
 - https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
 
 **Stop conditions:** a mandatory paid feature, exhausted free allowance, unstable external API, or inability to keep the pilot token secret. Do not put the owner token in a public APK.
+
+
+## P1-D opt-in multi-owner additions (10 November 2026)
+
+When `MOBILE_SCHEDULING_ENABLED==='true'`: at most 20 mapped identity subjects for this pilot, 3 monitors per mapped owner, 9 globally ACTIVE mobile monitors, at most 1 due task per owner and 3 total GitHub GET attempts per tick **across operator and mobile owners**. The D1 cursor persists owner rotation. Without the flag, the original single-owner schedule remains.
+
+These are runtime **application-level constraints**, not Cloudflare/GitHub account allocation proofs or guaranteed cadence. A task may run later than its declared interval under backlog. Live D1/Cron, billing/cost counters, Google login, device-off execution and schedule fairness during overlapping remote invocations remain unverified. Enabling any remote deployment still needs explicit operator authorization and fresh free-tier validation.

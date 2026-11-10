@@ -1,6 +1,8 @@
-import { boundedJson, InputError, json, parseMonitorInput } from './domain.ts';
+import { boundedJson, InputError, json, parseMonitorInput, parseStatusInput } from './domain.ts';
 import { verifyOidcBearer } from './oidc.ts';
 import type { Env } from './types.ts';
+
+export class IdentityCapacityError extends Error {}
 
 interface Identity { id: string }
 interface MobileMonitor {
@@ -17,7 +19,7 @@ interface MobileMonitor {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function syncView(row: MobileMonitor) {
+function syncView(row: MobileMonitor, env?: Env) {
   return {
     id: row.id,
     clientDraftId: row.client_draft_id,
@@ -27,7 +29,8 @@ function syncView(row: MobileMonitor) {
     version: row.version,
     lastSha: row.last_sha,
     lastCheckedAt: row.last_checked_at,
-    scheduled: false, // P1-C deliberately does not activate a multi-user scheduler.
+    scheduled: false, // No real remote Cloudflare execution is verified.
+    schedulerEligible: row.status === 'ACTIVE' && env?.MOBILE_SCHEDULING_ENABLED === 'true',
   };
 }
 
@@ -36,11 +39,13 @@ async function ownerFromVerifiedIdentity(request: Request, env: Env): Promise<st
   const candidate = crypto.randomUUID();
   const now = Date.now();
   await env.DB.prepare(`INSERT INTO user_identities(id,issuer,subject,created_at)
-    VALUES(?,?,?,?) ON CONFLICT(issuer,subject) DO NOTHING`)
+    SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM user_identities) < 20
+    ON CONFLICT(issuer,subject) DO NOTHING`)
     .bind(candidate, issuer, subject, now).run();
   const found = await env.DB.prepare(`SELECT id FROM user_identities WHERE issuer=? AND subject=?`)
     .bind(issuer, subject).first<Identity>();
-  if (!found || !UUID.test(found.id)) throw new Error('identity_mapping_missing');
+  if (!found) throw new IdentityCapacityError();
+  if (!UUID.test(found.id)) throw new Error('identity_mapping_invalid');
   return found.id;
 }
 
@@ -81,7 +86,7 @@ async function createSyncMonitor(request: Request, env: Env, ownerId: string): P
       .first<MobileMonitor & {sync_request_digest: string | null}>();
     if (existing) {
       if (existing.sync_request_digest !== digest) return json({error:'draft_id_payload_conflict'},409);
-      return json({monitor: syncView(existing),created:result.meta.changes === 1},result.meta.changes === 1 ? 201 : 200);
+      return json({monitor: syncView(existing,env),created:result.meta.changes === 1},result.meta.changes === 1 ? 201 : 200);
     }
     // A repo may already exist under a different client draft; or the owner is at quota.
     const sameRepo = await env.DB.prepare(`SELECT id FROM monitors
@@ -98,7 +103,7 @@ async function createSyncMonitor(request: Request, env: Env, ownerId: string): P
         FROM monitors WHERE owner_id=? AND client_draft_id=?`)
         .bind(ownerId,body.clientDraftId)
         .first<MobileMonitor & {sync_request_digest: string | null}>();
-      if (existing && existing.sync_request_digest === digest) return json({monitor:syncView(existing),created:false});
+      if (existing && existing.sync_request_digest === digest) return json({monitor:syncView(existing,env),created:false});
       return json({error:'repository_or_draft_conflict'},409);
     }
     throw error;
@@ -111,7 +116,7 @@ async function listSyncMonitors(env: Env, ownerId: string): Promise<Response> {
     WHERE owner_id=? AND client_draft_id IS NOT NULL
     ORDER BY created_at DESC,id DESC LIMIT 3`)
     .bind(ownerId).all<MobileMonitor>();
-  return json({monitors:result.results.map(syncView)});
+  return json({monitors:result.results.map(row => syncView(row,env))});
 }
 
 async function listSyncObservations(request: Request, env: Env, ownerId: string): Promise<Response> {
@@ -129,10 +134,38 @@ async function listSyncObservations(request: Request, env: Env, ownerId: string)
   return json({observations:result.results});
 }
 
+async function updateSyncStatus(request: Request, env: Env, ownerId: string, id: string): Promise<Response> {
+  if (!UUID.test(id)) return json({error:'not_found'},404);
+  const {status,expectedVersion} = parseStatusInput(await boundedJson(request));
+  if (status === 'ACTIVE' && env.MOBILE_SCHEDULING_ENABLED !== 'true')
+    return json({error:'scheduler_disabled'},409);
+
+  const now = Date.now();
+  const result = await env.DB.prepare(`UPDATE monitors SET status=?,next_due_at=?,
+    lease_token=NULL,lease_until=NULL,updated_at=?,version=version+1,
+    fail_count=CASE WHEN ?='ACTIVE' THEN 0 ELSE fail_count END,
+    last_error_code=CASE WHEN ?='ACTIVE' THEN NULL ELSE last_error_code END
+    WHERE id=? AND owner_id=? AND client_draft_id IS NOT NULL AND version=?
+      AND (?='PAUSED' OR status='ACTIVE' OR (
+         SELECT COUNT(*) FROM monitors WHERE client_draft_id IS NOT NULL AND status='ACTIVE'
+      ) < 9)`)
+    .bind(status,now,now,status,status,id,ownerId,expectedVersion,status).run();
+  if (result.meta.changes !== 1) {
+    const existing=await env.DB.prepare(`SELECT version,status FROM monitors WHERE id=?
+      AND owner_id=? AND client_draft_id IS NOT NULL`).bind(id,ownerId).first<{version:number;status:string}>();
+    if (!existing) return json({error:'not_found'},404);
+    if (existing.version!==expectedVersion) return json({error:'stale_version'},409);
+    return json({error:'active_monitor_limit'},409);
+  }
+  return json({id,status,version:expectedVersion+1,schedulerEligible:status==='ACTIVE'});
+}
+
 export async function mobileSync(request: Request, env: Env, path: string): Promise<Response> {
   const ownerId = await ownerFromVerifiedIdentity(request, env);
   if (path === '/v1/sync/monitors' && request.method === 'GET') return listSyncMonitors(env,ownerId);
   if (path === '/v1/sync/monitors' && request.method === 'POST') return createSyncMonitor(request,env,ownerId);
   if (path === '/v1/sync/observations' && request.method === 'GET') return listSyncObservations(request,env,ownerId);
+  const changed = new RegExp('^/v1/sync/monitors/([0-9a-f-]{36})$','i').exec(path);
+  if (changed && request.method === 'PATCH') return updateSyncStatus(request,env,ownerId,changed[1]);
   return json({error:'not_found'},404);
 }

@@ -1,5 +1,21 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-D: bounded multi-user scheduler (10 November 2026, pre-merge source)
+
+| Gate | Evidence class | Source SHA and exact verification |
+| --- | --- | --- |
+| 20 identities / 9 ACTIVE mobile monitors / 3 GET attempts per tick / 1 monitor per owner | CI_VERIFIED_SYNTHETIC | [Backend 33/33 + TypeScript 42755265080](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265080); source `1d7640417a7bbae9435098cd71fcc45c5418957a` |
+| Owner-scoped OIDC status PATCH, feature flag default disabled, stale version and pause-during-inflight | CI_VERIFIED_SYNTHETIC | Same source and run; signed fixture identities, injected GitHub responses |
+| D1 cursor persistence, restart and fair owner rotation | CI_VERIFIED_LOCAL_WORKERD | [workerd/D1 5/5 42755265299](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265299); same source SHA |
+| Existing GitHub and Android regression | CI_VERIFIED | [Live GitHub 42755265084](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265084), [Android network adapter 42755265417](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265417), [Android build 42755265184](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755265184) SUCCESS on same source SHA |
+| Real remote Cloudflare Cron / phone switched off | NOT_VERIFIED | No remote deployment, no device-off task IDs / timestamps, no billing validation |
+| Android real OAuth + synced cloud monitor | NOT_IMPLEMENTED | Existing APK has manual public GitHub preview only; no mobile bearer token |
+| Fairness under concurrent remote Worker ticks | NOT_VERIFIED | Lease fencing is tested; exact cursor order under overlapping remote Cron still an open risk |
+
+**Initial failure preserved:** [first PR-head source run 42755148731](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42755148731) failed due to malformed route TypeScript syntax; corrected with complete route replacement. Do not equate syntactic failure with a passed scheduler test. Source proof above is after the fix. For full technical limitations, see [ADR-0005](ADR/0005-bounded-fair-mobile-scheduler.md).
+
+---
+
 ## 2026-11-10 | P1-C scoped user monitor sync (source CI)
 
 | Gate | Class | Concrete proof and limits |

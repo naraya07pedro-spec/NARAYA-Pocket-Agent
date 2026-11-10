@@ -17,6 +17,7 @@ export function makeTestDb() {
   connection.exec('PRAGMA foreign_keys = ON;');
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0001_initial.sql', import.meta.url), 'utf8'));
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0002_mobile_identity_sync.sql', import.meta.url), 'utf8'));
+  connection.exec(fs.readFileSync(new URL('../worker/migrations/0003_scheduler_control.sql', import.meta.url), 'utf8'));
   return {
     connection,
     prepare(sql) { return statement(sql, [], connection); },
