@@ -203,15 +203,16 @@ export async function mobileSync(request: Request, env: Env, path: string): Prom
   const listing = path === '/v1/sync/monitors' && request.method === 'GET';
   const creating = path === '/v1/sync/monitors' && request.method === 'POST';
   const reading = path === '/v1/sync/observations' && request.method === 'GET';
-  const changed = new RegExp('^/v1/sync/monitors/([0-9a-f-]{36})
-,'i').exec(path);
-  const patching = !!changed && request.method === 'PATCH';
+  const monitorPrefix = '/v1/sync/monitors/';
+  const changed = path.startsWith(monitorPrefix) &&
+    path.length === monitorPrefix.length + 36 ? path.slice(monitorPrefix.length) : null;
+  const patching = changed !== null && request.method === 'PATCH';
   if (!listing && !creating && !reading && !patching)
     return json({error:'not_found'},404);
 
   const id = reading ? new URL(request.url).searchParams.get('monitorId') : null;
   if (reading && (!id || !UUID.test(id))) return json({error:'invalid_monitor_id'},400);
-  if (patching && !UUID.test(changed![1])) return json({error:'not_found'},404);
+  if (patching && !UUID.test(changed!)) return json({error:'not_found'},404);
   const createInput = creating ? parseSyncInput(await boundedJson(request)) : null;
   const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null;
 
@@ -219,5 +220,5 @@ export async function mobileSync(request: Request, env: Env, path: string): Prom
   if (listing) return listSyncMonitors(env,ownerId);
   if (creating) return createSyncMonitor(createInput!,env,ownerId);
   if (reading) return listSyncObservations(env,ownerId,id!);
-  return updateSyncStatus(env,ownerId,changed![1],statusInput!);
+  return updateSyncStatus(env,ownerId,changed!,statusInput!);
 }
