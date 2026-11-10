@@ -89,7 +89,7 @@ test('not seeing a paid subscription does not assert future zero usage charges',
       subscriptions([{state:'Trial',price:0},{state:'Provisioned'}]):
       history([],0)
   });
-  assert.equal(report.paid_subscription_signal,'NO_POSITIVE_PRICE_OR_PAID_STATE_SEEN_NOT_FREE_PROOF');
+  assert.equal(report.paid_subscription_signal,'SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN');
   limits(report);
 });
 
@@ -215,7 +215,145 @@ test('positive amount on an incomplete history is historical evidence, not free-
     return history([{amount:100}],page===1?2:3,page);
   }});
   assert.equal(report.billing_history,'INVALID_RESPONSE');
-  assert.equal(report.historical_positive_amount_seen,'UNKNOWN'); // page metadata inconsistency
+  assert.equal(report.historical_positive_amount_seen,'YES_HISTORICAL_ONLY'); // validated page one survives later error
+  assert.equal(report.billing_records_scanned,1);
   assert.equal(report.billing_metadata_complete,false);
+  limits(report);
+});
+
+
+test('P1-T: non-free rate_plan.id triggers caution even when price and state Paid are absent',async()=>{
+  for(const id of ['pro','pro_plus','business','enterprise','partners_pro','paid-custom-plan']){
+    const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+      url.endsWith('/subscriptions')?
+        subscriptions([{id:'private-'+id,state:'Provisioned',rate_plan:{id}}]):
+        history([],0)
+    });
+    assert.equal(report.paid_subscription_signal,'POTENTIAL_PAID_SUBSCRIPTION_PRESENT',id);
+    assert.equal(report.subscription_inventory,'COMPLETE_SINGLE_PAGE');
+    assert.equal(report.billing_metadata_complete,true);
+    assert.equal(JSON.stringify(report).includes('private-'+id),false);
+    limits(report);
+  }
+});
+
+test('P1-T: AwaitingPayment or externally managed/contract rate plans surface potential liability',async()=>{
+  for(const item of [
+    {state:'AwaitingPayment',price:undefined},
+    {state:'Provisioned',price:0,rate_plan:{externally_managed:true}},
+    {state:'Provisioned',rate_plan:{id:'free',is_contract:true}},
+  ]){
+    const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+      url.endsWith('/subscriptions')?subscriptions([item]):history([],0)
+    });
+    assert.equal(report.paid_subscription_signal,'POTENTIAL_PAID_SUBSCRIPTION_PRESENT');
+    limits(report);
+  }
+});
+
+test('P1-T: documented free rate plan with zero price is not a Free-tier account certification',async()=>{
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+    url.endsWith('/subscriptions')?
+      subscriptions([{state:'Provisioned',price:0,rate_plan:{id:'partners_free'}}]):
+      history([],0)
+  });
+  assert.equal(report.paid_subscription_signal,'NO_POSITIVE_PRICE_OR_PAID_STATE_SEEN_NOT_FREE_PROOF');
+  assert.equal(report.current_free_tier_proven,false);
+  assert.equal(report.future_zero_extra_cost_proven,false);
+  limits(report);
+});
+
+test('P1-T: ambiguous subscription state without price/plan is UNKNOWN not cleared',async()=>{
+  for(const state of ['Provisioned','Failed','Cancelled','UnknownProviderStatus']){
+    const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+      url.endsWith('/subscriptions')?subscriptions([{state}]):history([],0)
+    });
+    assert.equal(report.paid_subscription_signal,'SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN',state);
+    limits(report);
+  }
+});
+
+test('P1-T: invalid subscription price/plan shape fails closed instead of signaling no paid plan',async()=>{
+  for(const row of [
+    {state:'Trial',price:'19.99'},
+    {state:'Trial',price:NaN}, // serialized null by JSON; still invalid
+    {state:'Paid',rate_plan:{id:42}},
+    {state:'Provisioned',rate_plan:'pro'},
+    {state:101,price:0},
+  ]){
+    const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+      url.endsWith('/subscriptions')?subscriptions([row]):history([],0)
+    });
+    assert.equal(report.subscription_inventory,'INVALID_RESPONSE');
+    assert.equal(report.paid_subscription_signal,'UNKNOWN');
+    assert.equal(report.billing_metadata_complete,false);
+    limits(report);
+  }
+});
+
+test('P1-T: positive billing entry remains visible after page 2 returns a 403',async()=>{
+  const privateInvoice='private-first-page-invoice';
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>{
+    if(url.endsWith('/subscriptions'))return subscriptions([]);
+    const page=Number(new URL(url).searchParams.get('page'));
+    if(page===1)return history([{invoice_id:privateInvoice,amount:15}],2,1);
+    return new Response(JSON.stringify({success:false,errors:[{message:'SENSITIVE'}]}),{status:403});
+  }});
+  assert.equal(report.billing_history,'UNAVAILABLE');
+  assert.equal(report.historical_positive_amount_seen,'YES_HISTORICAL_ONLY');
+  assert.equal(report.billing_records_scanned,1);
+  assert.equal(report.billing_metadata_complete,false);
+  assert.ok(!JSON.stringify(report).includes(privateInvoice));
+  assert.ok(!JSON.stringify(report).includes('SENSITIVE'));
+  limits(report);
+});
+
+test('P1-T: later contradictory total_count cannot erase already observed positive amount',async()=>{
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>{
+    if(url.endsWith('/subscriptions'))return subscriptions([]);
+    const page=Number(new URL(url).searchParams.get('page'));
+    return page===1?history([{amount_to_pay:25}],2,1):
+      history([{amount:0}],3,2);
+  }});
+  assert.equal(report.billing_history,'INVALID_RESPONSE');
+  assert.equal(report.historical_positive_amount_seen,'YES_HISTORICAL_ONLY');
+  assert.equal(report.billing_records_scanned,1);
+  limits(report);
+});
+
+test('P1-T: malformed amount type on page 2 cannot erase validated page 1 positive',async()=>{
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>{
+    if(url.endsWith('/subscriptions'))return subscriptions([]);
+    const page=Number(new URL(url).searchParams.get('page'));
+    return page===1?history([{amount:1.5}],2,1):
+      history([{amount:'100.00',invoice_id:'private'}],2,2);
+  }});
+  assert.equal(report.billing_history,'INVALID_RESPONSE');
+  assert.equal(report.historical_positive_amount_seen,'YES_HISTORICAL_ONLY');
+  assert.equal(report.billing_records_scanned,1);
+  assert.ok(!JSON.stringify(report).includes('100.00'));
+  limits(report);
+});
+
+test('P1-T: malformed first history amount reports UNKNOWN with zero inspected records',async()=>{
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>
+    url.endsWith('/subscriptions')?subscriptions([]):
+      history([{amount:'unknown-string'}],1,1)
+  });
+  assert.equal(report.billing_history,'INVALID_RESPONSE');
+  assert.equal(report.historical_positive_amount_seen,'UNKNOWN');
+  assert.equal(report.billing_records_scanned,0);
+  limits(report);
+});
+
+test('P1-T: partial history retains earlier positive evidence even if page 2 is empty',async()=>{
+  const report=await inspectBillingReadOnly({accountId,token,fetchImpl:async url=>{
+    if(url.endsWith('/subscriptions'))return subscriptions([]);
+    const page=Number(new URL(url).searchParams.get('page'));
+    return page===1?history([{amount:1}],2,1):history([],2,2);
+  }});
+  assert.equal(report.billing_history,'PARTIAL_PAGES');
+  assert.equal(report.historical_positive_amount_seen,'YES_HISTORICAL_ONLY');
+  assert.equal(report.billing_records_scanned,1);
   limits(report);
 });
