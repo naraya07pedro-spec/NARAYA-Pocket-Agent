@@ -13,6 +13,9 @@ export interface Env {
   DB: D1DatabaseLike;
   OWNER_API_TOKEN?: string;
   OWNER_ID?: string;
+  OIDC_ISSUER?: string;
+  OIDC_AUDIENCE?: string;
+  OIDC_JWKS_URL?: string;
 }
 export interface Monitor {
   id: string;
