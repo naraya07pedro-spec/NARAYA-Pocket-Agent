@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-J | Dual activation permission and D1 budget readiness (10 November 2026, PR #16 source)
+## P1-J | Dual activation permission and D1 budget readiness (10 November 2026, PR #16 merged; not remotely deployed)
 
 | Claim | Evidence class | Exact proof / limitations |
 | --- | --- | --- |
@@ -12,6 +12,8 @@
 | Live Google-signed Android identity, deployed trusted Worker, remote D1 and Cron, Free CPU/billing, true phone-off observations | NOT_VERIFIED | No owner-approved Cloudflare deploy, remote migration, live Google ID token, hardware test or account metrics. A configuration-eligible ACTIVE response is never proof of execution |
 
 **First full source gate:** exact SHA `01da4689a6f0a2f01025f93fb5c6d2fa51c19ddc`, **5/5 CI SUCCESS**. Follow-up documentation commits need separate final-head CI before merge. The operator global Cron kill-switch remains default OFF; the mobile gate remains separately OFF. All current evidence is source/CI/local D1 and the project is **remote BLOCKED**.
+
+**Final verified exact PR HEAD:** `7aa9726f2070da16aa6bef578d42d2648426e2a5`: all **5/5** CI workflows SUCCESS. [Backend/preflight 42787809949](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787809949) **58/58**, source safety PASS and remote BLOCKED; [Cloudflare workerd/D1 42787810010](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787810010) **10/10**; [real public GitHub read on local D1 42787810357](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787810357) SUCCESS; [Android adapter 42787810321](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787810321) SUCCESS; [Android debug APK 42787809889](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42787809889) SUCCESS, **13 tests run / 0 skipped/fail/errors**, SHA-256 `dfe621bc75dcdba8832ea607847fe216e7c02a8df0a9f8a735ec755de8ad6e17`. [PR #16](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/16) merged as `4832bce90714ad366434b9c4657bc2d1258b9848`. No separate CI proof is claimed for the merge commit or subsequent documentation-only `main` SHAs. No Cloudflare remote resource and no real Google ID token was used.
 
 **Threat model nuance:** "dual permission plus D1 control row present" is necessary for backend activation but not sufficient to prove that the actual deployed Worker has a Cron trigger, public route, genuine OAuth or healthy Cloudflare Free CPU budget. The `/v1/me` capability field `monitorSync:true` describes the existing API, not a live deployment. See [ADR-0011](ADR/0011-dual-scheduler-authorization.md), [PROGRESS](PROGRESS.md), [REMOTE_PILOT_READINESS](REMOTE_PILOT_READINESS.md).
 
