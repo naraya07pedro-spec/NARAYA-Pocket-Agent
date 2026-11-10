@@ -78,6 +78,7 @@ class CloudSyncClientTest {
             SyncHttpResponse(201, "not-json"),
             SyncHttpResponse(201, " ".repeat(16385)),
             SyncHttpResponse(201, uploaded(true, monitor(status="INVALID"))),
+            SyncHttpResponse(201, uploaded(true, monitor(status="ACTIVE"))),
         )
         for (answer in bad) {
             val result = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ -> answer }).upload(token, draft)
