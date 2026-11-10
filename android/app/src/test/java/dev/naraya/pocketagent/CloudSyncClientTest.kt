@@ -21,6 +21,7 @@ class CloudSyncClientTest {
         JSONObject().put("id", serverId).put("clientDraftId", clientId)
             .put("repository", repo).put("intervalMinutes", 30).put("status", status)
             .put("version", 1).put("lastSha", JSONObject.NULL).put("lastCheckedAt", JSONObject.NULL)
+            .put("schedulerEligible", status == "ACTIVE").put("scheduled", false)
     private fun uploaded(created: Boolean = true, row: JSONObject = monitor()) =
         JSONObject().put("monitor", row).put("created", created).toString()
 
@@ -149,7 +150,7 @@ class CloudSyncClientTest {
 
     @Test fun pauseAndActivateMustUseVersionAndValidateServerAck() {
         var calls = 0
-        val current = CloudMonitor(serverId, id, "python/cpython", 30, "ACTIVE", 7, null, null)
+        val current = CloudMonitor(serverId, id, "python/cpython", 30, "ACTIVE", 7, null, null, true, false)
         val client = CloudSyncClient(origin, SyncTransport { dest, path, method, bearer, json ->
             assertEquals(origin, dest)
             assertEquals("/v1/sync/monitors/$serverId", path)
@@ -172,7 +173,7 @@ class CloudSyncClientTest {
     }
 
     @Test fun activeAckConflictsAndForgedOrStaleRepliesNeverSetCloudStatus() {
-        val current = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
+        val current = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null, false, false)
         val bodies = listOf(
             SyncHttpResponse(200, JSONObject().put("id", UUID.randomUUID().toString())
                 .put("status", "ACTIVE").put("version", 2).put("schedulerEligible", true).toString()),
@@ -266,7 +267,7 @@ class CloudSyncClientTest {
     }
 
     @Test fun conflict409BodyIsStrictlyMappedToKnownSafeCodes() {
-        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
+        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null, false, false)
         for ((raw, code) in listOf(
             "scheduler_disabled" to SyncFailure.SCHEDULER_DISABLED,
             "stale_version" to SyncFailure.STALE_VERSION,
