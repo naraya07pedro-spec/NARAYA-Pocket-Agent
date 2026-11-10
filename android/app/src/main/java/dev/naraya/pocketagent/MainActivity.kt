@@ -191,7 +191,7 @@ private fun MonitorDraftScreen(
                                                 when (result) {
                                                     is SyncResult.Listed -> {
                                                         cloudRows = result.monitors
-                                                        cloudNotice = "Server returned \${result.monitors.size} monitor(s); cloud state refreshed."
+                                                        cloudNotice = "Server returned ${result.monitors.size} monitor(s); cloud state refreshed."
                                                     }
                                                     is SyncResult.Failed -> {
                                                         if (result.code == SyncFailure.UNAUTHORIZED) {
@@ -199,7 +199,7 @@ private fun MonitorDraftScreen(
                                                             signedIn = false
                                                             cloudRows = emptyList()
                                                         }
-                                                        cloudNotice = "Cloud refresh failed: \${result.code}. Local drafts unchanged."
+                                                        cloudNotice = "Cloud refresh failed: ${result.code}. Local drafts unchanged."
                                                     }
                                                     else -> cloudNotice = "Unexpected server response; local drafts unchanged."
                                                 }
@@ -241,6 +241,44 @@ private fun MonitorDraftScreen(
                                 DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                                     .format(Date(draft.lastCheckedAt)), style = MaterialTheme.typography.bodySmall)
                         } else Text("No verified local snapshot yet", style = MaterialTheme.typography.bodySmall)
+                        val remote = cloudRows.firstOrNull { it.clientDraftId == draft.id }
+                        if (remote != null) {
+                            Text("Server state: ${remote.status} · version ${remote.version} · ID ${remote.id.take(8)}",
+                                style = MaterialTheme.typography.bodySmall)
+                        } else if (signedIn) {
+                            Text("No verified server mapping loaded.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (signedIn && cloudConfigured) {
+                            OutlinedButton(
+                                enabled = !cloudBusy && checkingId == null,
+                                onClick = {
+                                    cloudBusy = true
+                                    cloudNotice = "Uploading exactly one public repository draft..."
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { cloud.upload(session.read(), draft) }
+                                        when (result) {
+                                            is SyncResult.Uploaded -> {
+                                                cloudRows = cloudRows.filterNot { it.clientDraftId == result.monitor.clientDraftId } +
+                                                    result.monitor
+                                                cloudNotice = if (result.created)
+                                                    "Server confirmed PAUSED cloud monitor for ${draft.repository}; not remotely executed."
+                                                else "Server confirmed existing mapping for ${draft.repository}; no new duplicate."
+                                            }
+                                            is SyncResult.Failed -> {
+                                                if (result.code == SyncFailure.UNAUTHORIZED) {
+                                                    session.clear()
+                                                    signedIn = false
+                                                    cloudRows = emptyList()
+                                                }
+                                                cloudNotice = "Cloud upload failed: ${result.code}; local draft and verified SHA preserved."
+                                            }
+                                            else -> cloudNotice = "Unexpected cloud response; local draft unchanged."
+                                        }
+                                        cloudBusy = false
+                                    }
+                                },
+                            ) { Text(if (cloudBusy) "Syncing..." else "Sync this draft to cloud") }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
                                 enabled = checkingId == null,
@@ -285,10 +323,9 @@ private fun MonitorDraftScreen(
             item {
                 HorizontalDivider()
                 Text(
-                    "One manual HTTPS read goes directly to api.github.com. No GitHub token, " +
-                        "owner Worker credential or personal records are uploaded. GitHub sees the " +
-                        "requester's network address and requested public repository. " +
-                        "No Android background execution or powered-off-phone monitoring is active.",
+                    "Manual GitHub preview uses api.github.com without tokens. Optional explicit cloud " +
+                        "sync sends the selected public repo and ephemeral Google ID token to the configured " +
+                        "Worker. No operator API token, Android background process, or verified phone-off task.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
