@@ -21,6 +21,7 @@ class CloudSyncClientTest {
         JSONObject().put("id", serverId).put("clientDraftId", clientId)
             .put("repository", repo).put("intervalMinutes", 30).put("status", status)
             .put("version", 1).put("lastSha", JSONObject.NULL).put("lastCheckedAt", JSONObject.NULL)
+            .put("schedulerEligible", status == "ACTIVE").put("scheduled", false)
     private fun uploaded(created: Boolean = true, row: JSONObject = monitor()) =
         JSONObject().put("monitor", row).put("created", created).toString()
 
@@ -149,7 +150,7 @@ class CloudSyncClientTest {
 
     @Test fun pauseAndActivateMustUseVersionAndValidateServerAck() {
         var calls = 0
-        val current = CloudMonitor(serverId, id, "python/cpython", 30, "ACTIVE", 7, null, null)
+        val current = CloudMonitor(serverId, id, "python/cpython", 30, "ACTIVE", 7, null, null, true, false)
         val client = CloudSyncClient(origin, SyncTransport { dest, path, method, bearer, json ->
             assertEquals(origin, dest)
             assertEquals("/v1/sync/monitors/$serverId", path)
@@ -172,7 +173,7 @@ class CloudSyncClientTest {
     }
 
     @Test fun activeAckConflictsAndForgedOrStaleRepliesNeverSetCloudStatus() {
-        val current = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
+        val current = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null, false, false)
         val bodies = listOf(
             SyncHttpResponse(200, JSONObject().put("id", UUID.randomUUID().toString())
                 .put("status", "ACTIVE").put("version", 2).put("schedulerEligible", true).toString()),
@@ -266,7 +267,7 @@ class CloudSyncClientTest {
     }
 
     @Test fun conflict409BodyIsStrictlyMappedToKnownSafeCodes() {
-        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null)
+        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null, false, false)
         for ((raw, code) in listOf(
             "scheduler_disabled" to SyncFailure.SCHEDULER_DISABLED,
             "stale_version" to SyncFailure.STALE_VERSION,
@@ -286,4 +287,111 @@ class CloudSyncClientTest {
         })
         assertEquals(SyncResult.Failed(SyncFailure.CONFLICT),invalid.changeStatus(token, paused, "ACTIVE"))
     }
+
+    @Test fun schedulerEligibilityAndExecutionFlagsAreRequiredAndTypeStrict() {
+        val invalid = listOf(
+            monitor().apply { remove("schedulerEligible") },
+            monitor().apply { remove("scheduled") },
+            monitor().put("schedulerEligible", "false"),
+            monitor().put("scheduled", "false"),
+            monitor().put("schedulerEligible", JSONObject.NULL),
+            monitor().put("scheduled", JSONObject.NULL),
+            monitor(status="PAUSED").put("schedulerEligible", true),
+            monitor(status="PAUSED").put("scheduled", true),
+            monitor(status="ACTIVE").put("schedulerEligible", false).put("scheduled", true),
+        )
+        for (row in invalid) {
+            val answer = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+                SyncHttpResponse(200, JSONObject().put("monitors", JSONArray().put(row)).toString())
+            }).list(token)
+            assertEquals("must reject unproven scheduler flags: $row",
+                SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE), answer)
+        }
+    }
+
+    @Test fun persistedActiveDoesNotImplyCronEligibilityOrProvenRemoteExecution() {
+        val off = monitor(status="ACTIVE").put("schedulerEligible", false)
+        val eligible = monitor(status="ACTIVE").put("schedulerEligible", true)
+        val claimed = monitor(status="ACTIVE").put("schedulerEligible", true).put("scheduled", true)
+        fun read(row: JSONObject): CloudMonitor {
+            val answer = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+                SyncHttpResponse(200,JSONObject().put("monitors",JSONArray().put(row)).toString())
+            }).list(token) as SyncResult.Listed
+            return answer.monitors.single()
+        }
+        val stopped = read(off)
+        assertEquals("ACTIVE", stopped.status)
+        assertFalse(stopped.schedulerEligible)
+        assertFalse(stopped.scheduled)
+        assertTrue(stopped.executionSummary().contains("eligibility is OFF"))
+        assertTrue(stopped.executionSummary().contains("last server snapshot"))
+        val configured = read(eligible)
+        assertTrue(configured.schedulerEligible)
+        assertFalse(configured.scheduled)
+        assertTrue(configured.executionSummary().contains("NOT verified"))
+        val serverClaim = read(claimed)
+        assertTrue(serverClaim.scheduled)
+        assertTrue(serverClaim.executionSummary().contains("NOT independently verified"))
+        val paused = read(monitor())
+        assertEquals("PAUSED", paused.status)
+        assertFalse(paused.schedulerEligible)
+        assertTrue(paused.executionSummary().contains("No execution is authorized"))
+    }
+
+    @Test fun clientAcceptsServerValid15MinuteIntervalsWithoutBroadeningLocalDraftCreation() {
+        val fortyFive = monitor().put("intervalMinutes", 45)
+        val listed = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+            SyncHttpResponse(200,JSONObject().put("monitors",JSONArray().put(fortyFive)).toString())
+        }).list(token) as SyncResult.Listed
+        assertEquals(45,listed.monitors.single().intervalMinutes)
+        for (bad in listOf(1,15,31,1455,-15)) {
+            val row = monitor().put("intervalMinutes",bad)
+            val reply = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+                SyncHttpResponse(200,JSONObject().put("monitors",JSONArray().put(row)).toString())
+            }).list(token)
+            assertEquals(SyncResult.Failed(SyncFailure.INVALID_SERVER_RESPONSE),reply)
+        }
+    }
+
+    @Test fun schedulerD1Unavailable503IsActionableAndNeverEchoesUpstreamSecrets() {
+        val paused = CloudMonitor(serverId, id, "python/cpython", 30, "PAUSED", 1, null, null, false, false)
+        val response = SyncHttpResponse(503,JSONObject()
+            .put("error","scheduler_storage_unavailable")
+            .put("debug","private-bearer-$token").toString())
+        val typed = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ -> response })
+            .changeStatus(token,paused,"ACTIVE")
+        assertEquals(SyncResult.Failed(SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE),typed)
+        assertFalse(typed.toString().contains(token))
+        for (body in listOf("not-json", "{\"error\":\"other\"}",
+            "{\"error\":\"scheduler_storage_unavailable\",\"debug\":\"$token\"}".repeat(1000))) {
+            val actual = CloudSyncClient(origin, SyncTransport { _, _, _, _, _ ->
+                SyncHttpResponse(503,body)
+            }).changeStatus(token,paused,"ACTIVE")
+            // An intentionally oversized fake transport body is not a trusted error.
+            // The real transport refuses reading error bodies > 2 KiB.
+            if (body.length < 2048)
+                assertEquals(SyncResult.Failed(SyncFailure.UNAVAILABLE),actual)
+            else assertFalse(actual.toString().contains(token))
+        }
+    }
+
+    @Test fun versionedStatusMappingCannotLeaveStaleEligibleFlagOrInventScheduledCron() {
+        val stored=CloudMonitor(serverId,id,"python/cpython",30,"ACTIVE",7,null,null,true,false)
+        val paused=SyncResult.StatusChanged(serverId,"PAUSED",8,false)
+        val result=stored.withConfirmedStatus(paused)!!
+        assertEquals("PAUSED",result.status)
+        assertFalse(result.schedulerEligible)
+        assertFalse(result.scheduled)
+        assertEquals(8,result.version)
+        assertEquals(7,stored.version)
+        assertTrue(stored.schedulerEligible)
+        assertNull(stored.withConfirmedStatus(paused.copy(version=9)))
+        assertNull(stored.withConfirmedStatus(paused.copy(monitorId=UUID.randomUUID().toString())))
+        assertNull(stored.withConfirmedStatus(paused.copy(schedulerEligible=true)))
+        val resumed=result.withConfirmedStatus(SyncResult.StatusChanged(serverId,"ACTIVE",9,true))!!
+        assertTrue(resumed.schedulerEligible)
+        assertFalse(resumed.scheduled)
+        assertTrue(resumed.executionSummary().contains("NOT verified"))
+    }
+
 }

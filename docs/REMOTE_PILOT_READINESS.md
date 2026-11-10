@@ -23,6 +23,12 @@ npm run typecheck
 
 `npm run preflight:require-remote` returns exit code **2** (BLOCKED) in the current source. It does **not** deploy anything. Machine-readable status is available with `--json`, so no green source test can be presented as a completed remote pilot.
 
+## P1-K Android client acceptance prerequisite: no false ACTIVE interpretation
+
+In any owner-approved remote pilot, the APK's cloud monitor list **must show** three independent concepts: stored server `ACTIVE/PAUSED` state, eligibility from the **last verified GET/PATCH server response**, and lack of independent evidence of actual remote Cron execution. Test a previously ACTIVE monitor, flip the global Cron switch OFF and refresh the mobile list: it must show **stored ACTIVE but scheduler eligibility OFF**, not “monitoring is currently running.” Verify that PAUSE clears eligibility, a rejected ACTIVE leaves old state unchanged and a `503 scheduler_storage_unavailable` explains the missing D1 budget migration without logging an ID token.
+
+The P1-K Kotlin client requires explicit real JSON Booleans `schedulerEligible` and `scheduled` for all monitor rows; older backend deployments missing those fields are **not** accepted silently. Update server and APK under the same controlled rollout, with operator-approved staged tests. An APK build alone is not a real phone-off acceptance. [ADR-0012](ADR/0012-android-cloud-truth-and-fail-closed-recovery.md).
+
 ## P1-J activation prerequisite: no half-armed cloud monitors
 
 As a source-level safeguard, Android-signed `PATCH ACTIVE` must not succeed merely because the mobile permission is ON. The server requires **both** independently configured `SCHEDULER_ENABLED='true'` and `MOBILE_SCHEDULING_ENABLED='true'`, a valid `OWNER_ID`, and the **actual D1 `scheduler_control` row with migration 0004 budget fields**. Missing flags produce HTTP 409 `scheduler_disabled`; missing/invalid D1 control produces HTTP 503 `scheduler_storage_unavailable`. Operators must apply all migrations and confirm the control state **before** opening the final activation gate. Signed-owner PAUSE is always permitted with Cron OFF.

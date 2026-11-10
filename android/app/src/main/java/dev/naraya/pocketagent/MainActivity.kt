@@ -236,8 +236,11 @@ private fun MonitorDraftScreen(
                                 cloudRows.forEach { remote ->
                                     HorizontalDivider()
                                     Text(remote.repository, fontWeight = FontWeight.Medium)
-                                    Text("Server status: " + remote.status + " · version " + remote.version +
+                                    Text("Stored server status: " + remote.status + " · version " + remote.version +
                                         " · ID " + remote.id.take(8), style = MaterialTheme.typography.bodySmall)
+                                    Text(remote.executionSummary(), style = MaterialTheme.typography.bodySmall)
+                                    Text("Eligibility is from the last successful server response, not a live Cron signal.",
+                                        style = MaterialTheme.typography.bodySmall)
                                     if (remote.lastSha != null) {
                                         Text("Server-reported head: " + remote.lastSha.take(12),
                                             style = MaterialTheme.typography.bodySmall)
@@ -258,10 +261,9 @@ private fun MonitorDraftScreen(
                                                 when (outcome) {
                                                     is SyncResult.StatusChanged -> {
                                                         cloudRows = cloudRows.map { previous ->
-                                                            if (previous.id == outcome.monitorId) previous.copy(
-                                                                status = outcome.status,
-                                                                version = outcome.version,
-                                                            ) else previous
+                                                            if (previous.id == outcome.monitorId)
+                                                                previous.withConfirmedStatus(outcome) ?: previous
+                                                            else previous
                                                         }
                                                         cloudNotice = if (outcome.status == "ACTIVE")
                                                             "Server accepted activation eligibility. Cron and phone-off execution NOT verified."
@@ -275,7 +277,11 @@ private fun MonitorDraftScreen(
                                                             observedMonitorId = null
                                                             remoteObservations = emptyList()
                                                         }
-                                                        cloudNotice = "Status request failed: " + outcome.code +
+                                                        cloudNotice = if (outcome.code == SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE)
+                                                            "Activation blocked: server D1 scheduler budget is unavailable. " +
+                                                                "No task was activated; an operator must check migrations 0001–0004. " +
+                                                                "Refresh server state after it is repaired."
+                                                        else "Status request failed: " + outcome.code +
                                                             ". No success assumed. Refresh server state before retrying."
                                                     }
                                                     else -> cloudNotice = "Unexpected status response. No change confirmed."
@@ -354,8 +360,9 @@ private fun MonitorDraftScreen(
                         } else Text("No verified local snapshot yet", style = MaterialTheme.typography.bodySmall)
                         val remote = cloudRows.firstOrNull { it.clientDraftId == draft.id }
                         if (remote != null) {
-                            Text("Server state: ${remote.status} · version ${remote.version} · ID ${remote.id.take(8)}",
+                            Text("Stored server state: ${remote.status} · version ${remote.version} · ID ${remote.id.take(8)}",
                                 style = MaterialTheme.typography.bodySmall)
+                            Text(remote.executionSummary(), style = MaterialTheme.typography.bodySmall)
                         } else if (signedIn) {
                             Text("No verified server mapping loaded.", style = MaterialTheme.typography.bodySmall)
                         }

@@ -40,6 +40,8 @@ export function readSourceSnapshot(base=root){
     mobileSync:text(base,'worker/src/mobile-sync.ts'),
     workerTypes:text(base,'worker/src/types.ts'),
     androidGradle:text(base,'android/app/build.gradle.kts'),
+    androidCloudClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/CloudSyncClient.kt'),
+    androidMainActivity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt'),
     workflows,
   };
 }
@@ -111,6 +113,18 @@ export function auditSource(s){
       s.pilot.d1_databases[0].database_id==='REPLACE_WITH_OWNER_APPROVED_D1_UUID' &&
       s.pilot.name.includes('REPLACE_ME')),
     check('no_automatic_cloudflare_mutation_workflow',noAutomaticDeployWorkflow(s)),
+    check('android_cloud_execution_is_not_inferred_from_active',
+      /obj.get\("schedulerEligible"\)/.test(s.androidCloudClient) &&
+      /obj.get\("scheduled"\)/.test(s.androidCloudClient) &&
+      /status == "PAUSED" && \(eligibility \|\| scheduling\)/.test(s.androidCloudClient) &&
+      /fun CloudMonitor.executionSummary\(\)/.test(s.androidCloudClient) &&
+      /fun CloudMonitor.withConfirmedStatus\(/.test(s.androidCloudClient) &&
+      /"scheduler_storage_unavailable"/.test(s.androidCloudClient) &&
+      // Both the cloud-monitor list and the local-draft mapping must convey
+      // the last-known execution eligibility, not just one of them.
+      s.androidMainActivity.split('remote.executionSummary()').length === 3 &&
+      s.androidMainActivity.includes('previous.withConfirmedStatus(outcome)') &&
+      s.androidMainActivity.includes('SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -125,7 +139,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-I',
+    stage:'P1-K',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -151,7 +165,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-I offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-K offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');

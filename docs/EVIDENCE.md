@@ -1,5 +1,22 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-K | Android truthful cloud status and typed scheduler error (10 November 2026; PR #17)
+
+| Claim | Evidence class | Inspectable proof |
+| --- | --- | --- |
+| Android strictly requires Booleans `scheduled` + `schedulerEligible`, rejects contradictory/missing flags, displays ACTIVE but ineligible without false live execution claim | CI_VERIFIED_ANDROID_JVM | [Android debug/JVM 42791519376](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519376), source `cc7c526965db60099b35326eadce4ccce8e69e8e`: **18/18 CloudSyncClientTest PASS**, no fail/errors/skips; static source preflight [42791519409](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519409) checks both Android UI surfaces |
+| Android version-fenced status mapping, no stale eligibility after PAUSE, server-valid 15m intervals and nonsecret typed D1 503 recovery | CI_VERIFIED_ANDROID_JVM | Five additional Android tests on same SHA, Android APK SHA256 `8a3bca16a885d8016d76ae305ee6acb09cb1575e6271f37191ffff0eaa212bdc` |
+| Fail-closed source mutation guard for both Android cloud-status UI placements, strict client fields and D1 error handling | CI_VERIFIED_OFFLINE_NODE | [Node/preflight CI 42791519409](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519409), **59/59 PASS**, stage P1-K source PASS, remote BLOCKED |
+| Cloudflare Worker/D1 and read-only provider regressions preserved | CI_VERIFIED_LOCAL_D1_AND_PUBLIC_GITHUB | [D1 workerd 42791519518](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519518) **10/10 PASS**; [real public GitHub live read with isolated local D1 42791519495](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519495) SUCCESS; [Android GitHub adapter 42791519405](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791519405) SUCCESS |
+| One source CI regression while adding mutation tests (checker only verified one of two UI placements) | CI_FAILED_AND_CORRECTED | [Failed Node 42791391659](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42791391659), SHA `162e6bdea6016136603227d0584e030f26d4969f`: **58 PASS/1 FAIL** in new mutation check. Fixed at `cc7c526...`, rerun above **59/59 PASS**. No production incident and not a failed Android unit test |
+| Real deployed Cloudflare Worker/D1/Cron, Google-issued phone token, phone physically OFF while Cron persists events, account free-tier CPU/billing | **NOT_VERIFIED** | No live Cloudflare account resource, OAuth credential, remote D1 migration, phone hardware or running remote Worker accessed. Source safety PASS is separate from remote readiness BLOCKED |
+
+**Corrected code SHA `cc7c526965db60099b35326eadce4ccce8e69e8e`: 5/5 workflows SUCCESS.** Documentation-only commits and final PR-head SHA may differ and must be checked before merge. No automatic deploy or external mutating action is present. The Android `scheduled` field is a server assertion in this pilot and currently always `false`; even future `scheduled:true` would not be independent proof of a physical phone-OFF demonstration.
+
+**Cross-contract limitations:** the Kotlin verifier assumes the current backend always includes both scheduling flags. Older server versions without these flags are intentionally rejected, rather than silently treating missing eligibility as “running.” The UI describes the **last successful snapshot**; a subsequent cloud kill-switch can occur after that response. Versioned PATCH reconciles only its confirmed target; it cannot prove global Cron was scheduled remotely. See [ADR-0012](ADR/0012-android-cloud-truth-and-fail-closed-recovery.md), [ANDROID_ACCEPTANCE](ANDROID_ACCEPTANCE.md), [PROGRESS](PROGRESS.md).
+
+---
+
 ## P1-J | Dual activation permission and D1 budget readiness (10 November 2026, PR #16 merged; not remotely deployed)
 
 | Claim | Evidence class | Exact proof / limitations |

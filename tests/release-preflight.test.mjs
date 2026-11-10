@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,12);
+  assert.equal(result.checks.length,13);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -125,5 +125,29 @@ test('preflight rejects mobile activation if either global gate or budget migrat
   for (const update of mutate){
     const s=clone();update(s);
     assert.ok(failures(audit(s)).includes('mobile_activation_requires_both_flags_and_migrated_d1'));
+  }
+});
+
+
+test('preflight rejects Android client and UI regressions that hide Cron eligibility or D1 failures',()=>{
+  const mutators=[
+    s=>{s.androidCloudClient=s.androidCloudClient.replace('obj.get("schedulerEligible")','false');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace('obj.get("scheduled")','false');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'fun CloudMonitor.executionSummary()','fun CloudMonitor.somethingElse()');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      'fun CloudMonitor.withConfirmedStatus(','fun CloudMonitor.uncheckedStatus(');},
+    s=>{s.androidCloudClient=s.androidCloudClient.replace(
+      '"scheduler_storage_unavailable"','"unavailable_without_actionable_code"');},
+    s=>{s.androidMainActivity=s.androidMainActivity.replace(
+      'remote.executionSummary()','remote.status');},
+    s=>{s.androidMainActivity=s.androidMainActivity.replace(
+      'previous.withConfirmedStatus(outcome)','previous');},
+    s=>{s.androidMainActivity=s.androidMainActivity.replace(
+      'SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE','SyncFailure.UNAVAILABLE');},
+  ];
+  for(const mutate of mutators){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes('android_cloud_execution_is_not_inferred_from_active'));
   }
 });
