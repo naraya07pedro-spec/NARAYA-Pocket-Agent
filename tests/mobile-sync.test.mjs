@@ -59,8 +59,13 @@ test('A and B are isolated by SQL owner; tokens never grant operator API access'
     assert.equal((await request(env,'/v1/sync/observations?monitorId='+item.id,b)).status,404);
     assert.equal((await request(env,'/v1/sync/observations?monitorId='+item.id,a)).status,200);
     assert.equal((await request(env,'/v1/monitors',a)).status,401);
+    assert.equal(identities(env).length,1,'B did not register by reading an empty list or foreign monitor');
+    const bRegistered=await create(env,b,uuid(),'nodejs/node');
+    assert.equal(bRegistered.status,201);
     assert.equal(identities(env).length,2);
     assert.notEqual(identities(env)[0].id,identities(env)[1].id);
+    assert.equal((await(await request(env,'/v1/sync/monitors',a)).json()).monitors.length,1);
+    assert.equal((await(await request(env,'/v1/sync/monitors',b)).json()).monitors.length,1);
     assert.ok(!JSON.stringify(item).includes('owner_id'));
   } finally {globalThis.fetch=previous;env.DB.close();}
 });
