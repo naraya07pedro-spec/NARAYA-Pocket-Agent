@@ -1,5 +1,5 @@
 /**
- * P1-C authentication boundary. Read-only identity probe; NOT mobile/cloud sync.
+ * Signed OIDC identity boundary used by read-only probe and owner-scoped sync.
  * Configured JWKS URL is operator-controlled, never derived from a token or request.
  */
 export class AuthRejected extends Error {}
@@ -15,6 +15,32 @@ type Fetcher = typeof fetch;
 type JsonObject = Record<string, unknown>;
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 const RSA_SHA256 = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const;
+
+// Cache *public signing keys only*. Tokens, claims and subjects are never cached.
+// Isolate each fetcher: synthetic tests cannot poison another fetcher's key set.
+// Cloudflare Worker isolates may evict module state at any time, so caching is
+// opportunistic and must never be required for successful verification.
+const MAX_JWKS_CACHE_ENTRIES = 4;
+const MAX_JWKS_CACHE_MS = 300_000;
+interface JwksEntry {
+  value?: JsonObject;
+  expiresAt: number;
+  pending?: Promise<JsonObject>;
+}
+const jwksByFetcher = new WeakMap<Fetcher, Map<string, JwksEntry>>();
+
+function cacheTtlMs(headers: Headers): number {
+  const directives = (headers.get('cache-control') ?? '')
+    .split(',').map(part => part.trim().toLowerCase());
+  if (!directives.includes('public') ||
+      directives.some(value => value === 'private' || value === 'no-store' || value === 'no-cache')) return 0;
+  const ages = directives.filter(value => /^max-age=\d+$/.test(value));
+  if (ages.length !== 1) return 0;
+  const seconds = Number(ages[0].slice(8));
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return 0;
+  return Math.min(seconds * 1000, MAX_JWKS_CACHE_MS);
+}
+
 
 function object(value: unknown): value is JsonObject {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -52,7 +78,7 @@ function config(settings: OidcSettings): { issuer: string; audience: string; jwk
   return { issuer, audience, jwks };
 }
 
-async function boundedJwks(url: string, fetcher: Fetcher): Promise<JsonObject> {
+async function boundedJwks(url: string, fetcher: Fetcher): Promise<{ keys: JsonObject; ttlMs: number }> {
   let response: Response;
   try {
     response = await fetcher(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(3000) });
@@ -79,8 +105,41 @@ async function boundedJwks(url: string, fetcher: Fetcher): Promise<JsonObject> {
   try {
     const value: unknown = JSON.parse(UTF8.decode(bytes));
     if (!object(value) || !Array.isArray(value.keys) || value.keys.length > 32) throw new AuthUnavailable();
-    return value;
+    return { keys: value, ttlMs: cacheTtlMs(response.headers) };
   } catch { throw new AuthUnavailable(); }
+}
+
+async function cachedJwks(url: string, fetcher: Fetcher, nowMs: number): Promise<JsonObject> {
+  let entries = jwksByFetcher.get(fetcher);
+  if (!entries) {
+    entries = new Map<string, JwksEntry>();
+    jwksByFetcher.set(fetcher, entries);
+  }
+  const existing = entries.get(url);
+  if (existing?.pending) return existing.pending; // At most one concurrent upstream key fetch per isolate.
+  if (existing?.value && nowMs < existing.expiresAt) return existing.value;
+
+  entries.delete(url); // Expired sets are never accepted on provider failure.
+  if (entries.size >= MAX_JWKS_CACHE_ENTRIES) {
+    const oldest = entries.keys().next().value;
+    if (oldest !== undefined) entries.delete(oldest);
+  }
+  const entry: JwksEntry = { expiresAt: 0 };
+  entries.set(url, entry);
+  entry.pending = boundedJwks(url, fetcher).then(({ keys, ttlMs }) => {
+    if (entries?.get(url) === entry) {
+      if (ttlMs > 0) {
+        entry.value = keys;
+        entry.expiresAt = nowMs + ttlMs;
+        entry.pending = undefined;
+      } else entries.delete(url);
+    }
+    return keys;
+  }).catch((error: unknown) => {
+    if (entries?.get(url) === entry) entries.delete(url);
+    throw error; // Fail closed; never return stale/unvalidated keys.
+  });
+  return entry.pending;
 }
 
 export async function verifyOidcBearer(
@@ -112,7 +171,7 @@ export async function verifyOidcBearer(
       (payload.nbf !== undefined && (typeof payload.nbf !== 'number' || !Number.isSafeInteger(payload.nbf) || payload.nbf > now + 60)) ||
       (payload.azp !== undefined && payload.azp !== audience)) throw new AuthRejected();
 
-  const jwkSet = await boundedJwks(jwks, fetcher);
+  const jwkSet = await cachedJwks(jwks, fetcher, nowMs);
   const candidates = (jwkSet.keys as unknown[]).filter((key): key is JsonObject =>
     object(key) && key.kid === header.kid && key.kty === 'RSA' &&
     (key.use === undefined || key.use === 'sig') &&
