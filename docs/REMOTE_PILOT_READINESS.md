@@ -1,4 +1,31 @@
-# P1-Q release readiness gate | Owner-approved remote pilot ONLY
+# P1-R release readiness gate | Owner-approved remote pilot ONLY
+
+## P1-R: Paginated D1 owner inventory must not claim absent before complete
+
+**New mandatory source gate (PR #24):** The [Cloudflare D1 List API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/) reports `result_info.total_count`, not guaranteed `total_pages`. Older P1-Q code could incorrectly treat a short first page as all databases. The inspector now reads up to **ten GET-only D1 pages** with `per_page=100`, strict page/count/total consistency, and returns `UNKNOWN` if some pages cannot be verified. `d1_pages_inspected` and `d1_inventory` distinguish `COMPLETE_FIRST_PAGE`, `COMPLETE_ALL_PAGES`, `PARTIAL_PAGES` and `UNAVAILABLE`. Database absence is never confirmed from partial results. Upstream JSON is capped **during streaming** to 262,144 bytes. Worker scripts are an official **SinglePage** response, not assumed 20-item pages.
+
+Safe owner-only commands, from a trusted PowerShell session in the repo root (do not paste actual token, account ID or JSON response into GitHub):
+
+```powershell
+node scripts/cloudflare-readonly-inspect.mjs
+# Outputs OFFLINE_DEFAULT_NO_NETWORK; remains BLOCKED.
+
+$env:CF_READONLY_ACCOUNT_ID = Read-Host 'Cloudflare Account ID'
+$privateToken = Read-Host 'Cloudflare API token (read-only)' -AsSecureString
+try {
+  $env:CF_READONLY_API_TOKEN = [System.Net.NetworkCredential]::new('', $privateToken).Password
+  node scripts/cloudflare-readonly-inspect.mjs --inspect-live
+} finally {
+  Remove-Item Env:CF_READONLY_API_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:CF_READONLY_ACCOUNT_ID -ErrorAction SilentlyContinue
+  Remove-Variable privateToken -ErrorAction SilentlyContinue
+}
+```
+
+The actual account must be reviewed separately for plan, billing, CPU, D1 daily row usage and remaining quotas. `inventory_complete:true` is **only** a metadata-list property; it cannot certify free-tier eligibility, a deployed Worker route, event execution, signed Google token or a physically OFF Android. No Cloudflare account was accessed from the automated tests; **never** confuse a mocked API response with a live provider proof. Owner approval is separately required before any D1 remote backup/migration 0001–0005, deployment or Cron activation. [ADR-0019](ADR/0019-d1-account-inventory-pagination-and-bounded-fetch.md).
+
+---
+
 
 ## P1-Q: Account inventory read-only preparation (NO DEPLOYMENT)
 
