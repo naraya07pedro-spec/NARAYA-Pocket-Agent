@@ -23,6 +23,12 @@ npm run typecheck
 
 `npm run preflight:require-remote` returns exit code **2** (BLOCKED) in the current source. It does **not** deploy anything. Machine-readable status is available with `--json`, so no green source test can be presented as a completed remote pilot.
 
+## P1-L owner-approved observation timeline acceptance
+
+For a future remote pilot, the operator must first prove the Worker/D1 Cron actually generated observations while Android was **physically powered OFF**, using independent UTC timestamps, safe audit/usage records and post-power-on signed-owner retrieval. The Android client now additionally rejects an impossible SHA predecessor chain in a fully timestamp-ordered result. Demonstrate at least BASELINE → CHANGE → CHANGE with verified public GitHub SHA changes, and preserve the raw redacted D1 event timestamps/IDs to distinguish remote execution from local synthetic JSON.
+
+If multiple actual observations have exactly the same millisecond timestamp, the Worker breaks ties by random UUID, which is **not a causal ordering**. The client cannot assert full predecessor continuity in that case; do not misreport successful parsing as proof of a complete chain. The 50-row limit can omit old BASELINE events. See [ADR-0013](ADR/0013-observation-history-cross-runtime-contract.md). No account, live event or owner approval was used to execute this checklist in P1-L.
+
 ## P1-K Android client acceptance prerequisite: no false ACTIVE interpretation
 
 In any owner-approved remote pilot, the APK's cloud monitor list **must show** three independent concepts: stored server `ACTIVE/PAUSED` state, eligibility from the **last verified GET/PATCH server response**, and lack of independent evidence of actual remote Cron execution. Test a previously ACTIVE monitor, flip the global Cron switch OFF and refresh the mobile list: it must show **stored ACTIVE but scheduler eligibility OFF**, not “monitoring is currently running.” Verify that PAUSE clears eligibility, a rejected ACTIVE leaves old state unchanged and a `503 scheduler_storage_unavailable` explains the missing D1 budget migration without logging an ID token.

@@ -125,6 +125,12 @@ export function auditSource(s){
       s.androidMainActivity.split('remote.executionSummary()').length === 3 &&
       s.androidMainActivity.includes('previous.withConfirmedStatus(outcome)') &&
       s.androidMainActivity.includes('SyncFailure.SCHEDULER_STORAGE_UNAVAILABLE')),
+    check('android_observation_timeline_chain_guard',
+      s.androidCloudClient.includes('coherentObservationHistory(rows: List<CloudObservation>)') &&
+      s.androidCloudClient.includes('newer.previousSha != older.headSha') &&
+      s.androidCloudClient.includes('rows.count { it.type == "BASELINE" } > 1') &&
+      s.androidCloudClient.includes('rows.map { it.observedAt }.toSet().size == rows.size') &&
+      s.androidCloudClient.includes('if (!coherentObservationHistory(output))')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
@@ -139,7 +145,7 @@ export function auditSource(s){
     'physical_phone_off_and_remote_cron_not_measured',
   ];
   return {
-    stage:'P1-K',
+    stage:'P1-L',
     evidence_class:'OFFLINE_SOURCE_AUDIT_ONLY',
     source_safety:sourceSafe?'PASS':'FAIL',
     checks,
@@ -165,7 +171,7 @@ export function runCli(argv=process.argv.slice(2)){
   }
   if(flags.has('--json')) process.stdout.write(JSON.stringify(result,null,2)+'\n');
   else {
-    process.stdout.write('P1-K offline source checks: '+result.source_safety+'\n');
+    process.stdout.write('P1-L offline source checks: '+result.source_safety+'\n');
     for(const c of result.checks) process.stdout.write('  '+c.status+' '+c.id+'\n');
     process.stdout.write('Remote deployment status: '+result.remote_readiness+
       ' (account/provider/device evidence absent; no deployment attempted)\n');

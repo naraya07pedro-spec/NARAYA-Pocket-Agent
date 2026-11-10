@@ -1,4 +1,14 @@
-# Android acceptance matrix | P1-K honest cloud scheduler status; physical device and remote Cloudflare still unverified
+# Android acceptance matrix | P1-L linked observation contract; physical phone and remote Cron still unverified
+
+## P1-L SHA-linked observation timeline: source-only validation
+
+Android now checks history-wide consistency for the **last 50 owner-scoped observations**: at most one BASELINE; CHANGE cannot have an unchanged SHA; BASELINE cannot be strictly newer than older events; and, for distinct timestamps, each newer `previous_sha` must match the immediately older event's `head_sha`. When timestamps tie, the Worker's UUID tie-break is not causal, so the client retains per-record checks but does **not** claim total SHA continuity. A truncated page without the original BASELINE is legitimate.
+
+**Cross-runtime CI proof:** The same nonsecret [mobile-observations-v1.json](../android/app/src/test/resources/mobile-observations-v1.json) passes the real owner-scoped Worker HTTP response (seeded local D1 test fixture, other signed owner receives 404) and Kotlin JVM parser. A separate local scheduler test generates three actual **synthetic** SHA transitions; neither test touches remote Cloudflare. Initial source `8e1c90df378a2848b511031317bcc097de395a51`: [Node 42794662760](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662760) **62/62**, [workerd/D1 42794663050](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794663050) **10/10**, [Android APK/JVM 42794662385](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42794662385) **20/20 executed with zero failures/skips/errors**. Final PR-head SHA must be checked separately after documentation edits.
+
+**Still blocked:** Google OAuth real token, authenticated cloud deployment, real phone installation, measured app RAM/battery, Cloudflare Worker/D1/Cron account CPU/billing and observation creation while the phone is truly OFF. Do not call the synthetic fixture proof of independent cloud execution. [ADR-0013](ADR/0013-observation-history-cross-runtime-contract.md).
+
+---
 
 ## P1-K Android cloud-state safety contract (source verified, physical device NOT TESTED)
 

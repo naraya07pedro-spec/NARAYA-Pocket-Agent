@@ -1,0 +1,30 @@
+{
+  "contractVersion": 1,
+  "monitorId": "11111111-1111-4111-8111-111111111111",
+  "observations": [
+    {
+      "id": "22222222-2222-4222-8222-222222222223",
+      "monitor_id": "11111111-1111-4111-8111-111111111111",
+      "event_type": "CHANGE",
+      "previous_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "head_sha": "cccccccccccccccccccccccccccccccccccccccc",
+      "observed_at": 1800007200000
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "monitor_id": "11111111-1111-4111-8111-111111111111",
+      "event_type": "CHANGE",
+      "previous_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": 1800003600000
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222221",
+      "monitor_id": "11111111-1111-4111-8111-111111111111",
+      "event_type": "BASELINE",
+      "previous_sha": null,
+      "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": 1800000000000
+    }
+  ]
+}
