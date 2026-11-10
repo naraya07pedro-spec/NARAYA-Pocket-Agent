@@ -2,7 +2,7 @@
 
 **Android-first agent, cloud-resident execution.** Built for lightweight phones, bounded autonomy, and verifiable results even when the phone is switched off.
 
-> **Status: P1-R Cloudflare D1 inventory pagination/stream-bounds fix in PR #24 (code checkpoint 100/100 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI; final documentation HEAD to be rechecked). P1-Q is MERGED via PR #23. P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
+> **Status: P1-R Cloudflare D1 inventory pagination/stream-bounds fix MERGED via PR #24 (final PR HEAD 100/100 Node, 11/11 local workerd/D1, 20/20 Android security JVM, 5/5 CI). P1-Q is MERGED via PR #23. P1-P atomic onboarding is already merged via PR #22. No account inspection, remote deployment or real physical-device acceptance.** Checked-in Worker has no public route or remote D1 UUID; global Cron and mobile scheduling are independently OFF. No cloud agent is deployed, Google OAuth login is not verified, and the default Android APK has no cloud origin or Web Client ID. The Android APK can make a manual, read-only public GitHub HTTPS request and retain its last verified commit SHA offline. Verified with JVM/CI and debug APK builds, not a physical device. **Cloudflare remote D1/Cron, phone-off autonomy, production auth and RAM/battery measurements are NOT verified.**
 
 ## What actually works in this milestone
 
@@ -15,7 +15,7 @@
 
 **Why this matters:** the cloud scheduler does not depend on any Android process. Actual off-device acceptance is pending until an owner-authorized Cloudflare deployment is running.
 
-## P1-R honest paginated Cloudflare account inventory (PR #24, source/local only)
+## P1-R honest paginated Cloudflare account inventory (PR #24 MERGED, source/local only)
 
 Audit against the official Cloudflare D1 API exposed a P1-Q false-completeness risk: `result_info.total_count` may exceed the first page's row count even when `total_pages` is missing. The owner-operated, opt-in read-only GET inspector now validates page/total/count contracts across at most **10 x 100 D1 rows**, never asserts an unseen database absent when pages are incomplete, verifies database identity before accepting a size, and limits response bytes **while streaming**, not after buffering. Worker Script List follows its published SinglePage contract. Eleven additional offline adversarial tests (18 inspector tests total) cover pagination, failure paths and error sanitization; backend Node suite is **100/100** at code checkpoint, with Android and local D1 workflows also green. The owner has **not** connected a real Cloudflare account. No deploy, new costs, Cron activation or physical phone-off acceptance. See [ADR-0019](docs/ADR/0019-d1-account-inventory-pagination-and-bounded-fetch.md), [PROGRESS](docs/PROGRESS.md), [EVIDENCE](docs/EVIDENCE.md).
 
