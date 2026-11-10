@@ -1,6 +1,6 @@
 # Evidence register | NARAYA Pocket Agent
 
-## P1-H | Cross-invocation D1 global Cron dispatch budget (10 November 2026; pre-merge CI)
+## P1-H | Cross-invocation D1 global Cron dispatch budget (10 November 2026; merged PR #14; not deployed)
 
 | Verification | Evidence class | Exact proof |
 | --- | --- | --- |
@@ -10,6 +10,8 @@
 | Android JVM/provider adapter and APK regression | CI_VERIFIED_JVM_BUILD | [Android adapter 42777373129](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373129), [Android debug APK 42777373585](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373585): SUCCESS, no on-device run, app source unchanged |
 | First live-read test run with **outdated local migration fixture** | FAILED_TEST_SETUP_FIXED | [Failed workflow 42777198245](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777198245), old head `7f66a2197eb16f2edadd2acafc4161bbdfdbc7be`; error `D1_ERROR: no such table: scheduler_control`. Test fixture incorrectly applied **only 0001**. Fixed to apply 0001–0004 in `tests/github-live.test.mjs`; rerun 42777373157 SUCCESS |
 | Real remote Cloudflare Cron concurrency, account quota/charge, phone-off Android acceptance, live Google OAuth | NOT_VERIFIED | No deployment, provisioned D1, billable service, real Google signed-in device, actual cloud usage counters or physical device metrics |
+
+**Final 5/5 PR-head gate:** source SHA `352a99ab4860e0ac31ee50312ee01ac142c8a251`; [backend 42777929307](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777929307) **43/43 PASS**, [D1 workerd 42777929046](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777929046) **9/9 PASS**, [real public GitHub local D1 42777929294](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777929294) SUCCESS, [Android adapter 42777929001](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777929001) SUCCESS, [Android debug build 42777929189](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777929189) SUCCESS, **13/13 Android sync security tests executed, 0 skips/failures/errors**, APK SHA256 `01c0ecb948924082c089ac5e7598e9d8a8c1984647ef77b307a602cc6be37ab9`. [PR #14](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/14) merged as `b7cdca9ddd03b1f6e5f1f6f2ad3a7ab6b6946640`. No independent CI assertion is made on this merge SHA or subsequent docs-only commits. **No real Cloudflare remote operation was tested.**
 
 **Claim precision:** source/runtime local CI at `067b7905f9781193cba11beb3eaf650c6ecec5c4` **5/5 SUCCESS**, not yet the final docs-head/merge SHA. "Global" applies **only to invocations sharing the same D1 database**, not other Worker projects or database bindings. A fixed 15-minute UTC bucket is not a rolling 15-minute cap; six attempts can straddle the boundary. A granted reservation may be forfeited on a crash and tasks can be delayed. Neither exact owner fairness under remote contention nor Cloudflare Workers Free CPU viability has been tested.
 
