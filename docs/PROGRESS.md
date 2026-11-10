@@ -1,5 +1,22 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-10 | P1-G bounded public OIDC JWKS cache (PR #13; no remote deployment)
+
+**Implemented:** Cloudflare Worker now optionally caches **public provider JWKS bytes only** in a dedicated `caches.open('naraya-pocket-agent-public-jwks-v1')` namespace. Cache discovery happens **per request**; neither user credentials nor request-scoped Promise is saved globally. Only the operator-configured HTTPS JWKS URL is fetched. Provider must send `Cache-Control: public, max-age=N` with positive safe integer TTL and without private/no-store/no-cache. Cap at **300 sec (5 min)**, JWKS body at **64 KiB** and key array at 32. Every token still requires RS256 signature, issuer, audience, time and kid verification. Expired JWKS + provider outage fails closed, never uses stale keys. Cache API unavailable/corrupt is treated as an optional acceleration, not an authorization bypass.
+
+**Adversarial correction:** an initial candidate with module-level `WeakMap` and an in-flight fetch Promise (source SHA `ea5af66ff404c038f72899c3d8d88f8b676c439e`) was **replaced before merge** after consulting Cloudflare's current rule against request-scoped global I/O state. The final design intentionally does **not** promise single-flight across concurrent requests.
+
+**Tested source SHA `5bdad79e2821f0cb7418e0d1e2b09e542a26e4e0`, 5/5 CI SUCCESS:**
+- [Backend + TS source CI 42770060702](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060702): **40/40 tests PASS**, TypeScript typecheck. Seven additional tests cover real RSA signature checks on cache hit, forged JWT, no-store/private/bad cache headers, bounded TTL, stale/provider outage, key rotation, corrupt Cache API, named namespace and request concurrency.
+- [Cloudflare local workerd/D1 CI 42770060770](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060770): **7/7 tests PASS**, including two signed synthetic identities using one shared public key cache but separated D1 user mappings.
+- [Worker live read-only GitHub CI 42770060997](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060997), [Android GitHub adapter CI 42770061012](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770061012), [Android debug APK CI 42770060723](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42770060723): all SUCCESS, preserving previous behavior.
+
+**Evidence class:** source/local CI and synthetic JWT/Cache API. Google recommends caching public signing keys per HTTP directives; Cloudflare documents Cache API locality/availability and request-scope isolation, see [ADR-0008](ADR/0008-request-safe-oidc-jwks-cache.md). **Not proven:** live Google-issued token, Cloudflare remote JWKS cache effectiveness/cost, real OAuth configuration, deployed Worker/D1/Cron, physically powered-off phone, real Android RAM/battery or account-level free-tier/billing. Caching may miss or be unavailable and will fetch JWKS normally. There was **no deployment, production identity request, purchased service, API credential submission or billable cloud operation**.
+
+**Next:** verify exact final PR-head SHA after documentation; merge only with 5/5 CI. Then owner-approved Google OAuth/Cloudflare remote pilot and device-off acceptance remain [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8), [Issue #2](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/2), and [Issue #5](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/5).
+
+---
+
 ## 2026-11-10 | P1-F Android cloud monitor controls and observation evidence (merged PR #12; not remotely deployed)
 
 **Merged:** [PR #12](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/12) as `4028d783bd332470e198a6fd0607c2562b0ca726`. Final tested PR HEAD `9bfb371520592ee5afa3297873a9a4b08a8d4c52`.
