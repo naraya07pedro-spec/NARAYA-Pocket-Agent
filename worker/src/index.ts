@@ -111,7 +111,12 @@ export default {
       console.log(JSON.stringify({event:'scheduled_disabled'}));
       return;
     }
-    const report = await runScheduler(env);
-    console.log(JSON.stringify({ event: 'scheduled_tick', ...report }));
+    // Correlate this particular Cron invocation to committed D1 observation
+    // UUIDs. No monitor IDs, owner IDs, GitHub SHAs, leases or credentials
+    // are logged. A log by itself does NOT prove authentic remote execution.
+    const evidence: { observationIds: string[] } = { observationIds: [] };
+    const report = await runScheduler(env, Date.now(), fetch, evidence);
+    console.log(JSON.stringify({ event: 'scheduled_tick', ...report,
+      observationIds: evidence.observationIds }));
   },
 };
