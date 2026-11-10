@@ -1,5 +1,24 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-N | Offline owner-supplied phone-OFF evidence structural gate (10 November 2026; PR #20, source/local only)
+
+| Claim | Evidence class | Verified evidence / limitations |
+| --- | --- | --- |
+| Synthetically coherent Cron/D1/GitHub/phone timeline cannot automatically certify Cloudflare, physical phone or actual OAuth | CI_VERIFIED_OFFLINE_NODE | [Node/preflight 42803489730](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803489730), SHA `dde12473a80589ee510f38b9050c42ace170f33a`, **74/74 PASS**, `remote_readiness: BLOCKED`. Pure verifier returns **`remote_acceptance:NOT_VERIFIED`, `safe_to_activate_scheduler:false`** even for fully consistent synthetic example |
+| Exact owner-supplied schema, 65,536-byte maximum, private CLI and fail-closed red-team rejection for missing version, forged SHA, invalid sequences, fake intervals/credentials and no corroboration | CI_VERIFIED_OFFLINE_NODE | Same Node source 42803489730, new `tests/offdevice-evidence.test.mjs` tests and [synthetic example](examples/offdevice-evidence-synthetic.example.json). The test does **not** authenticate Cloudflare/GitHub/physical device origin |
+| `--require-remote` always exits 2 even for entirely coherent user-supplied input; no source path, bearer or raw manifest is printed | CI_VERIFIED_OFFLINE_CLI | Same source 42803489730: temp-file CLI tests, JSON results only check IDs, invalid and oversize private files, unknown arguments. No provider network or writes |
+| Source preflight cannot silently promote a self-reported manifest to a remote PASS or enable Cron and device acceptance | CI_VERIFIED_STATIC_MUTATION | Same Node source run, stage P1-N source PASS, remote BLOCKED; static mutation tests refuse `VERIFIED`, `safe_to_activate_scheduler:true` and remote exit 0 |
+| Android guide now names mandatory 0005 and remote runbook migration sequence is consistent | SOURCE_CHANGE_REQUIRES_FINAL_HEAD_CI | `android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt` and `docs/REMOTE_PILOT_READINESS.md` updated after the intermediate 74/74 gate; independent final HEAD CI still required before merge |
+| Existing Cloudflare local D1, public GitHub GET and Android regression tests remain passing | CI_VERIFIED_LOCAL_AND_PUBLIC_READ | [workerd/D1 42803490066](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803490066) **11/11 PASS**; [public official GitHub GET/local D1 42803489715](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803489715) SUCCESS, `remote_cloudflare:false`; [Android adapter 42803489711](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803489711) SUCCESS; [Android APK 42803489780](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803489780) SUCCESS, **20/20 JVM tests executed/0 failed/errors/skipped**, debug APK SHA256 `947fba66b37aaafd8b56d55b89a423315a74f4b6711e97a221fc6e60307e54ca` |
+| Initial red test was a mistaken truncation invariant, then corrected | CI_FAILED_AND_CORRECTED | [First source run 42803137677](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42803137677): **71 PASS / 1 FAIL**, test demanded baseline in a 50-row page. Source contract legitimately permits omitted baseline if predecessor SHA links remain consistent. Corrected and added positive test; later 74/74 PASS |
+| Real deployed Cloudflare Cron/D1 logs, account quota/CPU/billing, signed-in Google Android, independent powered-OFF phone proof | **NOT_VERIFIED** | No cloud resource/account, deployed Worker, Google-issued ID token, owner-approved migration, physical phone, paid action or real remote Cron was accessed. Owner-supplied JSON, even when matching all timestamps/SHA fields, remains **unauthenticated input** |
+
+**Intermediate exact source checkpoint:** `dde12473a80589ee510f38b9050c42ace170f33a` passed 5/5 GitHub Actions; the later documentation/Android status-guide changes require another exact-final-head 5/5 CI. [ADR-0015](ADR/0015-offdevice-acceptance-evidence-gate.md) defines the nonattestation contract. No new remote resource or external mutation performed.
+
+**Critical inference guard:** A Cron log with `scheduled_tick` counts is not linked cryptographically to a D1 observation ID; a time match within 60 seconds is **only a plausibility check**. A user-supplied `deviceEvidenceRef` does not prove the device was powered OFF. An observed GitHub SHA typed into a manifest is not a direct authorized API fetch. The owner and an independent reviewer must verify original external evidence before remote acceptance can ever be considered.
+
+---
+
 ## P1-M | Durable D1 event sequence, exact Worker/Android contract (10 November 2026; PR #19 MERGED, not remotely deployed)
 
 | Claim | Evidence classification | Evidence and limitation |
