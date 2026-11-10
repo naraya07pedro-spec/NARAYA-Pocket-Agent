@@ -27,11 +27,11 @@ export const BASELINE = Object.freeze({
   google_oauth_real_device:'NOT_VERIFIED',
 });
 
-function inventoryList(body) {
+function inventoryList(body, pageSize=100) {
   if (body?.success !== true || !Array.isArray(body.result)) throw new Error('invalid_api_response');
   const count=body.result.length;
   const pages=body.result_info?.total_pages;
-  return {rows:body.result,complete:(pages===undefined || pages===1) && count<100};
+  return {rows:body.result,complete:(pages===undefined ? count<pageSize : pages===1)};
 }
 
 function sanitizedFailure(error) {
@@ -107,7 +107,7 @@ export async function inspectReadOnly({
     result.d1_inventory=sanitizedFailure(error);
   }
   try {
-    const workers=inventoryList(await get(paths.workers));
+    const workers=inventoryList(await get(paths.workers),20);
     workerComplete=workers.complete;
     result.worker_inventory=workers.complete?'COMPLETE_FIRST_PAGE':'PARTIAL_FIRST_PAGE';
     result.target_worker_present=workers.rows.some(row=>row?.id===SCRIPT);
