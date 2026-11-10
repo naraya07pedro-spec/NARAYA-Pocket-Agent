@@ -1,7 +1,7 @@
 # ADR-0016 | Read-only signed sync must not register identities
 
 Date: 10 November 2026
-Status: P1-O source implementation in PR #21. No deployment, owner/account access or remote acceptance.
+Status: MERGED via PR #21 as `4ec8bf434ece4078dca41be9099f8553f0d78f44`. Exact final PR HEAD `e223292a51826612cd9ac63e1a9b4ea1c86fdffd` passed 5/5 CI (78/78 Node/backend/preflight, 11/11 local workerd/D1, 20/20 Android security JVM). No deployment, owner/account access or remote acceptance.
 
 ## Finding
 
