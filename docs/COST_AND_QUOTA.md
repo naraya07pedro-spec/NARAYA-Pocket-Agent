@@ -2,7 +2,7 @@
 
 Target: **no additional spend**. No paid AI calls, auto-upgrades, or deployment in GitHub Actions. All current acceptance tests are offline and require zero API accounts.
 
-Runtime hard limits in this code: 3 monitors per owner; max 3 checks per scheduler invocation; minimum monitor interval 30 minutes; Cron configuration every 15 minutes; maximum five failures before automatic pause; 6-second GitHub HTTP deadline; redirect prohibition. Rate-limited requests defer for 60 minutes. These are conservative application limits, **not** confirmation of remaining account quota.
+Runtime hard limits in this code: 3 monitors per owner; max 3 checks per scheduler invocation AND 3 reserved provider attempts per fixed UTC 15-minute window across all invocations sharing one D1 database (migration 0004 required); minimum monitor interval 30 minutes; Cron configuration every 15 minutes; maximum five failures before automatic pause; 6-second GitHub HTTP deadline; redirect prohibition. Rate-limited requests defer for 60 minutes. These are conservative application limits, **not** confirmation of remaining account quota.
 
 Before any owner-approved live deploy, check account-specific pricing, D1 allocation, scheduled Workers Free CPU time, request/row quotas, model billing status, available subscription period, and restrictions. Do not use Workers AI in this stage.
 
@@ -37,3 +37,12 @@ No client secret, Google API access token, user password, OAuth refresh token or
 The signed-user backend previously fetched provider JWKS on each valid-looking token request. New code **may reuse public signing keys** via a dedicated Cloudflare Cache API namespace if available and the provider explicitly advertises `Cache-Control: public, max-age=N`. Application TTL is capped at **300 seconds**, with max 64 KiB parsed response. Missing/private/no-store/malformed headers do not cache. Provider or cache failures do not make invalid JWTs valid; an expired set cannot be used on outage.
 
 **No production cost saving is assumed.** Cache API may be unavailable at a deployment host, may be local to a Cloudflare data center, and cold/concurrent requests can still fetch from Google independently. CI uses synthetic tokens and an injected cache; there are **no measured remote hit rates, account quotas, bandwidth, latency, billing or money amounts**. No deployment, paid API or real token occurred during P1-G. Free-tier and domain eligibility must be verified on the actual owner-controlled Cloudflare account before any approval to provision.
+
+
+## P1-H global D1 Cron attempt budget (10 November 2026)
+
+The old cap of three GitHub GET attempts per `runScheduler()` invocation did not protect against overlapping Cron invocations each making three requests. An additive D1 migration `0004_global_scheduler_budget.sql` adds a **single-row atomic reservation** to the persistent `scheduler_control` table. Every scheduler invocation, including operator-only mode when mobile scheduling is OFF, must obtain one of at most **three reserved provider attempts per fixed UTC quarter-hour on that D1 database** before network I/O. Failed lease acquisition refunds its unused slot; an ambiguous error or missing migration fails closed. The budget persists across local Worker restarts.
+
+**Trade-offs:** no guarantee of 30-minute check timing under backlog, a crash can waste the quota, and six attempts can straddle the boundary of two UTC quarter-hours, because this is not a rolling rate limit. No budget is shared across independent D1 databases, other Workers or separate external integrations. Strong fairness between owners under truly concurrent remote Cron invocations is not proven. The app still has no configured live Google OAuth or deployed Cloudflare Worker.
+
+**CI proof:** [43/43 backend](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373598) and [9/9 local workerd/D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42777373148) at source SHA `067b7905f9781193cba11beb3eaf650c6ecec5c4`, including overlapping invocations, persistent quota across restart and non-destructive migration. See [ADR-0009](ADR/0009-d1-global-cron-budget.md). The use of GitHub Actions/public GitHub reads does not establish Cloudflare Free usage or actual account bills. Real deployment remains an owner-approval gate.
