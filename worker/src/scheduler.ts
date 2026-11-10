@@ -3,12 +3,36 @@ import { readDefaultBranchHead, GithubReadError, type FetchLike } from './github
 import type { Env, Monitor } from './types.ts';
 
 const MAX_CHECKS_PER_TICK = 3;
+const DISPATCH_WINDOW_MS = 15 * 60_000; // Matches the fixed UTC Cron cadence.
 const LEASE_MS = 45_000;
 const STOP_AFTER_FAILURES = 5;
 
 export interface TickReport { claimed: number; completed: number; observations: number; deferred: number; skipped: number }
 
 function changes(value: { meta?: { changes?: number } }): number { return value.meta?.changes ?? 0; }
+
+// The single D1 scheduler_control row is the cross-invocation authority.
+// A reservation is taken BEFORE any provider fetch, even for operator-only
+// mode. Conditional SQL UPDATE is atomic across Worker invocations and does
+// not rely on isolate-global counters. Past-window replays cannot reset budget.
+async function reserveProviderSlot(env: Env, windowStart: number): Promise<boolean> {
+  const result = await env.DB.prepare(`UPDATE scheduler_control
+    SET budget_claims=CASE WHEN budget_window_start=? THEN budget_claims+1 ELSE 1 END,
+        budget_window_start=?
+    WHERE id=1 AND budget_window_start<=?
+      AND (budget_window_start<? OR budget_claims<?)`)
+    .bind(windowStart, windowStart, windowStart, windowStart, MAX_CHECKS_PER_TICK).run();
+  return changes(result) === 1;
+}
+
+// If a concurrent Worker already leased the candidate, no upstream attempt
+// happened, so release that reserved slot. A failed/ambiguous refund only
+// reduces availability, never increases the provider budget.
+async function refundUnclaimedSlot(env: Env, windowStart: number): Promise<void> {
+  await env.DB.prepare(`UPDATE scheduler_control SET budget_claims=budget_claims-1
+    WHERE id=1 AND budget_window_start=? AND budget_claims>0`)
+    .bind(windowStart).run();
+}
 
 async function saveSuccess(env: Env, monitor: Monitor, lease: string, headSha: string, now: number): Promise<number> {
   const db = env.DB;
@@ -51,6 +75,8 @@ async function saveFailure(env: Env, monitor: Monitor, lease: string, code: stri
 export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLike = fetch): Promise<TickReport> {
   const report: TickReport = { claimed: 0, completed: 0, observations: 0, deferred: 0, skipped: 0 };
   const owner = ownerId(env.OWNER_ID); // Fail closed if operator context is misconfigured.
+  if (!Number.isSafeInteger(now) || now < 0) throw new Error('scheduler_clock_invalid');
+  const windowStart = Math.floor(now / DISPATCH_WINDOW_MS) * DISPATCH_WINDOW_MS;
   const mobileEnabled = env.MOBILE_SCHEDULING_ENABLED === 'true';
   let results: Monitor[];
   if (mobileEnabled) {
@@ -80,12 +106,19 @@ export async function runScheduler(env: Env, now = Date.now(), fetcher: FetchLik
     results=selected.results;
   }
   for (const candidate of results) {
+    // No network call is allowed before D1 grants a window-scoped budget slot.
+    // Saturation stops this invocation even if more due rows exist.
+    if (!await reserveProviderSlot(env, windowStart)) break;
     const lease = crypto.randomUUID();
     const claim = await env.DB.prepare(`UPDATE monitors SET lease_token=?,lease_until=?,version=version+1
       WHERE id=? AND owner_id=? AND status='ACTIVE' AND next_due_at<=?
       AND (lease_until IS NULL OR lease_until<=?)`)
       .bind(lease, now + LEASE_MS, candidate.id, candidate.owner_id, now, now).run();
-    if (changes(claim) !== 1) { report.skipped++; continue; }
+    if (changes(claim) !== 1) {
+      await refundUnclaimedSlot(env, windowStart);
+      report.skipped++;
+      continue;
+    }
     report.claimed++;
     if (mobileEnabled) {
       // Record rotation before external I/O. A crash can delay fairness but
