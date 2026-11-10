@@ -10,14 +10,16 @@ import { runScheduler } from '../worker/src/scheduler.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
 const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql'];
-const schema = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8')).join('\n');
-async function applySchema(DB) {
-  // D1.exec splits on newlines and cannot execute SQL migration files that
-  // contain multiline CREATE statements. Execute complete statements instead.
-  const sql = schema.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
+async function applyStatements(DB, source) {
+  // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
+  const sql = source.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
   const statements = sql.split(';').map(statement=>statement.trim()).filter(Boolean);
-  assert.ok(statements.length >= 5);
+  assert.ok(statements.length >= 2);
   for (const statement of statements) await DB.prepare(statement).run();
+}
+async function applySchema(DB) {
+  for (const sql of migrationSql) await applyStatements(DB,sql);
 }
 const TOKEN = 'synthetic-owner-auth-just-for-test-use-987654321';
 const owner = 'local-cloudflare-test';
@@ -173,6 +175,38 @@ test('Cloudflare local D1: OIDC owner isolation and draft replay survives actual
     assert.equal((await restarted.DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,2);
   } finally {
     globalThis.fetch=originalFetch;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+test('Cloudflare local D1: upgrading 0001 -> 0002 preserves prior operator monitor and identity boundary', {timeout:90000}, async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-upgrade-'));
+  let platform;
+  try {
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applyStatements(DB,migrationSql[0]); // Historical database state.
+    const env={DB,OWNER_ID:owner,OWNER_API_TOKEN:TOKEN};
+    const result=await worker.fetch(new Request(base+'/v1/monitors',{
+      method:'POST',headers:{...auth,'content-type':'application/json'},
+      body:JSON.stringify({repository:'nodejs/node',intervalMinutes:30}),
+    }),env);
+    assert.equal(result.status,201);
+    const {id}=await result.json();
+    const before=await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(id).first();
+    assert.ok(before);
+    assert.equal(before.status,'ACTIVE');
+    await applyStatements(DB,migrationSql[1]); // Production-like additive migration.
+    const after=await DB.prepare('SELECT * FROM monitors WHERE id=?').bind(id).first();
+    for (const column of ['id','owner_id','repo_owner','repo_name','status','version','created_at','interval_minutes']) {
+      assert.equal(after[column],before[column]);
+    }
+    assert.equal(after.client_draft_id,null);
+    assert.equal(after.sync_request_digest,null);
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM user_identities').first()).n,0);
+    assert.equal((await(await worker.fetch(new Request(base+'/v1/monitors',{headers:auth}),env)).json()).monitors.length,1);
+  } finally {
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});
   }
