@@ -1,6 +1,6 @@
 # Progress ledger | NARAYA Pocket Agent
 
-## 2026-11-10 | P1-V Google Android ID-token cross-client OIDC compatibility and identity invariants (PR #28)
+## 2026-11-10 | P1-V Google Android ID-token cross-client OIDC compatibility and identity invariants (PR #28 MERGED; remote BLOCKED)
 
 **Source-level finding (confirmed against official Google docs):** prior `verifyOidcBearer` required `azp===aud`, and matched the `iss` claim to exactly one configured value. Google documents `azp` as authorized OAuth presenter (which can differ from server `aud`), and both `https://accounts.google.com` and `accounts.google.com` issuer forms. The older implementation could reject authentic Android-to-Worker Google ID tokens. This does **not** establish any real-device failure.
 
@@ -10,7 +10,7 @@
 - Add **9 RSA-backed adversarial Node tests**, extend **actual local Cloudflare workerd/D1** restart/identity test with Google legacy issuer and allowed Android presenter, and add offline preflight source safety regression gate.
 - No app OAuth client IDs, actual Google tokens, remote Workers/D1/Cron, account billing, Google Console, deployments, migrations or device power-off testing. No new service/cloud usage. Real sign-in still **BLOCKED/NOT_VERIFIED**.
 
-**Proof requested:** verify exact final PR HEAD five CI workflows and Node/local-D1/JVM counts, then merge only when successful. After merge independently verify final `main` SHA. Source-green is not live Google sign-in proof.
+**FINAL PR #28 MERGED:** [PR #28](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/28) merge commit `adca9cb8741d55e16e40e70711de64a74763178d`. Full PR HEAD `16f2937540b2c05c407aefbfadfbb8083014faed` independently verified **5/5 SUCCESS**: [Node source/TS 42852868204](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42852868204) **137/137 tests PASS**, [real local workerd/D1 42852868234](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42852868234) **11/11**, [public GitHub GET/local D1 42852868402](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42852868402) SUCCESS, [Android native adapter 42852868174](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42852868174) SUCCESS, [Android debug APK + JVM 42852868328](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42852868328) SUCCESS **20/20**, 0 failures/errors/skips. Final PR-head APK SHA-256 `09b5a13d07fc51740ce920a92b8a039d4ac9f257cf032382e26926c830847d20`. These runs verify exact PR HEAD but **do not independently certify merge SHA or later `main`**. Real Google sign-in and physical phone OFF remain NOT_VERIFIED.
 
 **Next owner-only gate:** inspect actual Google Console Web client ID vs Android OAuth client ID, package/signing SHA and permitted issuer, and inspect a **real issued** token locally without disclosing it. Check signed `/v1/me` on separately owner-approved deployed HTTPS Worker, then PAUSED monitor registration and offdevice pilot only after Cloudflare billing/CPU/Free quota and separate activation permissions. See [ADR-0023](ADR/0023-google-oidc-authorized-presenters.md), [EVIDENCE](EVIDENCE.md), [runbook](REMOTE_PILOT_READINESS.md), [PR #28](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/28).
 
