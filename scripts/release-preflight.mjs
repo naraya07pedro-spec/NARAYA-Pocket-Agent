@@ -155,10 +155,13 @@ export function auditSource(s){
     check('signed_user_admission_is_prevalidated_and_existing_users_read_only',
       s.mobileSync.includes('const existing = await env.DB.prepare') &&
       s.mobileSync.includes('if (existing) {') &&
+      s.mobileSync.includes('if (!registerOnCreate) return null') &&
+      s.mobileSync.includes('if (!ownerId) {') &&
+      s.mobileSync.includes('if (listing) return json({monitors:[]})') &&
       s.mobileSync.includes('const createInput = creating ? parseSyncInput(await boundedJson(request)) : null') &&
       s.mobileSync.includes('const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null') &&
       s.mobileSync.indexOf('const createInput = creating ?') <
-        s.mobileSync.lastIndexOf('const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env)') &&
+        s.mobileSync.lastIndexOf('const ownerId = await ownerFromVerifiedIdentity(issuer, subject, env, creating)') &&
       s.mobileSync.includes("if (reading && (!id || !UUID.test(id)))") &&
       s.mobileSync.includes('const {issuer,subject} = await verifyOidcBearer(request, env)')),
     check('android_public_configuration_off_by_default',
