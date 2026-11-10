@@ -1,7 +1,7 @@
 # ADR-0009 | D1-backed global Cron dispatch budget
 
 Date: 2026-11-10
-Status: Implemented on PR #14; CI-verified locally, not remotely deployed.
+Status: MERGED via PR #14 as `b7cdca9ddd03b1f6e5f1f6f2ad3a7ab6b6946640`. Final PR-head SHA `352a99ab4860e0ac31ee50312ee01ac142c8a251` passed 5/5 CI (43/43 backend, 9/9 local D1, 13/13 Android security tests). Not remotely deployed.
 
 ## Problem verified by code review
 
