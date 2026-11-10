@@ -32,6 +32,7 @@ export function readSourceSnapshot(base=root){
   return {
     prod:json(base,'worker/wrangler.jsonc'),
     local:json(base,'worker/wrangler.local.jsonc'),
+    pilot:json(base,'worker/wrangler.pilot.example.jsonc'),
     migrations,
     migration0004:text(base,'worker/migrations/0004_global_scheduler_budget.sql'),
     workerIndex:text(base,'worker/src/index.ts'),
@@ -88,7 +89,18 @@ export function auditSource(s){
     check('isolated_local_fake_database',s.local.name!=='naraya-pocket-agent' &&
       s.local.workers_dev===false && isFakeDbId(s.local.d1_databases?.[0]?.database_id) &&
       s.local.d1_databases?.[0]?.database_name!==d?.database_name),
-    check('no_literal_secret_vars',!stringRiskInVars(s.prod) && !stringRiskInVars(s.local)),
+    check('no_literal_secret_vars',!stringRiskInVars(s.prod) && !stringRiskInVars(s.local) &&
+      !stringRiskInVars(s.pilot)),
+    check('inert_approval_only_pilot_template',
+      s.pilot.workers_dev===true && Array.isArray(s.pilot.triggers?.crons) &&
+      s.pilot.triggers.crons.length===0 &&
+      s.pilot.vars?.SCHEDULER_ENABLED==='false' &&
+      s.pilot.vars?.MOBILE_SCHEDULING_ENABLED==='false' &&
+      s.pilot.d1_databases?.length===1 &&
+      s.pilot.d1_databases[0].binding==='DB' &&
+      s.pilot.d1_databases[0].migrations_dir==='migrations' &&
+      s.pilot.d1_databases[0].database_id==='REPLACE_WITH_OWNER_APPROVED_D1_UUID' &&
+      s.pilot.name.includes('REPLACE_ME')),
     check('no_automatic_cloudflare_mutation_workflow',noAutomaticDeployWorkflow(s)),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
