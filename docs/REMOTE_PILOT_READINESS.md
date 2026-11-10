@@ -1,8 +1,16 @@
-# P1-O release readiness gate | Owner-approved remote pilot ONLY
+# P1-P release readiness gate | Owner-approved remote pilot ONLY
 
 Date checked: 10 November 2026. Code status: **offline preflight and global Cron kill-switch implemented; no remote deployment**.
 
 This is a **human-authorized release procedure**, not a script that creates cloud resources. GitHub Actions must not deploy Workers, create remote D1, apply remote migrations, change triggers, publish Android APKs or register Google OAuth projects. A source test passing is **not** approval to execute the commands described here.
+
+## P1-P rollback-safe first identity and monitor, mandatory test before account pilot
+
+A newly signed-in user must be registered and receive its **first PAUSED monitor in one D1 `batch()` transaction**. An induced second-statement SQL error must leave **zero** identities and zero monitors. A valid first POST followed by a successful retry of the same `clientDraftId` must return the same monitor without creating duplicates. If an `INSERT OR IGNORE` returns zero and the identity has no monitors, only that request's candidate identity is deleted in the batch. This protects the hard 20-account pilot cap against stranded rows.
+
+For a future **owner-approved** remote pilot, first inspect actual D1 Free quota/billing/CPU and ensure migrations **0001–0005** are present. Test a private disposable D1 environment with no secrets in repo or CI. Review row counts before and after a controlled, reversible failure experiment; **never intentionally break a live customer's production monitor**. D1 `batch()` is transactional according to [Cloudflare documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/), but batching reduces round trips, not the billed number of rows ([official query-performance guidance](https://developers.cloudflare.com/d1/observability/find-expensive-queries/)). Local success is not evidence of remote Free-tier viability.
+
+`D1Result.meta` can be absent in the TypeScript definition, so the Worker refuses to assert successful creation when batch change counts are ambiguous. If a transaction actually committed but the response was lost, Android must retry with **the identical draft ID** and reconcile the existing monitor. See [ADR-0017](ADR/0017-atomic-first-monitor-onboarding.md).
 
 ## P1-O signed identity admission and live D1-cost acceptance
 
