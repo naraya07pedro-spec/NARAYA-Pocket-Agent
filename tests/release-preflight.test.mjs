@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,16);
+  assert.equal(result.checks.length,17);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -205,5 +205,28 @@ test('P1-N source gate refuses an owner-supplied manifest being promoted to veri
   for(const mutate of changes){
     const s=clone();mutate(s);
     assert.ok(failures(audit(s)).includes('owner_evidence_can_never_certify_remote_or_activate'));
+  }
+});
+
+
+test('P1-O source guard rejects regressed identity registration before path/body prevalidation',()=>{
+  const bad=[
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'const existing = await env.DB.prepare','const unused = await env.DB.prepare');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'if (existing) {','if (false) {');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'const createInput = creating ? parseSyncInput(await boundedJson(request)) : null',
+      'const createInput = null');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'const statusInput = patching ? parseStatusInput(await boundedJson(request)) : null',
+      'const statusInput = null');},
+    s=>{s.mobileSync=s.mobileSync.replace(
+      'const {issuer,subject} = await verifyOidcBearer(request, env)',
+      'const {issuer,subject} = {issuer:"fake",subject:"fake"}');},
+  ];
+  for(const mutate of bad){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes('signed_user_admission_is_prevalidated_and_existing_users_read_only'));
   }
 });
