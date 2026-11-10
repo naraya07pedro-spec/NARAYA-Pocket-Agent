@@ -1,5 +1,25 @@
 # Evidence register | NARAYA Pocket Agent
 
+## P1-E Android Google sign-in + manual cloud adapter (10 November 2026; branch candidate)
+
+| Gate | Result | Exact environment/source |
+| --- | --- | --- |
+| Native Android debug APK + JVM unit tests | SUCCESS | [Android run 42760135711](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135711) on `fbde24642ee96b8e4d8a78a33d89d49431526e0d`; APK SHA-256 `c4959e4d469e5c6eebd89ceb1c1d8ff7af0abd91052237bd9f60d1aca130e3d8` |
+| Existing real public GitHub Android JVM adapter | SUCCESS | [Run 42760135615](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135615), same SHA, JVM not physical device |
+| Source backend + TS | SUCCESS | [Run 42760135523](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135523), same SHA |
+| Local workerd/D1 | SUCCESS | [Run 42760135508](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135508), same SHA; not real Cloudflare remote |
+| Live public GitHub Worker GET | SUCCESS | [Run 42760135668](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42760135668), same SHA; not Cron/device-off |
+| Explicit Android signed-in cloud sync | NOT_VERIFIED | Google Web Client ID and Worker HTTPS origin intentionally blank in CI; tests mock transport and token-shaped strings |
+| Real Google sign-in + actual server ID token verification | NOT_VERIFIED | No configured Google OAuth project/device/real issued token |
+| Device installation, RAM/battery, powered-off Cloudflare Cron | NOT_VERIFIED | Device and remote setup/authorization required |
+
+**Initial failure and correction:** Android runs [42759905864](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905864) and [42759905986](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42759905986) failed on `cbc107b5c730ddc097f2e5efd8b8e3f0397985b5` due to Google ID SDK 1.2.1 Kotlin 2.4 metadata incompatible with app compiler 2.2 metadata reader. Pinning `googleid:1.1.1` yielded green CI, without unsafe skip flags.
+
+**Follow-up gate:** newly added Android CI assertion must show that `CloudSyncClientTest` really executed at least 7 tests, 0 failed/errored/skipped, on a later source SHA. Do not claim this XML gate before its workflow SUCCESS. Live providers, Google OAuth registration, real backend domain and remote Cloudflare remain unverified.
+
+---
+
+
 ## P1-D: bounded multi-user scheduler (10 November 2026, merged PR #10, not deployed)
 
 | Gate | Evidence class | Source SHA and exact verification |
