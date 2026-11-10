@@ -45,19 +45,47 @@ async function readResponse(response){
   return data;
 }
 
+// Official Cloudflare subscription fields are optional. An omitted price
+// cannot downgrade a known non-free rate-plan or AwaitingPayment state.
+const FREE_RATE_PLANS=new Set(['free','partners_free']);
+const PAID_OR_DUE_STATES=new Set(['Paid','AwaitingPayment']);
+function validAmount(value){
+  return value===undefined||(typeof value==='number'&&Number.isFinite(value));
+}
 function validateSubscriptions(data){
   if(!Array.isArray(data?.result)||data.result.length>250||
-    data.result.some(s=>!s||typeof s!=='object'||Array.isArray(s)))throw Error('invalid_api_response');
+    data.result.some(row=>!row||typeof row!=='object'||Array.isArray(row)||
+      !validAmount(row.price)||
+      (row.state!==undefined&&typeof row.state!=='string')||
+      (row.rate_plan!==undefined&&
+        (!row.rate_plan||typeof row.rate_plan!=='object'||Array.isArray(row.rate_plan)||
+         (row.rate_plan.id!==undefined&&typeof row.rate_plan.id!=='string'))))){
+    throw Error('invalid_api_response');
+  }
   const total=data.result_info?.total_count;
   if(total!==undefined&&(!safeInt(total)||total!==data.result.length))throw Error('invalid_api_response');
   return data.result;
 }
 function subscriptionSignal(records){
-  if(records.some(row=>row.state==='Paid'||(typeof row.price==='number'&&Number.isFinite(row.price)&&row.price>0))){
-    return 'POTENTIAL_PAID_SUBSCRIPTION_PRESENT';
-  }
   if(records.length===0)return 'NONE_RETURNED_NOT_FREE_PROOF';
-  return 'NO_POSITIVE_PRICE_OR_PAID_STATE_SEEN_NOT_FREE_PROOF';
+  let unknown=false;
+  for(const row of records){
+    const rateId=row.rate_plan?.id;
+    if(PAID_OR_DUE_STATES.has(row.state)||row.price>0||
+        (typeof rateId==='string'&&rateId.length>0&&!FREE_RATE_PLANS.has(rateId))||
+        row.rate_plan?.externally_managed===true||row.rate_plan?.is_contract===true){
+      return 'POTENTIAL_PAID_SUBSCRIPTION_PRESENT';
+    }
+    // A plain Provisioned/Trial with no price/plan ID is NOT evidence that
+    // the account is free. Likewise cancelled/failed rows may hide costs.
+    if((row.price===undefined&&rateId===undefined)||
+       (row.price===undefined&&row.state!=='Trial')||
+       (row.state!=='Trial'&&row.state!=='Provisioned')){
+      unknown=true;
+    }
+  }
+  return unknown?'SUBSCRIPTION_FINANCIAL_STATUS_UNKNOWN':
+    'NO_POSITIVE_PRICE_OR_PAID_STATE_SEEN_NOT_FREE_PROOF';
 }
 function validateHistoryPage(data,page,total){
   const info=data?.result_info;
@@ -66,7 +94,8 @@ function validateHistoryPage(data,page,total){
     (info.count!==undefined&&info.count!==data.result.length)||
     data.result.length>HISTORY_PAGE_SIZE||
     (total!==null&&total!==info.total_count)||
-    data.result.some(row=>!row||typeof row!=='object'||Array.isArray(row))){
+    data.result.some(row=>!row||typeof row!=='object'||Array.isArray(row)||
+      !validAmount(row.amount)||!validAmount(row.amount_to_pay))){
     throw Error('invalid_api_response');
   }
   return {records:data.result,total:info.total_count};
@@ -116,8 +145,10 @@ export async function inspectBillingReadOnly({accountId,token,fetchImpl=fetch,ti
     result.paid_subscription_signal=subscriptionSignal(subscriptionsData);
     subscriptionComplete=true;
   }catch(error){result.subscription_inventory=failCode(error)}
+  // Observed positive history is monotonic evidence: later 403/malformed
+  // pages must not erase a previously validated charge, nor its page count.
+  let total=null,n=0,positive=false;
   try{
-    let total=null,n=0,positive=false;
     for(let page=1;page<=MAX_HISTORY_PAGES;page++){
       const data=validateHistoryPage(await get(history(page)),page,total);
       total=data.total;
@@ -136,8 +167,8 @@ export async function inspectBillingReadOnly({accountId,token,fetchImpl=fetch,ti
       historyComplete?'NO_IN_HISTORY_NOT_FREE_PROOF':'UNKNOWN_IN_INCOMPLETE_HISTORY';
   }catch(error){
     result.billing_history=failCode(error);
-    result.historical_positive_amount_seen='UNKNOWN';
-    result.billing_records_scanned=0;
+    result.historical_positive_amount_seen=positive?'YES_HISTORICAL_ONLY':'UNKNOWN';
+    result.billing_records_scanned=n; // validated earlier pages only
   }
   result.billing_metadata_complete=subscriptionComplete&&historyComplete;
   return result;
