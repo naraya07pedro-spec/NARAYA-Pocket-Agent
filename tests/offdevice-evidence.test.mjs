@@ -91,7 +91,7 @@ test('red team: observation identity, causal chain and type-coercion attacks are
     v=>{v.cloudflare.observations[0].id=baselineId;},
     v=>{v.cloudflare.observations[0].monitor_id='99999999-9999-4999-8999-999999999999';},
     v=>{v.cloudflare.observations[0].event_type='BASELINE';v.cloudflare.observations[0].previous_sha=null;},
-    v=>{v.cloudflare.observations[1].event_type='CHANGE';v.cloudflare.observations[1].previous_sha=SHA_B;},
+    v=>{v.cloudflare.observations[1].event_type='CHANGE';v.cloudflare.observations[1].previous_sha=SHA_A;},
     v=>{v.cloudflare.observations[1].rawToken='Bearer secret';},
     v=>{v.cloudflare.observations=[v.cloudflare.observations[0]];},
   ];
@@ -99,6 +99,19 @@ test('red team: observation identity, causal chain and type-coercion attacks are
     const v=fixture();mutation(v);
     assert.equal(assessOffDeviceEvidence(v).structural_consistency,'FAIL',JSON.stringify(failing(v)));
   }
+});
+
+
+test('bounded 50-event history may legitimately omit a historical baseline',()=>{
+  const v=fixture();
+  v.cloudflare.observations[1].event_type='CHANGE';
+  v.cloudflare.observations[1].previous_sha=SHA_B;
+  // SHA_B -> SHA_A (older) and SHA_A -> SHA_B (newer) is a
+  // structurally continuous two-CHANGE page; the original BASELINE
+  // may have been truncated and no one can infer missing history.
+  const report=assessOffDeviceEvidence(v);
+  assert.equal(report.structural_consistency,'PASS');
+  assert.equal(report.remote_acceptance,'NOT_VERIFIED');
 });
 
 test('red team: Cron outside phone-off, D1 outside off, late/absent signed sync and unrelated GitHub SHA fail closed',()=>{
