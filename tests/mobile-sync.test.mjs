@@ -788,6 +788,11 @@ const approvalPayload=(clientIntentId=uuid(),leadId=uuid(),serviceCode='EXHIBITI
   target:'synthetic-crm',payload:{leadId,serviceCode},
 });
 const requestApproval=(env,t,payload)=>request(env,'/v1/approval-intents',t,'POST',payload);
+const registerSyntheticLead=(env,t,payload,budgetBand='UNKNOWN',daysToDeadline=30)=>
+  request(env,'/v1/synthetic-leads',t,'POST',{
+    clientLeadId:payload.payload.leadId,source:'SYNTHETIC_FORM',
+    serviceCode:payload.payload.serviceCode,budgetBand,daysToDeadline,
+  });
 const decisionBody=(item,decision='APPROVE',overrides={})=>({
   decision,expectedVersion:item.version,payloadDigest:item.payloadDigest,
   targetDigest:item.targetDigest,...overrides,
@@ -807,6 +812,7 @@ test('P2-A synthetic lead approval: OIDC scoped, durable, digest-bound, one deci
     assert.equal(identities(env).length,0);
     assert.equal((await create(env,a,uuid(),'python/cpython')).status,201);
     assert.equal((await create(env,b,uuid(),'nodejs/node')).status,201);
+    assert.equal((await registerSyntheticLead(env,a,body)).status,201);
     const first=await requestApproval(env,a,body);
     assert.equal(first.status,201);
     const created=(await first.json()).intent;
@@ -853,6 +859,7 @@ test('P2-A synthetic lead approval: expiry, denial, payload replay conflict and 
     const a=await token('p2-approver-expiry');
     assert.equal((await create(env,a,uuid())).status,201);
     const body=approvalPayload();
+    assert.equal((await registerSyntheticLead(env,a,body)).status,201);
     const first=(await requestApproval(env,a,body).then(r=>r.json())).intent;
     assert.equal((await requestApproval(env,a,{
       ...body,payload:{...body.payload,serviceCode:'INTERIOR'},
@@ -864,7 +871,9 @@ test('P2-A synthetic lead approval: expiry, denial, payload replay conflict and 
     assert.equal((await request(env,'/v1/approval-intents/'+first.id+'/decision',a,
       'POST',decisionBody(first,'APPROVE')).then(r=>r.status)),409);
 
-    const fresh=(await requestApproval(env,a,approvalPayload()).then(r=>r.json())).intent;
+    const freshBody=approvalPayload();
+    assert.equal((await registerSyntheticLead(env,a,freshBody)).status,201);
+    const fresh=(await requestApproval(env,a,freshBody).then(r=>r.json())).intent;
     env.DB.connection.prepare('UPDATE synthetic_approval_intents SET expires_at=? WHERE id=?')
       .run(Date.now()-10,fresh.id);
     const stale=await request(env,'/v1/approval-intents/'+fresh.id+'/decision',a,
@@ -890,8 +899,14 @@ test('P2-A synthetic approval: pending cap, no provider dispatch and auth reject
   try{
     const a=await token('p2-approver-cap');
     assert.equal((await create(env,a,uuid())).status,201);
-    for(let i=0;i<5;i++)assert.equal((await requestApproval(env,a,approvalPayload())).status,201);
-    assert.equal((await requestApproval(env,a,approvalPayload())).status,429);
+    for(let i=0;i<5;i++){
+      const b=approvalPayload();
+      assert.equal((await registerSyntheticLead(env,a,b)).status,201);
+      assert.equal((await requestApproval(env,a,b)).status,201);
+    }
+    const overflowing=approvalPayload();
+    assert.equal((await registerSyntheticLead(env,a,overflowing)).status,201);
+    assert.equal((await requestApproval(env,a,overflowing)).status,429);
     assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_approval_intents').get().n,5);
     assert.equal((await request(env,'/v1/approval-intents','not-a-token')).status,401);
     const all=await request(env,'/v1/approval-intents',a);
@@ -899,8 +914,77 @@ test('P2-A synthetic approval: pending cap, no provider dispatch and auth reject
     const first=(await request(env,'/v1/approval-intents',a).then(r=>r.json())).intents[0];
     assert.equal((await request(env,'/v1/approval-intents/'+first.id+'/decision',a,
       'POST',decisionBody(first)).then(r=>r.status)),200);
-    assert.equal((await requestApproval(env,a,approvalPayload())).status,201,
+    const reopened=approvalPayload();
+    assert.equal((await registerSyntheticLead(env,a,reopened)).status,201);
+    assert.equal((await requestApproval(env,a,reopened)).status,201,
       'approved non-dispatch state frees pending cap but does not execute anything');
     assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,0);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+
+test('P2-B synthetic intake: authenticated, deterministic category/draft, dedup and no data leakage',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const a=await token('p2b-a'), b=await token('p2b-b');
+    const clientLeadId=uuid();
+    const data={clientLeadId,source:'SYNTHETIC_FORM',serviceCode:'EXHIBITION',
+      budgetBand:'HIGH',daysToDeadline:7};
+    assert.equal((await request(env,'/v1/synthetic-leads',a,'POST',data)).status,409,
+      'signed but not onboarded user must not add intake');
+    assert.equal((await create(env,a,uuid())).status,201);
+    assert.equal((await create(env,b,uuid(),'nodejs/node')).status,201);
+    const created=await request(env,'/v1/synthetic-leads',a,'POST',data);
+    assert.equal(created.status,201);
+    const item=(await created.json()).lead;
+    assert.equal(item.priority,'TIME_SENSITIVE');
+    assert.equal(item.classification,'DETERMINISTIC_RULES_NOT_AI');
+    assert.equal(item.sendStatus,'DRAFT_ONLY');
+    assert.match(item.replyDraft,/booth pameran/);
+    assert.match(item.inputDigest,/^[0-9a-f]{64}$/);
+    assert.equal((await request(env,'/v1/synthetic-leads',a,'POST',data)).status,200);
+    assert.equal((await request(env,'/v1/synthetic-leads',a,'POST',
+      {...data,budgetBand:'LOW'})).status,409);
+    const list=(await request(env,'/v1/synthetic-leads',a).then(r=>r.json())).leads;
+    assert.equal(list.length,1);
+    assert.equal(list[0].clientLeadId,clientLeadId);
+    assert.equal((await request(env,'/v1/synthetic-leads',b).then(r=>r.json())).leads.length,0);
+    const foreignApproval=approvalPayload(uuid(),clientLeadId,'EXHIBITION');
+    assert.equal((await requestApproval(env,b,foreignApproval)).status,409,
+      'cannot approve another owner synthetic lead');
+    assert.equal((await requestApproval(env,a,foreignApproval)).status,201,
+      'approved preview must reference owned intake');
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_leads').get().n,1);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('P2-B rules classify without LLM or external provider, reject extra PII or URL fields',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const a=await token('p2b-validation');
+    assert.equal((await create(env,a,uuid())).status,201);
+    const a1={clientLeadId:uuid(),source:'SYNTHETIC_FORM',
+      serviceCode:'INTERIOR',budgetBand:'UNKNOWN',daysToDeadline:35};
+    const a2={...a1,clientLeadId:uuid(),budgetBand:'MID',daysToDeadline:70};
+    const r1=await request(env,'/v1/synthetic-leads',a,'POST',a1);
+    const r2=await request(env,'/v1/synthetic-leads',a,'POST',a2);
+    assert.equal((await r1.json()).lead.priority,'NEEDS_BUDGET');
+    assert.equal((await r2.json()).lead.priority,'STANDARD_REVIEW');
+    for(const bad of [
+      {...a1,email:'private@example.com'},
+      {...a1,phone:'08123456789'},
+      {...a1,source:'PUBLIC_WEBHOOK'},
+      {...a1,serviceCode:'https://evil.invalid'},
+      {...a1,budgetBand:'UNLIMITED'},
+      {...a1,daysToDeadline:0},
+      {...a1,daysToDeadline:365.5},
+      {...a1,clientLeadId:'wrong'},
+    ])assert.equal((await request(env,'/v1/synthetic-leads',a,'POST',bad)).status,400);
+    assert.equal((await request(env,'/v1/synthetic-leads','bad')).status,401);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_leads').get().n,2);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM audit_events').get().n,0,
+      'no actual provider effect recorded for synthetic response drafts');
   }finally{globalThis.fetch=previous;env.DB.close();}
 });

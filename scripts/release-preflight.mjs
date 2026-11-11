@@ -17,6 +17,7 @@ const EXPECTED_MIGRATIONS=[
   '0004_global_scheduler_budget.sql',
   '0005_observation_event_sequence.sql',
   '0006_synthetic_approval_intents.sql',
+  '0007_synthetic_lead_intake.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -40,6 +41,8 @@ export function readSourceSnapshot(base=root){
     migration0005:text(base,'worker/migrations/0005_observation_event_sequence.sql'),
     migration0006:text(base,'worker/migrations/0006_synthetic_approval_intents.sql'),
     approvalSource:text(base,'worker/src/synthetic-approvals.ts'),
+    migration0007:text(base,'worker/migrations/0007_synthetic_lead_intake.sql'),
+    syntheticLeadSource:text(base,'worker/src/synthetic-leads.ts'),
     schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
@@ -77,7 +80,9 @@ function migrationChainValid(s){
     /UPDATE observations SET event_sequence = rowid/.test(s.migration0005) &&
     /UNIQUE INDEX/.test(s.migration0005) &&
     /CREATE TABLE IF NOT EXISTS synthetic_approval_intents/.test(s.migration0006) &&
-    /UNIQUE\(owner_id,client_intent_id\)/.test(s.migration0006);
+    /UNIQUE\(owner_id,client_intent_id\)/.test(s.migration0006) &&
+    /CREATE TABLE IF NOT EXISTS synthetic_leads/.test(s.migration0007) &&
+    /UNIQUE\(owner_id,client_lead_id\)/.test(s.migration0007);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};

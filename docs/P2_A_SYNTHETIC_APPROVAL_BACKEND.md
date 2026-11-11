@@ -12,6 +12,8 @@ The intentionally narrow operation is **`provider=SYNTHETIC_ONLY`, `operation=CR
 
 ### Authenticated request contract
 
+**P2-B dependency:** Before the approval POST, the signed-in user must first create a synthetic lead through `POST /v1/synthetic-leads` using exactly the same `clientLeadId` as `payload.leadId` and the same `serviceCode`. A lead ID not owned by the user, nonexistent in D1, or mismatching category returns **409** and creates no approval. See [P2-B typed intake](P2_B_SYNTHETIC_LEAD_INTAKE.md). This is a positive owner binding, but still **no real CRM effect**.
+
 `POST /v1/approval-intents`, using the existing *signed* OIDC bearer in Authorization:
 
 ```json

@@ -75,6 +75,13 @@ async function create(request:Request,env:Env,owner:string){
   const now=Date.now();
   const payloadDigest=await digest(['p2a-v1',body.leadId,body.serviceCode]);
   const targetDigest=await digest(['p2a-v1','SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm']);
+  // Only a lead already owned and stored by the signed-in user may be
+  // considered for an approval. Never approve a fabricated/nonexistent ID.
+  const linked=await env.DB.prepare(`SELECT service_code FROM synthetic_leads
+    WHERE owner_id=? AND client_lead_id=?`)
+    .bind(owner,body.leadId).first<{service_code:string}>();
+  if(!linked||linked.service_code!==body.serviceCode)
+    return json({error:'synthetic_lead_not_found_or_mismatch'},409);
   const id=crypto.randomUUID();
   // One atomic D1 statement for both deduplication and the bounded pilot
   // quota. A repeated client-intent ID must preserve the original status.
