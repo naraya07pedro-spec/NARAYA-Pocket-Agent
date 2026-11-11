@@ -785,6 +785,7 @@ test('P2-C real local workerd D1: bounded task steps, durable restart and owner 
 
 test('P2-D real workerd D1: approval change atomically transitions only bound immutable effect',{timeout:90000},async()=>{
   const dir=mkdtempSync(join(tmpdir(),'naraya-d1-task-effect-'));
+  const originalFetch=globalThis.fetch;
   let platform;
   try{
     platform=await setupPlatform(dir);
@@ -833,12 +834,39 @@ test('P2-D real workerd D1: approval change atomically transitions only bound im
     await assert.rejects(DB.prepare(
       "UPDATE synthetic_effect_intents SET status='APPROVED_NO_DISPATCH' WHERE id=?")
       .bind(effect).run(),/task_effect_no_independent_transition/i);
-    const update=await DB.prepare(`UPDATE synthetic_approval_intents
-      SET status='APPROVED_NO_DISPATCH',version=version+1,decided_at=?
-      WHERE id=? AND owner_id=? AND status='PENDING'
-      AND payload_digest=? AND target_digest=?`)
-      .bind(now+10,approval,owner,payloadDigest,targetDigest).run();
-    assert.ok([1,2].includes(update.meta.changes),'D1 may count main and triggered effect writes');
+    // Actual signed OIDC HTTP API, not just a manually executed SQL UPDATE.
+    // This specifically catches D1's trigger-inclusive meta.changes=2 behavior.
+    const issuer='https://synthetic.example.invalid';
+    const aud='p2d-real-workerd-test';
+    const jwks='https://keys.example.invalid/p2d';
+    const pair=await crypto.subtle.generateKey({
+      name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+      publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+    },true,['sign','verify']);
+    const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),
+      kid:'p2d-workerd-key',alg:'RS256',use:'sig'};
+    const enc=object=>Buffer.from(JSON.stringify(object)).toString('base64url');
+    const seconds=Math.floor(Date.now()/1000);
+    const signedBase=enc({alg:'RS256',kid:'p2d-workerd-key',typ:'JWT'})+'.'+
+      enc({iss:issuer,sub:'p2d-workerd',aud,iat:seconds-20,exp:seconds+600});
+    const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',
+      pair.privateKey,new TextEncoder().encode(signedBase));
+    const signedToken=signedBase+'.'+Buffer.from(signature).toString('base64url');
+    globalThis.fetch=async (url,options)=>{
+      assert.equal(url,jwks);assert.equal(options.method,'GET');
+      return new Response(JSON.stringify({keys:[key]}));
+    };
+    const decisionResponse=await worker.fetch(new Request(base+
+      '/v1/approval-intents/'+approval+'/decision',{
+      method:'POST',headers:{authorization:'Bearer '+signedToken,
+        'content-type':'application/json'},
+      body:JSON.stringify({decision:'APPROVE',expectedVersion:1,
+        payloadDigest,targetDigest}),
+    }),{DB,OIDC_ISSUER:issuer,OIDC_AUDIENCE:aud,OIDC_JWKS_URL:jwks});
+    const decisionResult=await decisionResponse.json();
+    assert.equal(decisionResponse.status,200,JSON.stringify(decisionResult));
+    assert.equal(decisionResult.status,'APPROVED_NO_DISPATCH');
+    assert.equal(decisionResult.eligibleForDispatch,false);
     assert.equal((await DB.prepare('SELECT status FROM synthetic_effect_intents WHERE id=?')
       .bind(effect).first()).status,'APPROVED_NO_DISPATCH');
     await platform.dispose();platform=null;
@@ -851,6 +879,7 @@ test('P2-D real workerd D1: approval change atomically transitions only bound im
     assert.equal((await platform.env.DB.prepare(
       'SELECT COUNT(*) AS n FROM synthetic_effect_intents').first()).n,1);
   }finally{
+    globalThis.fetch=originalFetch;
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});
   }
