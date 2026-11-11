@@ -120,16 +120,50 @@ async function decide(request:Request,env:Env,owner:string,id:string){
   const body=decision(await boundedJson(request));
   const now=Date.now();
   const next=body.choice==='APPROVE'?'APPROVED_NO_DISPATCH':'DENIED';
-  // An atomic versioned, owner-scoped CAS: stale, expired, wrong target,
-  // wrong payload, forged user or duplicate decision cannot mutate anything.
-  // APPROVED_NO_DISPATCH is deliberately NEVER an external provider effect.
+  const before=await env.DB.prepare(`SELECT task_id,status,version,
+    payload_digest,target_digest FROM synthetic_approval_intents
+    WHERE id=? AND owner_id=?`).bind(id,owner).first<{
+      task_id:string|null;status:string;version:number;
+      payload_digest:string;target_digest:string;
+    }>();
+  if(!before||before.status!=='PENDING'||before.version!==body.version||
+    before.payload_digest!==body.payloadDigest||
+    before.target_digest!==body.targetDigest)
+    return json({error:'approval_not_found_or_stale_expired'},409);
+  // P2-D SQL BEFORE/AFTER triggers enforce that a task-bound effect is
+  // present, matches the frozen payload and changes state atomically.
+  // D1 may include the trigger's effect-row write in meta.changes (=2).
+  // Node SQLite's direct changes metadata may report only the main row (=1).
   const result=await env.DB.prepare(`UPDATE synthetic_approval_intents
     SET status=?,version=version+1,decided_at=?
     WHERE id=? AND owner_id=? AND version=? AND status='PENDING'
       AND expires_at>? AND payload_digest=? AND target_digest=?`)
     .bind(next,now,id,owner,body.version,now,
       body.payloadDigest,body.targetDigest).run();
-  if(result.meta?.changes!==1) return json({error:'approval_not_found_or_stale_expired'},409);
+  if(result.meta?.changes===0)return json({error:'approval_not_found_or_stale_expired'},409);
+  if(result.meta?.changes!==1&&result.meta?.changes!==2)
+    throw new Error('approval_commit_result_ambiguous');
+  // Never infer a committed decision solely from the statement's changed
+  // row count. Independently read back the exact owner-scoped final state.
+  const committed=await env.DB.prepare(`SELECT status,version,decided_at
+    FROM synthetic_approval_intents WHERE id=? AND owner_id=?`)
+    .bind(id,owner).first<{status:string;version:number;decided_at:number|null}>();
+  if(!committed||committed.status!==next||
+    committed.version!==body.version+1||committed.decided_at!==now)
+    throw new Error('approval_post_commit_readback_mismatch');
+  if(before.task_id!==null){
+    const effect=await env.DB.prepare(`SELECT status,decided_at,payload_digest,
+      target_digest FROM synthetic_effect_intents
+      WHERE owner_id=? AND approval_id=? AND task_id=?`)
+      .bind(owner,id,before.task_id).first<{
+        status:string;decided_at:number|null;
+        payload_digest:string;target_digest:string;
+      }>();
+    if(!effect||effect.status!==next||effect.decided_at!==now||
+      effect.payload_digest!==body.payloadDigest||
+      effect.target_digest!==body.targetDigest)
+      throw new Error('approval_effect_post_commit_readback_mismatch');
+  }
   return json({id,status:next,version:body.version+1,
     externalWrite:'NOT_IMPLEMENTED',eligibleForDispatch:false});
 }
