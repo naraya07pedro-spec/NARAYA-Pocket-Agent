@@ -62,6 +62,8 @@ export function readSourceSnapshot(base=root){
     androidCloudClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/CloudSyncClient.kt'),
     androidGoogleIdentity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/GoogleIdentityClient.kt'),
     androidMainActivity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt'),
+    androidWorkflowClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/WorkflowReviewClient.kt'),
+    androidWorkflowPanel:text(base,'android/app/src/main/java/dev/naraya/pocketagent/WorkflowReviewPanel.kt'),
     offdeviceEvidenceGate:text(base,'scripts/offdevice-evidence-gate.mjs'),
     workflows,
   };
@@ -270,6 +272,23 @@ export function auditSource(s){
       s.migration0010.includes('CREATE TRIGGER IF NOT EXISTS sandbox_dispatch_state_guard') &&
       s.migration0010.includes('CREATE TRIGGER IF NOT EXISTS sandbox_provider_no_delete') &&
       s.migration0010.includes('UNIQUE(owner_id,effect_id)')),
+    check('p2f_android_explicit_user_review_no_hidden_dispatch',
+      s.androidMainActivity.includes('WorkflowReviewPanel(') &&
+      s.androidMainActivity.includes('if (signedIn && cloudConfigured)') &&
+      s.androidWorkflowClient.includes('CloudSyncClient.validIdTokenShape(token)') &&
+      s.androidWorkflowClient.includes('CloudSyncClient.validOrigin(origin)') &&
+      s.androidWorkflowClient.includes('fun allowedRoute(path: String, method: String)') &&
+      s.androidWorkflowClient.includes('instanceFollowRedirects = false') &&
+      s.androidWorkflowClient.includes('safeToRetry') &&
+      s.androidWorkflowClient.includes('fun decide(token:String?') &&
+      s.androidWorkflowClient.includes('fun reconcile(token:String?') &&
+      s.androidWorkflowPanel.includes('AlertDialog(') &&
+      s.androidWorkflowPanel.includes('ReviewConfirmation.Decide') &&
+      s.androidWorkflowPanel.includes('readToken() != token') &&
+      s.androidWorkflowPanel.includes('perform("rekonsiliasi read-only"') &&
+      !/SharedPreferences|WorkManager|PeriodicWorkRequest|AlarmManager|Bearer\\s+\\$/.test(
+        s.androidWorkflowClient+'\n'+s.androidWorkflowPanel) &&
+      !/https?:\\/\\/(?!agent\\.example\\.invalid)/.test(s.androidWorkflowPanel)),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
