@@ -34,9 +34,9 @@ This repository provides **`scripts/android-owner-pilot.mjs`**, which reads a *p
 5. **Only after Cloudflare account+billing verification, owner-approved inert Worker deployment, and a real Google Cloud OAuth project:** create an **Android OAuth client** for package `dev.naraya.pocketagent` with this *owner-local* SHA-1; create a separate **Web OAuth client** whose public client ID must equal Worker `OIDC_AUDIENCE`. Confirm your Worker exact HTTPS host is owned/controlled by you. Then explicitly build with both *public* identifiers:
 
    ```powershell
-   node scripts/android-owner-pilot.mjs --build ` + `
-     --web-client-id="<VERIFIED_PUBLIC_GOOGLE_WEB_CLIENT_ID>" ` + `
-     --worker-origin="https://<OWNER_CONTROLLED_WORKER_HOST>" ` + `
+   node scripts/android-owner-pilot.mjs --build `
+     --web-client-id="<VERIFIED_PUBLIC_GOOGLE_WEB_CLIENT_ID>" `
+     --worker-origin="https://<OWNER_CONTROLLED_WORKER_HOST>" `
      --acknowledge-owned-origin
    ```
 
