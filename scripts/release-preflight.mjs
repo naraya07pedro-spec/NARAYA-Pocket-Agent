@@ -288,7 +288,8 @@ export function auditSource(s){
       s.androidWorkflowPanel.includes('perform("rekonsiliasi read-only"') &&
       !/SharedPreferences|WorkManager|PeriodicWorkRequest|AlarmManager|Bearer\\s+\\$/.test(
         s.androidWorkflowClient+'\n'+s.androidWorkflowPanel) &&
-      !/https?:\\/\\/(?!agent\\.example\\.invalid)/.test(s.androidWorkflowPanel)),
+      !s.androidWorkflowPanel.includes('https://') &&
+      !s.androidWorkflowPanel.includes('http://')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
