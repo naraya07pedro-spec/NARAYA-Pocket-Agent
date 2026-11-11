@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,21);
+  assert.equal(result.checks.length,22);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -61,6 +61,29 @@ test('P1-AB: source preflight blocks bypass or removal of actual built APK verif
   );
   assert.ok(failures(audit(removed)).includes(
     'android_ci_requires_real_apk_signature_and_package_verification'));
+});
+
+test('P2-C static gate refuses external fetch, disabled lease fencing and missing task quota',()=>{
+  const check='p2c_runtime_durable_manual_fenced_no_provider_dispatch';
+  const base=clone();
+  assert.ok(!failures(audit(base)).includes(check));
+  const mutations=[
+    s=>{s.taskRuntimeSource=s.taskRuntimeSource.replace(
+      'const MAX_STEPS_PER_HOUR=12','const MAX_STEPS_PER_HOUR=999999');},
+    s=>{s.taskRuntimeSource=s.taskRuntimeSource.replace(
+      'AND t.version=?','AND 1=1');},
+    s=>{s.taskRuntimeSource += '\\nfetch("https://untrusted.invalid");\\n';},
+    s=>{s.workerIndex=s.workerIndex.replace(
+      'return await taskRuntimeRoute(request,env,pathname)',
+      'return json({pretend:true})');},
+    s=>{s.migration0008=s.migration0008.replace(
+      'CREATE TABLE IF NOT EXISTS task_step_budgets',
+      'CREATE TABLE IF NOT EXISTS fake_budgets');},
+  ];
+  for(const mutate of mutations){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes(check));
+  }
 });
 
 test('preflight detects accidental public routes and schedule expansion',()=>{
