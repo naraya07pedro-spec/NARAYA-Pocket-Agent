@@ -72,7 +72,7 @@ test('P2-C static gate refuses external fetch, disabled lease fencing and missin
       'const MAX_STEPS_PER_HOUR=12','const MAX_STEPS_PER_HOUR=999999');},
     s=>{s.taskRuntimeSource=s.taskRuntimeSource.replaceAll(
       'AND t.version=?','AND 1=1');},
-    s=>{s.taskRuntimeSource += '\\nfetch("https://untrusted.invalid");\\n';},
+    s=>{s.taskRuntimeSource += ' fetch("https://untrusted.invalid");';},
     s=>{s.workerIndex=s.workerIndex.replace(
       'return await taskRuntimeRoute(request,env,pathname)',
       'return json({pretend:true})');},
