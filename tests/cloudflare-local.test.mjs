@@ -13,11 +13,31 @@ const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', impor
 const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql', '0008_durable_task_runtime.sql', '0009_task_bound_effect_intents.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
-  // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
-  const sql = source.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
-  const statements = sql.split(';').map(statement=>statement.trim()).filter(Boolean);
+  // Prepare whole CREATE TRIGGER ... BEGIN ... END; blocks as one SQLite
+  // statement; naive semicolon splitting breaks trigger bodies and atomics.
+  // D1.exec is unsuitable here because multiline input differs by runtime.
+  const lines=source.split('\n').filter(line=>!line.trimStart().startsWith('--'));
+  const statements=[];
+  let pending='',insideTrigger=false;
+  for(const line of lines){
+    const trimmed=line.trim();
+    if(!pending.trim()&&/^CREATE TRIGGER\\b/i.test(trimmed))insideTrigger=true;
+    pending+=line+'\n';
+    if(insideTrigger){
+      if(trimmed==='END;'){
+        statements.push(pending.trim());
+        pending='';insideTrigger=false;
+      }
+    }else{
+      const parts=pending.split(';');
+      for(const sql of parts.slice(0,-1))if(sql.trim())statements.push(sql.trim());
+      pending=parts.at(-1)??'';
+    }
+  }
+  assert.equal(pending.trim(),'','migration contains incomplete statement');
+  assert.equal(insideTrigger,false);
   assert.ok(statements.length >= 2);
-  for (const statement of statements) await DB.prepare(statement).run();
+  for(const statement of statements) await DB.prepare(statement).run();
 }
 async function applySchema(DB) {
   for (const sql of migrationSql) await applyStatements(DB,sql);
