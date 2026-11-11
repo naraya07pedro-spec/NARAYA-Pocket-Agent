@@ -781,3 +781,77 @@ test('P2-C real local workerd D1: bounded task steps, durable restart and owner 
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+
+test('P2-D real workerd D1: approval change atomically transitions only bound immutable effect',{timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-task-effect-'));
+  let platform;
+  try{
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const id=crypto.randomUUID,owner=id(),lead=id(),task=id(),
+      approval=id(),effect=id(),now=Date.now();
+    const leadDigest='a'.repeat(64),payloadDigest='b'.repeat(64),targetDigest='c'.repeat(64);
+    await DB.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+      .bind(owner,'https://synthetic.example.invalid','p2d-workerd',now).run();
+    await DB.prepare(`INSERT INTO synthetic_leads(
+      id,owner_id,client_lead_id,source,service_code,budget_band,days_to_deadline,
+      priority,reply_draft,input_digest,created_at)
+      VALUES(?,?,?,'SYNTHETIC_FORM','SIGNAGE','MID',45,
+      'STANDARD_REVIEW','draft never sent',?,?)`)
+      .bind(id(),owner,lead,leadDigest,now).run();
+    await DB.prepare(`INSERT INTO task_runs(
+      id,owner_id,client_task_id,kind,client_lead_id,lead_input_digest,
+      status,current_step,version,created_at,updated_at,finished_at)
+      VALUES(?,?,?,'SYNTHETIC_LEAD_TRIAGE_V1',?,?,'SUCCEEDED',3,7,?,?,?)`)
+      .bind(task,owner,id(),lead,leadDigest,now,now,now).run();
+    for(const [i,code] of ['VERIFY_LEAD','VERIFY_TRIAGE','VERIFY_DRAFT'].entries()){
+      await DB.prepare(`INSERT INTO task_steps(
+        id,task_id,step_index,step_code,status,attempt_count,updated_at)
+        VALUES(?,?,?,?,'SUCCEEDED',1,?)`)
+        .bind(id(),task,i,code,now).run();
+    }
+    await DB.prepare(`INSERT INTO synthetic_approval_intents(
+      id,owner_id,client_intent_id,provider,operation,target,
+      payload_digest,target_digest,lead_id,service_code,status,version,
+      expires_at,created_at,task_id,task_input_digest,task_version)
+      VALUES(?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,?,?,'SIGNAGE','PENDING',1,?,?,?,?,7)`)
+      .bind(approval,owner,id(),payloadDigest,targetDigest,
+        lead,now+600000,now,task,leadDigest).run();
+    await DB.prepare(`INSERT INTO synthetic_effect_intents(
+      id,owner_id,task_id,approval_id,provider,operation,target,
+      client_lead_id,service_code,task_input_digest,task_version,
+      payload_digest,target_digest,status,created_at)
+      VALUES(?,?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,'SIGNAGE',?,7,?,?,'AWAITING_APPROVAL',?)`)
+      .bind(effect,owner,task,approval,lead,leadDigest,payloadDigest,targetDigest,now).run();
+    await assert.rejects(DB.prepare(
+      "UPDATE synthetic_effect_intents SET target='evil' WHERE id=?")
+      .bind(effect).run(),/task_effect_immutable_payload/i);
+    await assert.rejects(DB.prepare(
+      "UPDATE synthetic_effect_intents SET status='APPROVED_NO_DISPATCH' WHERE id=?")
+      .bind(effect).run(),/task_effect_no_independent_transition/i);
+    const update=await DB.prepare(`UPDATE synthetic_approval_intents
+      SET status='APPROVED_NO_DISPATCH',version=version+1,decided_at=?
+      WHERE id=? AND owner_id=? AND status='PENDING'
+      AND payload_digest=? AND target_digest=?`)
+      .bind(now+10,approval,owner,payloadDigest,targetDigest).run();
+    assert.equal(update.meta.changes,1);
+    assert.equal((await DB.prepare('SELECT status FROM synthetic_effect_intents WHERE id=?')
+      .bind(effect).first()).status,'APPROVED_NO_DISPATCH');
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const after=await platform.env.DB.prepare(
+      'SELECT status,task_input_digest FROM synthetic_effect_intents WHERE id=?')
+      .bind(effect).first();
+    assert.equal(after.status,'APPROVED_NO_DISPATCH');
+    assert.equal(after.task_input_digest,leadDigest);
+    assert.equal((await platform.env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents').first()).n,1);
+  }finally{
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
