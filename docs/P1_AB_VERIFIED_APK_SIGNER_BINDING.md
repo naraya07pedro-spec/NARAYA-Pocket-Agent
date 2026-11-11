@@ -10,11 +10,11 @@ P1-AB additionally verifies the **actual compiled APK file**:
 
 1. Official Android SDK Build Tools **36.0.0** `apksigner.jar`, invoked using the installed JDK through `java -jar`, must exit successfully for `verify --verbose --print-certs --min-sdk-version 26 app-debug.apk`.
 2. The resulting verifier report must say **exactly one signer** and v2 APK signature scheme verified (required to support the current minimum API 26). It must contain exactly one well-formed SHA-1 and SHA-256 **signing certificate** digest for that signer.
-3. Both APK certificate digests must match the **owner's local debug keystore certificate**, which must also be pinned for the user-approved local `--build` workflow. A different keystore or CI runner cert is rejected.
+3. **Owner-local `--build` only:** both APK certificate digests must match the **owner's pinned local debug keystore certificate**. A different cert is rejected. **CI `--verify-apk` does not have a stable owner key** and therefore verifies the real APK's signature and package but emits `certificate_matches_owner_keystore=NOT_CHECKED_NO_OWNER_KEY`, never claiming owner-key continuity.
 4. Official Android Build Tools `aapt dump badging` must confirm the package is exactly `dev.naraya.pocketagent`.
 5. Any missing SDK utility, malformed/ambiguous output, nonzero verifier exit, extra signer, wrong package, mismatch, or missing APK **blocks success**. The script does not sign/modify the APK or install it. It emits a local artifact SHA-256 only after passing these checks.
 
-The new `--verify-apk` entrypoint does **not** require an owner pin and is intended for GitHub CI, because each ephemeral CI runner has its own unique signing key. It verifies that the APK produced on **that runner** has the expected signature and package. Local user-approved `--build` still requires the long-lived owner-local pin first.
+The new `--verify-apk` entrypoint does **not** require an owner pin or keystore. GitHub CI does not promise that an ephemeral debug keystore exists at `~/.android/debug.keystore`; the APK is cryptographically verified directly, and its public cert SHA-1/SHA-256 are reported **without** a key continuity claim. Local user-approved `--build` still requires the long-lived owner-local pin first.
 
 ## Commands from the repository root
 
