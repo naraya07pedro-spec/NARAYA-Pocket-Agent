@@ -24,6 +24,7 @@ export function makeTestDb() {
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0007_synthetic_lead_intake.sql', import.meta.url), 'utf8'));
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0008_durable_task_runtime.sql', import.meta.url), 'utf8'));
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0009_task_bound_effect_intents.sql', import.meta.url), 'utf8'));
+  connection.exec(fs.readFileSync(new URL('../worker/migrations/0010_sandbox_reconciliation.sql', import.meta.url), 'utf8'));
   return {
     connection,
     prepare(sql) { return statement(sql, [], connection); },
