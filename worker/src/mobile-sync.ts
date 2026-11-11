@@ -35,7 +35,7 @@ function syncView(row: MobileMonitor, env?: Env) {
   };
 }
 
-async function ownerFromVerifiedIdentity(
+export async function ownerFromVerifiedIdentity(
   issuer: string, subject: string, env: Env,
 ): Promise<string | null> {
   // A signed user's read or retry does not mutate the identity registry.
