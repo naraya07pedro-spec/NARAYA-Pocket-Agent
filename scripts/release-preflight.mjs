@@ -64,6 +64,8 @@ export function readSourceSnapshot(base=root){
     androidMainActivity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt'),
     androidWorkflowClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/WorkflowReviewClient.kt'),
     androidWorkflowPanel:text(base,'android/app/src/main/java/dev/naraya/pocketagent/WorkflowReviewPanel.kt'),
+    androidDesign:text(base,'android/app/src/main/java/dev/naraya/pocketagent/PocketDesign.kt'),
+    androidUiState:text(base,'android/app/src/main/java/dev/naraya/pocketagent/PocketUiState.kt'),
     offdeviceEvidenceGate:text(base,'scripts/offdevice-evidence-gate.mjs'),
     workflows,
   };
@@ -290,6 +292,26 @@ export function auditSource(s){
         s.androidWorkflowClient+'\n'+s.androidWorkflowPanel) &&
       !s.androidWorkflowPanel.includes('https://') &&
       !s.androidWorkflowPanel.includes('http://')),
+    check('p2g_native_navigation_honest_gated_review_no_mock_cloud',
+      s.androidMainActivity.includes('PocketBottomNavigation(currentTab)') &&
+      s.androidMainActivity.includes('currentTab == PocketTab.HOME') &&
+      s.androidMainActivity.includes('currentTab == PocketTab.APPROVALS') &&
+      s.androidMainActivity.includes('if (signedIn && cloudConfigured)') &&
+      s.androidMainActivity.includes('PocketConnectionGate(') &&
+      s.androidDesign.includes('internal fun PocketHome(') &&
+      s.androidDesign.includes('internal fun PocketBottomNavigation(') &&
+      s.androidDesign.includes('Koneksi cloud belum dikonfigurasi') &&
+      s.androidDesign.includes('Tidak ada angka sukses, lead, atau penggunaan cloud yang direka.') &&
+      s.androidWorkflowPanel.includes('mode: PocketTab') &&
+      s.androidWorkflowPanel.includes('if (mode == PocketTab.TASKS)') &&
+      s.androidWorkflowPanel.includes('PocketUiState.pendingDecisions(data)') &&
+      s.androidWorkflowPanel.includes('ReviewConfirmation.Decide') &&
+      s.androidWorkflowPanel.includes('perform("rekonsiliasi read-only"') &&
+      s.androidUiState.includes('Disetujui · belum dikirim') &&
+      s.androidUiState.includes('Tercatat di simulasi D1') &&
+      s.androidUiState.includes('approval.expiresAt > System.currentTimeMillis()') &&
+      !/WorkManager|PeriodicWorkRequest|AlarmManager/.test(
+        s.androidDesign+'\\n'+s.androidUiState)),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
