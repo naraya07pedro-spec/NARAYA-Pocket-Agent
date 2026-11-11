@@ -11,6 +11,7 @@ import {isIP} from 'node:net';
 import {createHash,X509Certificate} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {verifyCompiledApk} from './android-apk-signature.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const HOME=homedir();
@@ -36,7 +37,7 @@ export function validWebClientId(value){
 }
 export function parseOptions(argv){
   const opt={mode:'inspect',web:'',origin:'',ack:false};
-  const modes=new Set(['--inspect','--bootstrap','--pin','--build']);
+  const modes=new Set(['--inspect','--bootstrap','--pin','--build','--verify-apk']);
   let chosen=false;
   for(const value of argv){
     if(modes.has(value)){
@@ -117,7 +118,7 @@ function runGradle(args=[]){
 export function runOwnerCli(argv=process.argv.slice(2)){
   let o;
   try{o=parseOptions(argv);}catch{
-    process.stderr.write('Invalid command. Use --inspect, --bootstrap, --pin, or --build; cloud build requires BOTH public IDs and --acknowledge-owned-origin.\n');
+    process.stderr.write('Invalid command. Use --inspect, --bootstrap, --pin, --verify-apk, or --build; cloud build requires BOTH public IDs and --acknowledge-owned-origin.\n');
     return 2;
   }
   try{
@@ -125,8 +126,19 @@ export function runOwnerCli(argv=process.argv.slice(2)){
       // Explicit owner action: local Gradle may download dependencies and
       // create an owner-local debug keystore. Never supply cloud identifiers.
       runGradle();
+      const signer=localCertificate();
+      const verification=verifyCompiledApk({apkPath,signer});
       inspect();
+      console.log(JSON.stringify({apk_verification:verification},null,2));
       console.log('Next: verify your local SHA-1, then run --pin once. Do not upload the keystore.');
+    }else if(o.mode==='verify-apk'){
+      // CI can verify the APK cryptographically without assuming Gradle's
+      // ephemeral debug keystore lives under ~/.android on every runner.
+      // The owner-local --build path still requires a PINNED keystore match.
+      const verification=verifyCompiledApk({apkPath});
+      const digest=createHash('sha256').update(readFileSync(apkPath)).digest('hex');
+      console.log(JSON.stringify({result:'APK_SIGNATURE_AND_PACKAGE_VERIFIED',
+        ...verification,apk_file_sha256:digest,oauth_real_device:'NOT_VERIFIED'},null,2));
     }else if(o.mode==='pin'){
       const current=localCertificate();
       const previous=loadPin();
@@ -153,11 +165,13 @@ export function runOwnerCli(argv=process.argv.slice(2)){
       const after=localCertificate();
       if(!pinMatches(pinned,after))throw Error('owner_signer_changed_during_build');
       if(!existsSync(apkPath))throw Error('debug_apk_not_found_after_build');
+      const verifiedApk=verifyCompiledApk({apkPath,signer:after});
       const digest=createHash('sha256').update(readFileSync(apkPath)).digest('hex');
       console.log(JSON.stringify({
         result:'OWNER_LOCAL_DEBUG_BUILD_SUCCEEDED',package:PACKAGE,
         signer_sha1:after.sha1,signer_sha256:after.sha256,
-        apk_sha256:digest,apk_path:apkPath,
+        apk_sha256:digest,apk_path:apkPath,apk_verified_signer:verifiedApk.apk_sha256,
+        apk_signature_verified_for_min_sdk_26:true,
         google_backend_login:'NOT_VERIFIED',remote_phone_off:'NOT_VERIFIED',
       },null,2));
       console.log('Debug only, not production/release signing. Do not mix with CI APKs signed by different keys.');

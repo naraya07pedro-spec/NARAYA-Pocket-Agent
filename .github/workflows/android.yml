@@ -32,6 +32,8 @@ jobs:
           gradle-version: '9.4.1'
       - name: Unit tests and debug-signed pilot APK
         run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify compiled APK signature, signer and package with Android SDK
+        run: node scripts/android-owner-pilot.mjs --verify-apk
       - name: Verify cloud-sync security JVM tests actually executed
         run: |
           python3 - <<'PY'

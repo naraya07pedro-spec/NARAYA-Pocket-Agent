@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,20);
+  assert.equal(result.checks.length,21);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -48,6 +48,19 @@ test('P1-Z sign-out handles the actual AndroidX ClearCredentialException, not Ge
     'import androidx.credentials.exceptions.ClearCredentialException','',
   );
   assert.ok(failures(audit(missing)).includes(check));
+});
+
+test('P1-AB: source preflight blocks bypass or removal of actual built APK verifier',()=>{
+  const snapshot=clone();
+  assert.ok(!failures(audit(snapshot)).includes(
+    'android_ci_requires_real_apk_signature_and_package_verification'));
+  const removed=clone();
+  removed.workflows['android.yml']=removed.workflows['android.yml'].replace(
+    'run: node scripts/android-owner-pilot.mjs --verify-apk',
+    'run: echo bypassed',
+  );
+  assert.ok(failures(audit(removed)).includes(
+    'android_ci_requires_real_apk_signature_and_package_verification'));
 });
 
 test('preflight detects accidental public routes and schedule expansion',()=>{

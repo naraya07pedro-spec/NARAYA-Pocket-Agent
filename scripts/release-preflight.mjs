@@ -197,6 +197,12 @@ export function auditSource(s){
       s.androidGoogleIdentity.includes('catch (_: GetCredentialException)') &&
       /suspend fun signOut\(\)\s*\{[\s\S]*?catch \(_: ClearCredentialException\)/.test(s.androidGoogleIdentity) &&
       !/suspend fun signOut\(\)\s*\{[\s\S]*?catch \(_: GetCredentialException\)/.test(s.androidGoogleIdentity)),
+    check('android_ci_requires_real_apk_signature_and_package_verification',
+      typeof s.workflows['android.yml']==='string' &&
+      s.workflows['android.yml'].includes('run: node scripts/android-owner-pilot.mjs --verify-apk') &&
+      s.workflows['android.yml'].includes('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug') &&
+      s.workflows['android.yml'].indexOf('run: node scripts/android-owner-pilot.mjs --verify-apk') >
+        s.workflows['android.yml'].indexOf('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
