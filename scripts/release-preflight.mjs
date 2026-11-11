@@ -19,6 +19,7 @@ const EXPECTED_MIGRATIONS=[
   '0006_synthetic_approval_intents.sql',
   '0007_synthetic_lead_intake.sql',
   '0008_durable_task_runtime.sql',
+  '0009_task_bound_effect_intents.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -46,6 +47,8 @@ export function readSourceSnapshot(base=root){
     syntheticLeadSource:text(base,'worker/src/synthetic-leads.ts'),
     migration0008:text(base,'worker/migrations/0008_durable_task_runtime.sql'),
     taskRuntimeSource:text(base,'worker/src/task-runtime.ts'),
+    migration0009:text(base,'worker/migrations/0009_task_bound_effect_intents.sql'),
+    taskApprovalSource:text(base,'worker/src/task-bound-approvals.ts'),
     schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
@@ -88,7 +91,10 @@ function migrationChainValid(s){
     /UNIQUE\(owner_id,client_lead_id\)/.test(s.migration0007) &&
     /CREATE TABLE IF NOT EXISTS task_runs/.test(s.migration0008) &&
     /CREATE TABLE IF NOT EXISTS task_steps/.test(s.migration0008) &&
-    /CREATE TABLE IF NOT EXISTS task_step_budgets/.test(s.migration0008);
+    /CREATE TABLE IF NOT EXISTS task_step_budgets/.test(s.migration0008) &&
+    /CREATE TABLE IF NOT EXISTS synthetic_effect_intents/.test(s.migration0009) &&
+    /CREATE TRIGGER IF NOT EXISTS task_approval_after_decision/.test(s.migration0009) &&
+    /CREATE TRIGGER IF NOT EXISTS task_effect_no_retarget/.test(s.migration0009);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};
