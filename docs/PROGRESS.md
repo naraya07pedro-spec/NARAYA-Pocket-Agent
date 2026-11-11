@@ -1,5 +1,32 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-11 | P2-E | Synthetic provider UNKNOWN_OUTCOME and readback reconciliation (PR #39)
+
+**What was missing:** P2-D created immutable, human-approved, task-bound effect intents, but there was no safe dispatch-attempt ledger or recovery path if a provider had already committed an effect before the response was lost. Blind retry after a timeout can duplicate real business operations.
+
+**Implemented in this PR:**
+- Additive D1 migration **0010_sandbox_reconciliation.sql** creates bounded `sandbox_dispatches` and immutable `sandbox_provider_records` with one provider-idempotency key per effect. Database triggers require an approved, frozen P2-D task/approval/effect and valid state transitions, and reject independent receipt creation, mutation, deletion and false `CONFIRMED_APPLIED` without an exact receipt.
+- Signed existing-user, owner-scoped **manual** API `GET /v1/sandbox-dispatches/{effectId}`, `POST /v1/sandbox-dispatches/{effectId}/attempt` with exact `{}`, and `POST /v1/sandbox-dispatches/{effectId}/reconcile` with exact `{}`. Exactly one durable claim and one simulated D1 provider insert are allowed per approved effect; repeated requests never cause a second write.
+- Explicit state machine: `PREPARED → IN_FLIGHT → CONFIRMED_APPLIED` only after readback, or `IN_FLIGHT → UNKNOWN_OUTCOME` when request outcome is uncertain. Only a later **positive matching receipt** can clear UNKNOWN; an absent receipt remains `NOT_FOUND_UNCERTAIN` and `safeToRetry:false`. No blind re-dispatch after timeouts or lease expiry. Conflicting receipt is `QUARANTINED`. Reconciliation reads provider data but never writes it, capped at **10** checks/dispatch.
+- Node tests inject process/transport faults **BEFORE** and **AFTER** synthetic provider commit, concurrent manual attempts, cross-owner/unsigned access, denied/pending approvals, mutation attempts, at-most-one provider receipt, expired lease and negative readback.
+- Real **local Cloudflare workerd/D1** test applies all ten migrations and verifies a committed synthetic provider receipt survives Worker restart and is confirmed through readback without rewriting it. **No HTTP provider request, real CRM, webhook, email, WhatsApp, LLM, remote Cloudflare deployment, Cron task execution or live customer PII.**
+
+**Actual preliminary source evidence on PR candidate SHA `1e58bfde08593819d9c98b3eb3cb228b46c09f94`, all 5/5 CI SUCCESS:**
+- [Node + TypeScript **187/187**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43020101240)
+- [Real local workerd/D1 **14/14** including crash/restart reconciliation](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43020101220)
+- [Public GitHub read + isolated local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43020101307)
+- [Android native adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43020101423)
+- [Android security JVM 20/20 and real apksigner](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43020101347)
+
+**Failures handled:** initial node test consumed a redundant monitor quota; initial D1 migration had two inline trigger endings incompatible with the local D1 test migration parser. Both issues were corrected and the **complete new tests rerun**, not bypassed. These links prove candidate PR code. The exact *final doc-inclusive PR-head* and merged `main` require independent CI proof before this milestone is declared merged.
+
+**Next priority:** P2-F Android task and approval reviewer UX with explicit human approval and no secret-bearing provider controls; then provider-specific sandbox authorization with independently verified idempotency/readback, PII/privacy safeguards and owner cost gate. Real Google login, Cloudflare owner billing/remote D1/Worker/Cron and physical phone-OFF proof still require authenticated owner/device evidence.
+
+**Gates:** `remote_acceptance=BLOCKED`, `safe_to_deploy=false`, `safe_to_activate_scheduler=false`. This synthetic provider work is not an authorization to deploy, spend, contact customers or send messages.
+
+[Detailed P2-E contract](P2_E_SYNTHETIC_RECONCILIATION.md) · [PR #39](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/39) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+
 ## 2026-11-11 | P2-D | Immutable task-linked approval and inert effect intent ledger (PR #38)
 
 **Problem closed at source level:** P2-A's legacy synthetic approval was lead-linked but not task-linked, while P2-C's durable task steps were not joined to a single immutable external-action intent. An approved lead could not safely be treated as authorization for any future task or provider call.
