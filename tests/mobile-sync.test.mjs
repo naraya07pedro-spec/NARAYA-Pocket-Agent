@@ -781,3 +781,126 @@ test('P1-P an already committed batch with missing metadata fails closed and rep
     assert.equal(monitors(env).length,1);
   }finally{globalThis.fetch=previous;realDb.close();}
 });
+
+
+const approvalPayload=(clientIntentId=uuid(),leadId=uuid(),serviceCode='EXHIBITION')=>({
+  clientIntentId,provider:'SYNTHETIC_ONLY',operation:'CREATE_CRM_LEAD',
+  target:'synthetic-crm',payload:{leadId,serviceCode},
+});
+const requestApproval=(env,t,payload)=>request(env,'/v1/approval-intents',t,'POST',payload);
+const decisionBody=(item,decision='APPROVE',overrides={})=>({
+  decision,expectedVersion:item.version,payloadDigest:item.payloadDigest,
+  targetDigest:item.targetDigest,...overrides,
+});
+
+test('P2-A synthetic lead approval: OIDC scoped, durable, digest-bound, one decision, NO external effects',async()=>{
+  const previous=globalThis.fetch;let jwksReads=0;
+  globalThis.fetch=async(url,options)=>{jwksReads++;return fakeJwks(url,options)};
+  const env=makeEnv();
+  try{
+    const a=await token('p2-approver-a'), b=await token('p2-approver-b');
+    const body=approvalPayload();
+    // Signed identity without an existing first monitor cannot register
+    // or create any approvals via GET or POST.
+    assert.equal((await requestApproval(env,a,body)).status,409);
+    assert.equal((await request(env,'/v1/approval-intents',a)).status,409);
+    assert.equal(identities(env).length,0);
+    assert.equal((await create(env,a,uuid(),'python/cpython')).status,201);
+    assert.equal((await create(env,b,uuid(),'nodejs/node')).status,201);
+    const first=await requestApproval(env,a,body);
+    assert.equal(first.status,201);
+    const created=(await first.json()).intent;
+    assert.equal(created.status,'PENDING');
+    assert.equal(created.provider,'SYNTHETIC_ONLY');
+    assert.equal(created.target,'synthetic-crm');
+    assert.equal(created.externalWrite,'NOT_IMPLEMENTED');
+    assert.equal(created.eligibleForDispatch,false);
+    assert.match(created.payloadDigest,/^[0-9a-f]{64}$/);
+    assert.match(created.targetDigest,/^[0-9a-f]{64}$/);
+    const duplicate=await requestApproval(env,a,body);
+    assert.equal(duplicate.status,200);
+    assert.equal((await duplicate.json()).created,false);
+    const forged=await request(env,'/v1/approval-intents/'+created.id+'/decision',b,
+      'POST',decisionBody(created));
+    assert.equal(forged.status,409);
+    const tampered=await request(env,'/v1/approval-intents/'+created.id+'/decision',a,
+      'POST',decisionBody(created,'APPROVE',{payloadDigest:'a'.repeat(64)}));
+    assert.equal(tampered.status,409);
+    const wrongTarget=await request(env,'/v1/approval-intents/'+created.id+'/decision',a,
+      'POST',decisionBody(created,'APPROVE',{targetDigest:'b'.repeat(64)}));
+    assert.equal(wrongTarget.status,409);
+    assert.equal((await request(env,'/v1/approval-intents',b).then(r=>r.json())).intents.length,0);
+    const approved=await request(env,'/v1/approval-intents/'+created.id+'/decision',a,
+      'POST',decisionBody(created));
+    assert.equal(approved.status,200);
+    assert.equal((await approved.json()).status,'APPROVED_NO_DISPATCH');
+    assert.equal((await request(env,'/v1/approval-intents/'+created.id+'/decision',a,
+      'POST',decisionBody(created)).then(r=>r.status)),409);
+    const listed=(await request(env,'/v1/approval-intents',a).then(r=>r.json())).intents;
+    assert.equal(listed.length,1);
+    assert.equal(listed[0].status,'APPROVED_NO_DISPATCH');
+    assert.equal(listed[0].version,2);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_approval_intents').get().n,1);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM audit_events').get().n,0);
+    assert.ok(jwksReads>0);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('P2-A synthetic lead approval: expiry, denial, payload replay conflict and input strictness',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const a=await token('p2-approver-expiry');
+    assert.equal((await create(env,a,uuid())).status,201);
+    const body=approvalPayload();
+    const first=(await requestApproval(env,a,body).then(r=>r.json())).intent;
+    assert.equal((await requestApproval(env,a,{
+      ...body,payload:{...body.payload,serviceCode:'INTERIOR'},
+    })).status,409);
+    const denied=await request(env,'/v1/approval-intents/'+first.id+'/decision',a,
+      'POST',decisionBody(first,'DENY'));
+    assert.equal(denied.status,200);
+    assert.equal((await denied.json()).status,'DENIED');
+    assert.equal((await request(env,'/v1/approval-intents/'+first.id+'/decision',a,
+      'POST',decisionBody(first,'APPROVE')).then(r=>r.status)),409);
+
+    const fresh=(await requestApproval(env,a,approvalPayload()).then(r=>r.json())).intent;
+    env.DB.connection.prepare('UPDATE synthetic_approval_intents SET expires_at=? WHERE id=?')
+      .run(Date.now()-10,fresh.id);
+    const stale=await request(env,'/v1/approval-intents/'+fresh.id+'/decision',a,
+      'POST',decisionBody(fresh));
+    assert.equal(stale.status,409);
+    assert.equal((await request(env,'/v1/approval-intents',a).then(r=>r.json())).intents[0].status,'EXPIRED');
+    const badInputs=[
+      {...approvalPayload(),provider:'REAL_CRM'},
+      {...approvalPayload(),target:'https://attacker.invalid'},
+      {...approvalPayload(),operation:'SEND_EMAIL'},
+      {...approvalPayload(),payload:{leadId:uuid(),serviceCode:'EXHIBITION',email:'private@example.com'}},
+      {...approvalPayload(),payload:{leadId:uuid(),serviceCode:'UNKNOWN'}},
+      {...approvalPayload(),clientIntentId:'invalid'},
+    ];
+    for(const input of badInputs)assert.equal((await requestApproval(env,a,input)).status,400);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_approval_intents').get().n,2);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
+
+test('P2-A synthetic approval: pending cap, no provider dispatch and auth rejection',async()=>{
+  const previous=globalThis.fetch;globalThis.fetch=fakeJwks;
+  const env=makeEnv();
+  try{
+    const a=await token('p2-approver-cap');
+    assert.equal((await create(env,a,uuid())).status,201);
+    for(let i=0;i<5;i++)assert.equal((await requestApproval(env,a,approvalPayload())).status,201);
+    assert.equal((await requestApproval(env,a,approvalPayload())).status,429);
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_approval_intents').get().n,5);
+    assert.equal((await request(env,'/v1/approval-intents','not-a-token')).status,401);
+    const all=await request(env,'/v1/approval-intents',a);
+    assert.equal((await all.json()).intents.length,5);
+    const first=(await request(env,'/v1/approval-intents',a).then(r=>r.json())).intents[0];
+    assert.equal((await request(env,'/v1/approval-intents/'+first.id+'/decision',a,
+      'POST',decisionBody(first)).then(r=>r.status)),200);
+    assert.equal((await requestApproval(env,a,approvalPayload())).status,201,
+      'approved non-dispatch state frees pending cap but does not execute anything');
+    assert.equal(env.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,0);
+  }finally{globalThis.fetch=previous;env.DB.close();}
+});
