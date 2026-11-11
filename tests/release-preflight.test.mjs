@@ -45,7 +45,7 @@ test('P1-Z sign-out handles the actual AndroidX ClearCredentialException, not Ge
   assert.ok(failures(audit(s)).includes(check));
   const missing=clone();
   missing.androidGoogleIdentity=missing.androidGoogleIdentity.replace(
-    'import androidx.credentials.exceptions.ClearCredentialException\\n','',
+    'import androidx.credentials.exceptions.ClearCredentialException','',
   );
   assert.ok(failures(audit(missing)).includes(check));
 });
