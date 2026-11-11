@@ -1,5 +1,24 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-11 | P2-D | Immutable task-linked approval and inert effect intent ledger (PR #38)
+
+**Problem closed at source level:** P2-A's legacy synthetic approval was lead-linked but not task-linked, while P2-C's durable task steps were not joined to a single immutable external-action intent. An approved lead could not safely be treated as authorization for any future task or provider call.
+
+**Implemented:**
+- Additive D1 **migration 0009**. Legacy P2-A approvals remain explicitly unbound (`task_id=NULL`) and **cannot** generate P2-D effect intents. New task-bound approvals snapshot the exact **SUCCEEDED** P2-C task ID, final version and stored immutable lead-input SHA-256. A unique owner/task constraint makes effect intent one-per-task; approval and inert effect row are created together in one transactional D1 batch.
+- OIDC-only `POST /v1/task-approvals` accepts only fixed `SYNTHETIC_ONLY / CREATE_CRM_LEAD / synthetic-crm` plus typed lead ID/service. Task owner, all three succeeded steps, task version and typed lead SHA-256 are validated on the server. Payload and target hashes are computed by the server and bind the exact frozen task/lead/target.
+- OIDC-only `GET /v1/task-effects` and `GET /v1/task-effects/{id}` are **read-only** with per-user isolation. No `dispatch`, `send`, `retry`, external API/CRM/WhatsApp, tool execution or LLM is implemented.
+- The existing P2-A approval `POST /decision` reuses its owner/version/expiry/digest compare-and-swap. **SQLite BEFORE/AFTER triggers** require a matching effect and transition the effect state atomically to `APPROVED_NO_DISPATCH` or `DENIED`. Another SQL trigger rejects immutable owner/task/approval/provider/target/payload mutation. Independent effect state updates are blocked.
+- A *real local workerd/D1 test discovered an actual integration bug*: the D1 changed-row metadata can include **both** the approval update and triggered effect update (2 vs 1). Backend decision logic was repaired to handle 1/2 and **read back both committed owner-scoped rows**, preventing a false conflict or claimed effect on incomplete commit.
+- Added signed-OIDC adversarial tests for incomplete/foreign/mismatched tasks, invalid providers/fields, idempotency, cross-owner effect read, replay, approval/deny, expiry, missing effect fail-closed, SQL retarget attempts and D1 transactional rollback. D1 migration fixture now prepares whole `CREATE TRIGGER ... END;` blocks.
+
+**Evidence at source candidate SHA `a8658e3739c4540d052aa0f0773a59471f9f1f19`:** [Node + TypeScript **180/180**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43012975971) SUCCESS, [real local workerd/D1 **13/13**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43012975800) SUCCESS including **actual signed OIDC HTTP decision/read-back and restart**, [Android native adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43012975862) SUCCESS, [Android debug APK](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43012975587) SUCCESS. One [separate public GitHub live-read job](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43012975678) failed its independent upstream SHA assertion and was rerun. This preliminary checkpoint is **not** a 5/5 claim. The final PR-head and merged-main status must be independently linked in [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8).
+
+**Still missing and deliberately BLOCKED:** P2-E real provider-effect dispatch with idempotency keys, `UNKNOWN_OUTCOME` and read-back reconciliation; Android approval/task UX; private owner Cloudflare billing, quota and authenticated remote D1/Worker; Google live login; real Cron/phone physically powered off; production customer PII/privacy governance and bounded AI. A status `APPROVED_NO_DISPATCH` **is NOT a completed CRM write**. `remote_acceptance:BLOCKED`, `safe_to_deploy:false`, `safe_to_activate_scheduler:false`.
+
+[Detailed P2-D contract](P2_D_TASK_BOUND_EFFECT_INTENTS.md) · [PR #38](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/38) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+
 ## 2026-11-11 | P2-C | Core backend task runtime (PR #37, CI-verified source; remote BLOCKED)
 
 **Why:** P1 was a bounded GitHub monitor, P2-A/B were synthetic lead intake plus approval. Neither was a durable task/step execution runtime. P2-C adds the first task engine **without** claiming a fully generic agent or any real-world provider effects.

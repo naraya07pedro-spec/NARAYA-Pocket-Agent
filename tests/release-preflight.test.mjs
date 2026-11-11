@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,22);
+  assert.equal(result.checks.length,23);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -81,6 +81,28 @@ test('P2-C static gate refuses external fetch, disabled lease fencing and missin
       'CREATE TABLE IF NOT EXISTS fake_budgets');},
   ];
   for(const mutate of mutations){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes(check));
+  }
+});
+
+test('P2-D static gate blocks adding network provider dispatch or deleting immutable effect guards',()=>{
+  const check='p2d_task_bound_effects_inert_immutable_and_approval_cas';
+  assert.ok(!failures(audit(snapshot())).includes(check));
+  const attacks=[
+    s=>{s.taskApprovalSource+=' fetch("https://provider.invalid");';},
+    s=>{s.taskApprovalSource=s.taskApprovalSource.replace(
+      "task.status!=='SUCCEEDED'","false");},
+    s=>{s.taskApprovalSource=s.taskApprovalSource.replaceAll(
+      'eligibleForDispatch:false','eligibleForDispatch:true');},
+    s=>{s.migration0009=s.migration0009.replace(
+      'CREATE TRIGGER IF NOT EXISTS task_effect_no_retarget',
+      'CREATE TRIGGER IF NOT EXISTS removed_immutability');},
+    s=>{s.workerIndex=s.workerIndex.replace(
+      'return await taskApprovalRoute(request,env,pathname)',
+      'return json({pretend:true})');},
+  ];
+  for(const mutate of attacks){
     const s=clone();mutate(s);
     assert.ok(failures(audit(s)).includes(check));
   }

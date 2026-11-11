@@ -10,14 +10,34 @@ import { runScheduler } from '../worker/src/scheduler.ts';
 import { advanceSyntheticTask } from '../worker/src/task-runtime.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql', '0008_durable_task_runtime.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql', '0008_durable_task_runtime.sql', '0009_task_bound_effect_intents.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
-  // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
-  const sql = source.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
-  const statements = sql.split(';').map(statement=>statement.trim()).filter(Boolean);
+  // Prepare whole CREATE TRIGGER ... BEGIN ... END; blocks as one SQLite
+  // statement; naive semicolon splitting breaks trigger bodies and atomics.
+  // D1.exec is unsuitable here because multiline input differs by runtime.
+  const lines=source.split('\n').filter(line=>!line.trimStart().startsWith('--'));
+  const statements=[];
+  let pending='',insideTrigger=false;
+  for(const line of lines){
+    const trimmed=line.trim();
+    if(!pending.trim()&&/^CREATE TRIGGER\b/i.test(trimmed))insideTrigger=true;
+    pending+=line+'\n';
+    if(insideTrigger){
+      if(trimmed==='END;'){
+        statements.push(pending.trim());
+        pending='';insideTrigger=false;
+      }
+    }else{
+      const parts=pending.split(';');
+      for(const sql of parts.slice(0,-1))if(sql.trim())statements.push(sql.trim());
+      pending=parts.at(-1)??'';
+    }
+  }
+  assert.equal(pending.trim(),'','migration contains incomplete statement');
+  assert.equal(insideTrigger,false);
   assert.ok(statements.length >= 2);
-  for (const statement of statements) await DB.prepare(statement).run();
+  for(const statement of statements) await DB.prepare(statement).run();
 }
 async function applySchema(DB) {
   for (const sql of migrationSql) await applyStatements(DB,sql);
@@ -757,6 +777,109 @@ test('P2-C real local workerd D1: bounded task steps, durable restart and owner 
     assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM audit_events').first()).n,0);
     assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,0);
   }finally{
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+
+test('P2-D real workerd D1: approval change atomically transitions only bound immutable effect',{timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-task-effect-'));
+  const originalFetch=globalThis.fetch;
+  let platform;
+  try{
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const id=()=>crypto.randomUUID(),owner=id(),lead=id(),task=id(),
+      approval=id(),effect=id(),now=Date.now();
+    const leadDigest='a'.repeat(64),payloadDigest='b'.repeat(64),targetDigest='c'.repeat(64);
+    await DB.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+      .bind(owner,'https://synthetic.example.invalid','p2d-workerd',now).run();
+    await DB.prepare(`INSERT INTO synthetic_leads(
+      id,owner_id,client_lead_id,source,service_code,budget_band,days_to_deadline,
+      priority,reply_draft,input_digest,created_at)
+      VALUES(?,?,?,'SYNTHETIC_FORM','SIGNAGE','MID',45,
+      'STANDARD_REVIEW','draft never sent',?,?)`)
+      .bind(id(),owner,lead,leadDigest,now).run();
+    await DB.prepare(`INSERT INTO task_runs(
+      id,owner_id,client_task_id,kind,client_lead_id,lead_input_digest,
+      status,current_step,version,created_at,updated_at,finished_at)
+      VALUES(?,?,?,'SYNTHETIC_LEAD_TRIAGE_V1',?,?,'SUCCEEDED',3,7,?,?,?)`)
+      .bind(task,owner,id(),lead,leadDigest,now,now,now).run();
+    for(const [i,code] of ['VERIFY_LEAD','VERIFY_TRIAGE','VERIFY_DRAFT'].entries()){
+      await DB.prepare(`INSERT INTO task_steps(
+        id,task_id,step_index,step_code,status,attempt_count,updated_at)
+        VALUES(?,?,?,?,'SUCCEEDED',1,?)`)
+        .bind(id(),task,i,code,now).run();
+    }
+    await DB.prepare(`INSERT INTO synthetic_approval_intents(
+      id,owner_id,client_intent_id,provider,operation,target,
+      payload_digest,target_digest,lead_id,service_code,status,version,
+      expires_at,created_at,task_id,task_input_digest,task_version)
+      VALUES(?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,?,?,'SIGNAGE','PENDING',1,?,?,?,?,7)`)
+      .bind(approval,owner,id(),payloadDigest,targetDigest,
+        lead,now+600000,now,task,leadDigest).run();
+    await DB.prepare(`INSERT INTO synthetic_effect_intents(
+      id,owner_id,task_id,approval_id,provider,operation,target,
+      client_lead_id,service_code,task_input_digest,task_version,
+      payload_digest,target_digest,status,created_at)
+      VALUES(?,?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,'SIGNAGE',?,7,?,?,'AWAITING_APPROVAL',?)`)
+      .bind(effect,owner,task,approval,lead,leadDigest,payloadDigest,targetDigest,now).run();
+    await assert.rejects(DB.prepare(
+      "UPDATE synthetic_effect_intents SET target='evil' WHERE id=?")
+      .bind(effect).run(),/task_effect_immutable_payload/i);
+    await assert.rejects(DB.prepare(
+      "UPDATE synthetic_effect_intents SET status='APPROVED_NO_DISPATCH' WHERE id=?")
+      .bind(effect).run(),/task_effect_no_independent_transition/i);
+    // Actual signed OIDC HTTP API, not just a manually executed SQL UPDATE.
+    // This specifically catches D1's trigger-inclusive meta.changes=2 behavior.
+    const issuer='https://synthetic.example.invalid';
+    const aud='p2d-real-workerd-test';
+    const jwks='https://keys.example.invalid/p2d';
+    const pair=await crypto.subtle.generateKey({
+      name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
+      publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256',
+    },true,['sign','verify']);
+    const key={...await crypto.subtle.exportKey('jwk',pair.publicKey),
+      kid:'p2d-workerd-key',alg:'RS256',use:'sig'};
+    const enc=object=>Buffer.from(JSON.stringify(object)).toString('base64url');
+    const seconds=Math.floor(Date.now()/1000);
+    const signedBase=enc({alg:'RS256',kid:'p2d-workerd-key',typ:'JWT'})+'.'+
+      enc({iss:issuer,sub:'p2d-workerd',aud,iat:seconds-20,exp:seconds+600});
+    const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',
+      pair.privateKey,new TextEncoder().encode(signedBase));
+    const signedToken=signedBase+'.'+Buffer.from(signature).toString('base64url');
+    globalThis.fetch=async (url,options)=>{
+      assert.equal(url,jwks);assert.equal(options.method,'GET');
+      return new Response(JSON.stringify({keys:[key]}));
+    };
+    const decisionResponse=await worker.fetch(new Request(base+
+      '/v1/approval-intents/'+approval+'/decision',{
+      method:'POST',headers:{authorization:'Bearer '+signedToken,
+        'content-type':'application/json'},
+      body:JSON.stringify({decision:'APPROVE',expectedVersion:1,
+        payloadDigest,targetDigest}),
+    }),{DB,OIDC_ISSUER:issuer,OIDC_AUDIENCE:aud,OIDC_JWKS_URL:jwks});
+    const decisionResult=await decisionResponse.json();
+    assert.equal(decisionResponse.status,200,JSON.stringify(decisionResult));
+    assert.equal(decisionResult.status,'APPROVED_NO_DISPATCH');
+    assert.equal(decisionResult.eligibleForDispatch,false);
+    assert.equal((await DB.prepare('SELECT status FROM synthetic_effect_intents WHERE id=?')
+      .bind(effect).first()).status,'APPROVED_NO_DISPATCH');
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const after=await platform.env.DB.prepare(
+      'SELECT status,task_input_digest FROM synthetic_effect_intents WHERE id=?')
+      .bind(effect).first();
+    assert.equal(after.status,'APPROVED_NO_DISPATCH');
+    assert.equal(after.task_input_digest,leadDigest);
+    assert.equal((await platform.env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents').first()).n,1);
+  }finally{
+    globalThis.fetch=originalFetch;
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});
   }
