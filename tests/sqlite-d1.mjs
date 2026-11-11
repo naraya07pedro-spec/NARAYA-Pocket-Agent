@@ -20,6 +20,7 @@ export function makeTestDb() {
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0003_scheduler_control.sql', import.meta.url), 'utf8'));
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0004_global_scheduler_budget.sql', import.meta.url), 'utf8'));
   connection.exec(fs.readFileSync(new URL('../worker/migrations/0005_observation_event_sequence.sql', import.meta.url), 'utf8'));
+  connection.exec(fs.readFileSync(new URL('../worker/migrations/0006_synthetic_approval_intents.sql', import.meta.url), 'utf8'));
   return {
     connection,
     prepare(sql) { return statement(sql, [], connection); },
