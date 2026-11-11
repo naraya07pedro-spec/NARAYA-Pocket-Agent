@@ -105,8 +105,8 @@ test('P2-C: one manual step per call; all steps are D1-only validators with term
     let task=(await (await taskCreate(e,t,body)).json()).task;
     for(let i=0;i<3;i++){
       const r=await advance(e,t,task);
-      assert.equal(r.status,200,JSON.stringify(await r.json()));
       const report=await r.json();
+      assert.equal(r.status,200,JSON.stringify(report));
       task=report.task;
       assert.equal(task.currentStep,i+1);
       assert.equal(task.status,i===2?'SUCCEEDED':'RUNNING');
@@ -170,8 +170,9 @@ test('P2-C: expired lease can be re-claimed but stale lease cannot finish later'
     const blocked=await advanceSyntheticTask(e,owner,task.id,current.version,now+1000);
     assert.equal(blocked.status,409);
     const reclaimed=await advanceSyntheticTask(e,owner,task.id,current.version,now+46_000);
-    assert.equal(reclaimed.status,200,JSON.stringify(await reclaimed.json()));
-    current=(await reclaimed.json()).task;
+    const reclaimBody=await reclaimed.json();
+    assert.equal(reclaimed.status,200,JSON.stringify(reclaimBody));
+    current=reclaimBody.task;
     assert.equal(current.currentStep,1);
     release();const stale=await old;
     assert.equal(stale.status,409);
@@ -193,8 +194,8 @@ test('P2-C: three deterministic evaluator failures lead to backoff and terminal 
     let current=task, now=Date.now();
     for(let attempt=1;attempt<=3;attempt++){
       const r=await advanceSyntheticTask(e,owner,task.id,current.version,now,alwaysFail);
-      assert.equal(r.status,200,JSON.stringify(await r.json()));
       const item=await r.json();
+      assert.equal(r.status,200,JSON.stringify(item));
       current=item.task;
       assert.equal(item.steps[0].attempts,attempt);
       assert.equal(current.status,attempt===3?'FAILED':'RUNNING');
