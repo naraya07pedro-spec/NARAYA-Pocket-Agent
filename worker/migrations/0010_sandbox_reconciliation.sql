@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS sandbox_dispatches (
   readback TEXT NOT NULL DEFAULT 'NOT_CHECKED' CHECK(readback IN
     ('NOT_CHECKED','FOUND_MATCH','NOT_FOUND_UNCERTAIN','FOUND_CONFLICT')),
   last_reconciled_at INTEGER,
+  reconcile_count INTEGER NOT NULL DEFAULT 0 CHECK(reconcile_count BETWEEN 0 AND 10),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   UNIQUE(owner_id,effect_id)
