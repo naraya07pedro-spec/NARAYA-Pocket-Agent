@@ -79,7 +79,7 @@ export function verifyCompiledApk({
   const jar=join(sdkRoot,'build-tools','36.0.0','lib','apksigner.jar');
   const aapt=join(sdkRoot,'build-tools','36.0.0',platform()==='win32'?'aapt.exe':'aapt');
   if(!existsSync(jar)||!existsSync(aapt))throw Error('android_sdk_36_build_tools_missing');
-  if(!signer?.package||!signer?.sha1||!signer?.sha256)
+  if(signer!==undefined && (!signer?.package||!signer?.sha1||!signer?.sha256))
     throw Error('owner_signer_not_available');
 
   const options={encoding:'utf8',timeout:20_000,maxBuffer:MAX_OUTPUT,windowsHide:true,
@@ -90,12 +90,14 @@ export function verifyCompiledApk({
   if(signature?.error||signature?.status!==0 ||typeof signature?.stdout!=='string')
     throw Error('android_apksigner_verification_failed');
   const actual=parseVerifiedApkSignature(signature.stdout);
-  if(!apkSignerMatches(signer,actual))throw Error('apk_signer_does_not_match_owner_keystore');
+  if(signer!==undefined && !apkSignerMatches(signer,actual))
+    throw Error('apk_signer_does_not_match_owner_keystore');
 
   const manifest=run(aapt,['dump','badging',apkPath],options);
   if(manifest?.error||manifest?.status!==0||typeof manifest?.stdout!=='string')
     throw Error('android_aapt_package_inspection_failed');
   parseApkPackage(manifest.stdout);
   return {package:PACKAGE,apk_sha1:actual.sha1,apk_sha256:actual.sha256,
-    signature_verified_for_min_sdk_26:true,certificate_matches_owner_keystore:true};
+    signature_verified_for_min_sdk_26:true,
+    certificate_matches_owner_keystore:signer===undefined?'NOT_CHECKED_NO_OWNER_KEY':true};
 }
