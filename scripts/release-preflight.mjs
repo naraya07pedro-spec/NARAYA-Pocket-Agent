@@ -228,7 +228,7 @@ export function auditSource(s){
       s.taskRuntimeSource.includes("lease_token=?") &&
       s.taskRuntimeSource.includes("status='CANCELLED'") &&
       s.taskRuntimeSource.includes('reserveBudget(env,owner,now)') &&
-      !/\\bfetch\\s*\\(/.test(s.taskRuntimeSource) &&
+      !/\bfetch\s*\(/.test(s.taskRuntimeSource) &&
       s.migration0008.includes('CREATE TABLE IF NOT EXISTS task_step_budgets')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
