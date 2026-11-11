@@ -239,7 +239,7 @@ class WorkflowReviewClientTest {
         assertTrue(client.requestTaskApproval(token,t,"SIGNAGE") is ReviewResult.Ok)
         assertEquals(2,keys.size)
         assertEquals(keys[0],keys[1])
-        assertTrue(WorkflowReviewClient.validId(keys.single()))
+        assertTrue(WorkflowReviewClient.validId(keys.first()))
         assertEquals(ReviewResult.Failed(ReviewFailure.STALE_OR_CONFLICT),
             client.requestTaskApproval(token,t.copy(status="RUNNING"),"SIGNAGE"))
     }
