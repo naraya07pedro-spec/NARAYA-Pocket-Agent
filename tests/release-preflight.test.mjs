@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,24);
+  assert.equal(result.checks.length,25);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -126,6 +126,28 @@ test('P2-E source gate blocks external calls, unsafe retries, lost unique receip
   for(const mutate of attacks){
     const s=clone();mutate(s);
     assert.ok(failures(audit(s)).includes(check));
+  }
+});
+
+test('P2-F source gate rejects hidden Android execution, removed confirmation or unvalidated OIDC token',()=>{
+  const name='p2f_android_explicit_user_review_no_hidden_dispatch';
+  assert.ok(!failures(audit(snapshot())).includes(name));
+  const mutations=[
+    s=>{s.androidMainActivity=s.androidMainActivity.replaceAll(
+      'if (signedIn && cloudConfigured)','if (true)');},
+    s=>{s.androidWorkflowClient=s.androidWorkflowClient.replaceAll(
+      'CloudSyncClient.validIdTokenShape(token)','true');},
+    s=>{s.androidWorkflowClient=s.androidWorkflowClient.replace(
+      'instanceFollowRedirects = false','instanceFollowRedirects = true');},
+    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replace(
+      'AlertDialog(','Text(');},
+    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replace(
+      'perform("rekonsiliasi read-only"','perform("blind retry"');},
+    s=>{s.androidWorkflowClient+=' WorkManager';},
+  ];
+  for(const [index,mutate] of mutations.entries()){
+    const changed=clone();mutate(changed);
+    assert.ok(failures(audit(changed)).includes(name), 'uncaught P2-F mutation '+index);
   }
 });
 

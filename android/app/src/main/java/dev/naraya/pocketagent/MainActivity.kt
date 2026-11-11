@@ -343,6 +343,22 @@ private fun MonitorDraftScreen(
                     }
                 }
             }
+            item {
+                if (signedIn && cloudConfigured) {
+                    WorkflowReviewPanel(
+                        client = remember { WorkflowReviewClient(BuildConfig.CLOUD_API_ORIGIN) },
+                        readToken = { session.read() },
+                        onUnauthorized = {
+                            session.clear()
+                            signedIn = false
+                            cloudRows = emptyList()
+                            observedMonitorId = null
+                            remoteObservations = emptyList()
+                            cloudNotice = "Workflow token no longer authorized. Sign in again."
+                        },
+                    )
+                }
+            }
             item { Text("Saved on this phone · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium) }
             if (drafts.isEmpty()) {
                 item { Text("No repositories added. Add one above.", style = MaterialTheme.typography.bodyMedium) }

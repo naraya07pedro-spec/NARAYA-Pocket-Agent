@@ -1,5 +1,32 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-11 | P2-F | Android signed-in human review and synthetic workflow controls (PR #40)
+
+**Reason:** P2-C/D/E implemented a durable three-step task, task-bound immutable approval, and a one-shot synthetic D1 effect with UNKNOWN_OUTCOME readback, but Android users could not actually review and operate the workflow. P2-F adds that missing **native Kotlin/Jetpack Compose user-facing control panel**. It does **not** add real autonomous provider execution, cloud deployment, or Google/phone-off evidence.
+
+**Implemented in PR #40:**
+- New `android/app/src/main/java/dev/naraya/pocketagent/WorkflowReviewClient.kt`: bound `https://` Worker origin, strict ID-token shape, exact GET/POST method+UUID route allowlist, 6-second network timeouts, redirects refused, 16 KiB UTF-8 reply and 4 KiB outbound JSON bounds, typed task/lead/approval/effect/dispatch data validation, no cached token or operator secret. Client refuses forged `eligibleForDispatch=true` or `safeToRetry=true` and malformed/unbound/incorrect-version acknowledgements.
+- New `WorkflowReviewPanel.kt` mounted **only with a live in-memory Google sign-in session and nonempty public OAuth/Worker config**. On 401 it clears the RAM bearer and last-known cloud state. User must tap to refresh; no silent background calls.
+- Working **synthetic-only demonstration flow**: explicit creation of typed lead and P2-C task using stable client UUIDs across ambiguous HTTP outcomes; manual one-step advancement; versioned task cancellation behind confirmation; deterministic task-specific approval intent; explicit approve/deny confirmation with task/effect/hash/version disclosure; signed D1-only single-receipt simulation after another confirmation; readback-only reconciliation for UNKNOWN_OUTCOME, no UI blind retry. Backend remains source of truth, and every acknowledged mutation is followed by a fresh signed full snapshot before claiming current state.
+- The original manual GitHub monitor, Google sign-in, OAuth/Worker configuration defaults, local drafts and Cloud Sync controls are retained. Android still does **not** run scheduled background work. New JVM `WorkflowReviewClientTest.kt` exercises origin/token/URL allowlisting, strict typed response contracts, cross-wiring/hash/version failures, idempotent demo keys, `202 UNKNOWN_OUTCOME`, no `safeToRetry`, forged ack and redacted failures.
+- Offline release preflight now has **25** checks including the reviewer opt-in and no-background/no-external-dispatch safety gate; an adversarial test mutates token/confirmation/HTTPS/permission assumptions. Documentation in [P2-F Android reviewer contract](P2_F_ANDROID_WORKFLOW_REVIEW.md) and [Android README](../android/README.md).
+
+**Exactly checked candidate PR-head code `681d9aba0e50c5fb7e3daa2ef9672022823ebc92`: 5/5 GitHub Actions SUCCESS**
+1. [Source, TypeScript and Node **188/188**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43027605120)
+2. [Real local workerd/D1 **14/14**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43027605100)
+3. [Public GitHub read and local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43027604921)
+4. [Android native GitHub adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43027605169)
+5. [Android Kotlin/Compose debug APK and JVM tests + actual SDK APK signature, **20/20** Android security checks](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43027605046)
+
+**Defects caught and fixed, never hidden:** early PR source preflight failed from an invalid URL regex; Kotlin JVM test asserted singleton on the deliberately duplicated approval idempotency-key requests; mutation test initially changed only one of several identical sign-in/token safeguards and was corrected to mutate all relevant occurrences. Final *code* candidate 5/5 CI succeeded. After adding this ledger, the final doc-inclusive PR-head and the independently merged `main` must still be checked; do not treat this paragraph as post-merge evidence.
+
+**Still open and important:** production-like real-provider sandbox validation (actual external idempotency + readback contracts and error cases), Android device UI/manual instrumentation and real Google sign-in, existing-owner Cloudflare Workers/D1 account billing/usage and quotas, owner-authorized inert migrations/deployment, Cron activation with separate permission, genuine physical device-OFF execution test and evidence. The checked-in Android debug APK keeps OAuth and Worker public identifiers blank, so the reviewer is not usable with any live backend yet. No third-party CRM, WhatsApp, email, actual AI invocation, PII or paid service was touched.
+
+**Safety status: `remote_acceptance=BLOCKED`, `safe_to_deploy=false`, `safe_to_activate_scheduler=false`.** One-way delivery to real customers remains prohibited until the provider and owner checks are complete.
+
+[P2-F contract](P2_F_ANDROID_WORKFLOW_REVIEW.md) · [PR #40](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/40) · [P2-E](P2_E_SYNTHETIC_RECONCILIATION.md) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+
 ## 2026-11-11 | P2-E | Synthetic provider UNKNOWN_OUTCOME and readback reconciliation (PR #39)
 
 **What was missing:** P2-D created immutable, human-approved, task-bound effect intents, but there was no safe dispatch-attempt ledger or recovery path if a provider had already committed an effect before the response was lost. Blind retry after a timeout can duplicate real business operations.
