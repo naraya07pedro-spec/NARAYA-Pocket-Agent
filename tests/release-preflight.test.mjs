@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,23);
+  assert.equal(result.checks.length,24);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -100,6 +100,27 @@ test('P2-D static gate blocks adding network provider dispatch or deleting immut
       'CREATE TRIGGER IF NOT EXISTS removed_immutability');},
     s=>{s.workerIndex=s.workerIndex.replace(
       'return await taskApprovalRoute(request,env,pathname)',
+      'return json({pretend:true})');},
+  ];
+  for(const mutate of attacks){
+    const s=clone();mutate(s);
+    assert.ok(failures(audit(s)).includes(check));
+  }
+});
+
+test('P2-E source gate blocks external calls, unsafe retries, lost unique receipt and disabled reconciliation',()=>{
+  const check='p2e_sandbox_provider_no_network_no_blind_retry';
+  assert.ok(!failures(audit(snapshot())).includes(check));
+  const attacks=[
+    s=>{s.sandboxDispatchSource+=' fetch("https://provider.invalid");';},
+    s=>{s.sandboxDispatchSource=s.sandboxDispatchSource.replaceAll(
+      'safeToRetry:false','safeToRetry:true');},
+    s=>{s.sandboxDispatchSource=s.sandboxDispatchSource.replaceAll(
+      'NOT_FOUND_UNCERTAIN','SAFE_TO_RETRY');},
+    s=>{s.migration0010=s.migration0010.replaceAll(
+      'UNIQUE(owner_id,effect_id)','UNIQUE(owner_id,created_at)');},
+    s=>{s.workerIndex=s.workerIndex.replace(
+      'return await sandboxDispatchRoute(request,env,pathname)',
       'return json({pretend:true})');},
   ];
   for(const mutate of attacks){
