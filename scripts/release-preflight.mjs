@@ -243,7 +243,7 @@ export function auditSource(s){
       s.taskApprovalSource.includes("task.lead_input_digest") &&
       s.taskApprovalSource.includes("effectView(effect)") &&
       s.taskApprovalSource.includes("eligibleForDispatch:false") &&
-      !/\\bfetch\\s*\\(/.test(s.taskApprovalSource) &&
+      !/\bfetch\s*\(/.test(s.taskApprovalSource) &&
       s.migration0009.includes('CREATE UNIQUE INDEX IF NOT EXISTS synthetic_approval_single_task') &&
       s.migration0009.includes('CREATE TRIGGER IF NOT EXISTS task_approval_before_decision') &&
       s.migration0009.includes('CREATE TRIGGER IF NOT EXISTS task_approval_after_decision') &&
