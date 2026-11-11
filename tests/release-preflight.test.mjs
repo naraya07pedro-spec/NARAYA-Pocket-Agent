@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,25);
+  assert.equal(result.checks.length,26);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -148,6 +148,29 @@ test('P2-F source gate rejects hidden Android execution, removed confirmation or
   for(const [index,mutate] of mutations.entries()){
     const changed=clone();mutate(changed);
     assert.ok(failures(audit(changed)).includes(name), 'uncaught P2-F mutation '+index);
+  }
+});
+
+test('P2-G gate catches fabricated cloud connection and bypassed reviewer login',()=>{
+  const check='p2g_native_navigation_honest_gated_review_no_mock_cloud';
+  assert.ok(!failures(audit(snapshot())).includes(check));
+  const attacks=[
+    s=>{s.androidMainActivity=s.androidMainActivity.replaceAll(
+      'if (signedIn && cloudConfigured)','if (true)');},
+    s=>{s.androidDesign=s.androidDesign.replace(
+      'Koneksi cloud belum dikonfigurasi','Cloud always online');},
+    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replaceAll(
+      'if (mode == PocketTab.TASKS)','if (true)');},
+    s=>{s.androidUiState=s.androidUiState.replace(
+      'Disetujui · belum dikirim','Terkirim ke CRM');},
+    s=>{s.androidUiState=s.androidUiState.replace(
+      'approval.expiresAt > System.currentTimeMillis()','true');},
+    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replaceAll(
+      'ReviewConfirmation.Decide','NoConfirmation');},
+  ];
+  for(const [i,attack] of attacks.entries()){
+    const source=clone();attack(source);
+    assert.ok(failures(audit(source)).includes(check),'undetected unsafe UI mutation '+i);
   }
 });
 

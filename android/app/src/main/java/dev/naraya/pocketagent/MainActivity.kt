@@ -46,11 +46,14 @@ class MainActivity : ComponentActivity() {
         val store = DraftStore(applicationContext)
         setContent {
             val colors = darkColorScheme(
-                primary = Color(0xFF6BD6C3),
-                surface = Color(0xFF10191C),
-                background = Color(0xFF0B1114),
-                onSurface = Color(0xFFF1F5F4),
-                onBackground = Color(0xFFF1F5F4),
+                primary = PocketInk.accent,
+                onPrimary = PocketInk.canvas,
+                surface = PocketInk.surface,
+                surfaceVariant = PocketInk.surfaceRaised,
+                background = PocketInk.canvas,
+                onSurface = PocketInk.primary,
+                onBackground = PocketInk.primary,
+                outline = PocketInk.border,
             )
             MaterialTheme(colorScheme = colors) {
                 MonitorDraftScreen(
@@ -97,26 +100,64 @@ private fun MonitorDraftScreen(
     var cloudNotice by remember { mutableStateOf("") }
     val cloudConfigured = webClientId.isNotBlank() && CloudSyncClient.validOrigin(BuildConfig.CLOUD_API_ORIGIN)
     val scope = rememberCoroutineScope()
+    var currentTab by remember { mutableStateOf(PocketTab.HOME) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("NARAYA Pocket Agent") }) }
+        containerColor = PocketInk.canvas,
+        topBar = { PocketHeader() },
+        bottomBar = {
+            PocketBottomNavigation(currentTab) { currentTab = it }
+        },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+        if (currentTab == PocketTab.HOME) {
+            PocketHome(
+                localDraftCount = drafts.size,
+                cloudConfigured = cloudConfigured,
+                signedIn = signedIn,
+                onNavigate = { currentTab = it },
+                modifier = Modifier.padding(padding),
+            )
+        } else if (currentTab == PocketTab.TASKS || currentTab == PocketTab.APPROVALS) {
+            if (signedIn && cloudConfigured) {
+                WorkflowReviewPanel(
+                    client = remember { WorkflowReviewClient(BuildConfig.CLOUD_API_ORIGIN) },
+                    readToken = { session.read() },
+                    onUnauthorized = {
+                        session.clear()
+                        signedIn = false
+                        cloudRows = emptyList()
+                        observedMonitorId = null
+                        remoteObservations = emptyList()
+                        cloudNotice = "Sesi berakhir. Login ulang untuk membaca workflow."
+                    },
+                    mode = currentTab,
+                    modifier = Modifier.padding(padding),
+                )
+            } else {
+                PocketConnectionGate(
+                    cloudConfigured = cloudConfigured,
+                    signedIn = signedIn,
+                    onMonitor = { currentTab = PocketTab.MONITOR },
+                    modifier = Modifier.padding(padding),
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("MANUAL GITHUB PREVIEW · OPT-IN CLOUD CONTROLS", color = Color(0xFF6BD6C3),
-                        style = MaterialTheme.typography.labelLarge)
-                    Text("Check a public repository", style = MaterialTheme.typography.headlineSmall,
+                    PocketEyebrow("KONEKSI  /  GITHUB MONITOR")
+                    Text("Pantau secara terukur.", style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Check now reads public GitHub once and saves the latest SHA offline. " +
-                            "Cloud control is optional and disabled without trusted OAuth/Worker configuration; " +
-                            "this Android app never schedules background checks.",
+                        "Pemeriksaan GitHub di perangkat selalu manual. Pengaturan cloud " +
+                            "memerlukan akun Google dan Worker yang benar-benar dikonfigurasi. " +
+                            "HP ini tidak menjalankan jadwal otomatis.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = PocketInk.muted,
                     )
                 }
             }
@@ -343,22 +384,6 @@ private fun MonitorDraftScreen(
                     }
                 }
             }
-            item {
-                if (signedIn && cloudConfigured) {
-                    WorkflowReviewPanel(
-                        client = remember { WorkflowReviewClient(BuildConfig.CLOUD_API_ORIGIN) },
-                        readToken = { session.read() },
-                        onUnauthorized = {
-                            session.clear()
-                            signedIn = false
-                            cloudRows = emptyList()
-                            observedMonitorId = null
-                            remoteObservations = emptyList()
-                            cloudNotice = "Workflow token no longer authorized. Sign in again."
-                        },
-                    )
-                }
-            }
             item { Text("Saved on this phone · ${drafts.size}/20", style = MaterialTheme.typography.titleMedium) }
             if (drafts.isEmpty()) {
                 item { Text("No repositories added. Add one above.", style = MaterialTheme.typography.bodyMedium) }
@@ -464,6 +489,7 @@ private fun MonitorDraftScreen(
                         "Worker. No operator API token, Android background process, or verified phone-off task.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
             }
         }
     }

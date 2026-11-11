@@ -4,6 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -64,6 +70,8 @@ internal fun WorkflowReviewPanel(
     client: WorkflowReviewClient,
     readToken: () -> String?,
     onUnauthorized: () -> Unit,
+    mode: PocketTab,
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -101,13 +109,11 @@ internal fun WorkflowReviewPanel(
                     notice = "Data workflow dibaca dari server. Ini bukan bukti Cron/HP mati."
                 }
                 is ReviewResult.Failed -> {
+                    snapshot = null
+                    dispatchStates = emptyMap()
                     notice = "Muat workflow gagal: ${outcome.code}. " +
                         "Status lama tidak boleh dianggap terbaru."
-                    if (outcome.code == ReviewFailure.UNAUTHORIZED) {
-                        snapshot = null
-                        dispatchStates = emptyMap()
-                        onUnauthorized()
-                    }
+                    if (outcome.code == ReviewFailure.UNAUTHORIZED) onUnauthorized()
                 }
             }
             busy = false
@@ -175,86 +181,151 @@ internal fun WorkflowReviewPanel(
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Workflow business · HUMAN REVIEW", style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold)
-            Text(
-                "Hanya data lead sintetis dan simulasi D1. Task, approval dan hasil efek " +
-                    "berasal dari Worker yang dikonfigurasi. Tidak ada CRM nyata, " +
-                    "pesan keluar, AI otonom, atau bukti HP mati.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Button(enabled = !busy, onClick = { refresh() }) {
-                Text(if (busy) "Memeriksa..." else "Muat workflow dari server")
-            }
-            Text(notice, style = MaterialTheme.typography.bodySmall)
-            HorizontalDivider()
-            Text("1 · Buat workflow uji", style = MaterialTheme.typography.titleSmall)
-            Text("Memakai UUID sintetis, kategori jasa, dan deadline 30 hari. Tidak " +
-                "menyimpan nama, nomor HP, email, atau chat pelanggan.",
-                style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (option in listOf("SIGNAGE","INTERIOR","EXHIBITION")) {
-                    if (serviceCode == option) Button(
-                        enabled = !busy && pendingDemo == null,
-                        onClick = { serviceCode = option },
-                    ) { Text(option.take(4)) }
-                    else OutlinedButton(
-                        enabled = !busy && pendingDemo == null,
-                        onClick = { serviceCode = option },
-                    ) { Text(option.take(4)) }
+    val data = snapshot
+    var selectedFilter by remember { mutableStateOf(PocketTaskFilter.ALL) }
+    var expandedEffect by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        PocketEyebrow(if (mode == PocketTab.TASKS) "WORKFLOW  /  02" else "HUMAN REVIEW  /  03")
+        Text(
+            if (mode == PocketTab.TASKS) "Pekerjaan." else "Persetujuan.",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        PocketMuted(
+            if (mode == PocketTab.TASKS)
+                "Tiga langkah verifikasi yang dijalankan manual. Semua status berasal dari D1."
+            else "Setiap keputusan terikat ke task, target, dan versi. Persetujuan tidak mengirim CRM."
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PocketTag("SINTETIS")
+            PocketTag("TANPA PENGIRIMAN")
+        }
+        OutlinedButton(enabled = !busy, onClick = { refresh() }) {
+            Text(if (busy) "Memeriksa server..." else "Muat ulang dari server")
+        }
+        PocketPanel {
+            PocketEyebrow("STATUS PEMBACAAN")
+            Text(notice, style = MaterialTheme.typography.bodySmall, color = PocketInk.muted)
+        }
+
+        if (mode == PocketTab.TASKS) {
+            PocketEyebrow("BUAT PENGUJIAN")
+            PocketPanel {
+                Text("Workflow uji baru", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold)
+                PocketMuted(
+                    "UUID dan kategori jasa sintetis. Tidak ada nama, nomor telepon, " +
+                        "atau data pelanggan nyata."
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (option in listOf("SIGNAGE","INTERIOR","EXHIBITION")) {
+                        FilterChip(
+                            selected = serviceCode == option,
+                            enabled = !busy && pendingDemo == null,
+                            onClick = { serviceCode = option },
+                            label = { Text(when(option) {
+                                "SIGNAGE" -> "Signage"
+                                "INTERIOR" -> "Interior"
+                                else -> "Pameran"
+                            }) },
+                        )
+                    }
+                }
+                val frozen = pendingDemo
+                if (frozen != null) {
+                    PocketMuted(
+                        "Permintaan sebelumnya belum pasti. ID ${frozen.leadId.take(8)} " +
+                            "dipertahankan agar tidak membuat duplikat."
+                    )
+                }
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        val seed = pendingDemo ?: DemoSeed(
+                            WorkflowReviewClient.newClientId(),
+                            WorkflowReviewClient.newClientId(),serviceCode,
+                        ).also { pendingDemo = it }
+                        perform("pembuatan lead dan task sintetis", {
+                            client.createDemo(it,seed.leadId,seed.taskId,seed.service)
+                        }) { result ->
+                            if (result is ReviewDemo) pendingDemo = null
+                        }
+                    },
+                ) {
+                    Text(if (pendingDemo == null) "Buat task uji" else "Gunakan ID uji yang sama")
                 }
             }
-            val frozen = pendingDemo
-            if (frozen != null) {
-                Text(
-                    "ID uji tetap dipertahankan selama respons belum pasti: " +
-                        "${frozen.leadId.take(8)}. Retry tidak membuat ID baru.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                PocketEyebrow("DAFTAR TUGAS")
+                if (data != null) PocketTag("${data.tasks.size} tercatat")
             }
-            OutlinedButton(
-                enabled = !busy,
-                onClick = {
-                    val seed = pendingDemo ?: DemoSeed(
-                        WorkflowReviewClient.newClientId(),
-                        WorkflowReviewClient.newClientId(),serviceCode,
-                    ).also { pendingDemo = it }
-                    perform("pembuatan lead dan task sintetis",{
-                        client.createDemo(it,seed.leadId,seed.taskId,seed.service)
-                    }) { outcome ->
-                        if (outcome is ReviewDemo) pendingDemo = null
-                    }
-                },
-            ) { Text(if (pendingDemo==null) "Buat lead + task sintetis" else "Retry ID uji yang sama") }
-            HorizontalDivider()
-            Text("2 · Task persisten", style = MaterialTheme.typography.titleSmall)
-            val data = snapshot
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for ((filter,label) in listOf(
+                    PocketTaskFilter.ALL to "Semua",
+                    PocketTaskFilter.OPEN to "Aktif",
+                    PocketTaskFilter.FINISHED to "Riwayat",
+                )) {
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(label) },
+                    )
+                }
+            }
             if (data == null) {
-                Text("Belum ada hasil baca server yang tervalidasi.",
-                    style = MaterialTheme.typography.bodySmall)
+                PocketMuted("Ketuk Muat ulang dari server untuk melihat task milik akunmu.")
             } else {
-                if (data.tasks.isEmpty()) Text("Belum ada task server.",
-                    style = MaterialTheme.typography.bodySmall)
-                data.tasks.forEach { task ->
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            "Task ${task.id.take(8)} · ${task.status} · langkah ${task.currentStep}/3",
-                            fontWeight = FontWeight.Medium,
+                val visible = PocketUiState.taskList(data.tasks,selectedFilter)
+                if (visible.isEmpty()) PocketPanel {
+                    Text("Tidak ada tugas pada filter ini.",
+                        style = MaterialTheme.typography.titleSmall)
+                    PocketMuted("Ini berarti halaman server tidak mengembalikan task " +
+                        "untuk filter tersebut, bukan bukti agent sudah selesai bekerja.")
+                }
+                visible.forEach { task ->
+                    PocketPanel {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Validasi lead sintetis",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold)
+                                PocketMuted("Task ${task.id.take(8)}  ·  versi ${task.version}")
+                            }
+                            PocketTag(
+                                PocketUiState.title(task.status),
+                                caution = task.status in setOf("FAILED","CANCELLED"),
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { task.currentStep / 3f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = PocketInk.accent,
+                            trackColor = PocketInk.border,
                         )
-                        Text("Versi ${task.version} · Lead ${task.leadId.take(8)}",
-                            style = MaterialTheme.typography.bodySmall)
+                        PocketMuted("Langkah tervalidasi: ${task.currentStep} dari 3. " +
+                            "Tidak ada langkah otomatis.")
                         if (task.status in setOf("QUEUED","RUNNING") && task.currentStep < 3) {
-                            OutlinedButton(
+                            Button(
                                 enabled = !busy,
                                 onClick = {
                                     perform("satu langkah sintetis", { client.advance(it,task) })
                                 },
-                            ) { Text("Jalankan 1 step manual") }
+                            ) { Text("Jalankan 1 langkah") }
                             OutlinedButton(
                                 enabled = !busy,
                                 onClick = { confirmation = ReviewConfirmation.Cancel(task) },
@@ -263,58 +334,99 @@ internal fun WorkflowReviewPanel(
                         val service = data.leads.firstOrNull {
                             it.clientLeadId == task.leadId
                         }?.serviceCode
-                        val existing = data.effects.any { it.taskId == task.id }
-                        if (task.status == "SUCCEEDED" && !existing && service != null) {
-                            OutlinedButton(
+                        if (PocketUiState.taskNeedsApproval(task,data) && service != null) {
+                            Button(
                                 enabled = !busy,
                                 onClick = {
-                                    perform("permintaan approval terikat task",{
+                                    perform("permintaan approval terikat task", {
                                         client.requestTaskApproval(it,task,service)
                                     })
                                 },
-                            ) { Text("Buat approval sintetis") }
+                            ) { Text("Ajukan persetujuan") }
                         }
-                        HorizontalDivider()
                     }
                 }
             }
-            Text("3 · Approval dan effect intent", style = MaterialTheme.typography.titleSmall)
-            if (data != null) {
-                if (data.effects.isEmpty()) Text("Belum ada effect intent yang terikat task.",
-                    style = MaterialTheme.typography.bodySmall)
-                data.effects.forEach { effect ->
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                PocketEyebrow("KOTAK KEPUTUSAN")
+                if (data != null) PocketTag(
+                    "${PocketUiState.pendingDecisions(data)} menunggu",
+                    caution = PocketUiState.pendingDecisions(data)>0,
+                )
+            }
+            if (data == null) {
+                PocketMuted("Belum ada approval terverifikasi dari server.")
+            } else if (data.effects.isEmpty()) {
+                PocketPanel {
+                    Text("Belum ada tindakan untuk ditinjau.",
+                        style = MaterialTheme.typography.titleMedium)
+                    PocketMuted("Approval hanya dibuat dari task sintetis yang telah " +
+                        "menyelesaikan ketiga langkahnya. Tidak ada contoh palsu.")
+                }
+            } else {
+                val sorted = data.effects.sortedWith(
+                    compareBy<ReviewEffect> { effect ->
+                        val approval = data.approvals.firstOrNull { it.id == effect.approvalId }
+                        if (PocketUiState.decisionAllowed(approval,effect)) 0 else 1
+                    }.thenBy { it.id },
+                )
+                sorted.forEach { effect ->
                     val approval = data.approvals.firstOrNull {
                         it.id == effect.approvalId &&
                             it.payloadDigest == effect.payloadDigest &&
                             it.targetDigest == effect.targetDigest
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("Effect ${effect.id.take(8)} · ${effect.status}",
-                            fontWeight = FontWeight.Medium)
-                        Text(
-                            "Task ${effect.taskId.take(8)} · ${effect.serviceCode} · " +
-                                "SHA-256 ${effect.payloadDigest.take(12)}",
-                            style = MaterialTheme.typography.bodySmall,
+                    val eligible = PocketUiState.decisionAllowed(approval,effect)
+                    PocketPanel {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PocketEyebrow(if (eligible) "PERLU KEPUTUSAN" else "CATATAN EFFECT")
+                            PocketTag(PocketUiState.title(effect.status),
+                                caution = eligible || effect.status=="DENIED")
+                        }
+                        Text("Catat lead di CRM sintetis",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        PocketMuted(
+                            "Kategori: ${effect.serviceCode}  ·  Task ${effect.taskId.take(8)}\n" +
+                                "Target: sandbox D1, bukan CRM eksternal."
                         )
-                        if (effect.status == "AWAITING_APPROVAL" &&
-                            approval?.status == "PENDING") {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(enabled = !busy,
-                                    onClick = {
-                                        confirmation = ReviewConfirmation.Decide(approval,effect,true)
-                                    }) { Text("Setujui") }
-                                OutlinedButton(enabled = !busy,
+                        if (eligible && approval != null) {
+                            PocketMuted("Diajukan untuk keputusan sekali pakai. " +
+                                "Menekan Setujui hanya mengubah izin menjadi APPROVED_NO_DISPATCH.")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                OutlinedButton(
+                                    enabled = !busy,
+                                    modifier = Modifier.weight(1f),
                                     onClick = {
                                         confirmation = ReviewConfirmation.Decide(approval,effect,false)
-                                    }) { Text("Tolak") }
+                                    },
+                                ) { Text("Tolak") }
+                                Button(
+                                    enabled = !busy,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        confirmation = ReviewConfirmation.Decide(approval,effect,true)
+                                    },
+                                ) { Text("Setujui") }
                             }
                         } else if (effect.status == "AWAITING_APPROVAL") {
-                            Text("Approval tidak tersedia, sudah expired, atau di luar halaman " +
-                                "server saat ini. Tidak ada keputusan otomatis.",
-                                style = MaterialTheme.typography.bodySmall)
+                            PocketMuted("Keputusan tidak tersedia, kedaluwarsa, atau bukan " +
+                                "bagian dari halaman approval terverifikasi. Muat ulang.")
                         }
                         if (effect.status == "APPROVED_NO_DISPATCH") {
-                            val recorded = dispatchStates[effect.id]
+                            PocketMuted("Izin diberikan. Belum ada tindakan CRM atau pesan keluar.")
                             OutlinedButton(enabled = !busy, onClick = {
                                 val token = readToken()
                                 if (token == null) {
@@ -326,13 +438,14 @@ internal fun WorkflowReviewPanel(
                                             client.getDispatch(token,effect.id)
                                         }
                                         if (readToken() == token) {
-                                            when(result) {
+                                            when (result) {
                                                 is ReviewResult.Ok -> {
                                                     dispatchStates = dispatchStates + (effect.id to result.value)
-                                                    notice = "Status D1 terbaru dibaca. Ini bukan efek CRM eksternal."
+                                                    notice = "Status D1 dibaca. Bukan hasil CRM eksternal."
                                                 }
                                                 is ReviewResult.Failed -> {
-                                                    notice = "Status efek tidak terkonfirmasi: ${result.code}"
+                                                    dispatchStates = dispatchStates - effect.id
+                                                    notice = "Status simulasi tidak terkonfirmasi: ${result.code}"
                                                     if(result.code==ReviewFailure.UNAUTHORIZED) onUnauthorized()
                                                 }
                                             }
@@ -340,41 +453,56 @@ internal fun WorkflowReviewPanel(
                                         busy = false
                                     }
                                 }
-                            }) { Text("Baca status simulasi D1") }
+                            }) { Text("Periksa hasil simulasi") }
+                            val recorded = dispatchStates[effect.id]
                             if (recorded != null) {
-                                Text(
-                                    "Simulasi: ${recorded.state} · upaya ${recorded.attemptCount}/1 · " +
-                                        "readback ${recorded.readback ?: "belum ada"}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                                PocketTag(PocketUiState.title(recorded.state),
+                                    caution=recorded.state in setOf("UNKNOWN_OUTCOME","QUARANTINED"))
+                                PocketMuted("Upaya provider sintetis: ${recorded.attemptCount}/1  ·  " +
+                                    "readback: ${recorded.readback ?: "belum diperiksa"}")
                                 if (recorded.state == "NOT_ATTEMPTED") {
                                     Button(
                                         enabled = !busy,
-                                        onClick = { confirmation = ReviewConfirmation.Simulate(effect) },
-                                    ) { Text("Simulasikan 1 efek D1") }
+                                        onClick = {
+                                            confirmation = ReviewConfirmation.Simulate(effect)
+                                        },
+                                    ) { Text("Jalankan 1 simulasi D1") }
                                 }
                                 if (recorded.state in setOf("IN_FLIGHT","UNKNOWN_OUTCOME")) {
                                     OutlinedButton(enabled = !busy, onClick = {
                                         perform("rekonsiliasi read-only", {
                                             client.reconcile(it,effect)
-                                        }) { outcome ->
-                                            if(outcome is ReviewDispatch)
-                                                dispatchStates = dispatchStates + (effect.id to outcome)
+                                        }) { result ->
+                                            if(result is ReviewDispatch) {
+                                                dispatchStates = dispatchStates +
+                                                    (effect.id to result)
+                                            }
                                         }
                                     }) { Text("Rekonsiliasi tanpa retry") }
                                 }
-                                Text("safeToRetry = false. Tidak ada tombol eksekusi ulang.",
-                                    style = MaterialTheme.typography.bodySmall)
+                                PocketMuted("Tidak ada retry otomatis. Hasil tidak pasti " +
+                                    "tidak memberi izin untuk mengirim ulang.")
                             }
                         }
-                        HorizontalDivider()
+                        OutlinedButton(
+                            onClick = {
+                                expandedEffect = if (expandedEffect==effect.id) null else effect.id
+                            },
+                        ) {
+                            Text(if (expandedEffect==effect.id) "Tutup detail teknis"
+                                else "Detail teknis")
+                        }
+                        if (expandedEffect==effect.id) {
+                            PocketMuted("Effect ${effect.id}\nApproval ${effect.approvalId}\n" +
+                                "Payload SHA-256 ${effect.payloadDigest}\n" +
+                                "Target SHA-256 ${effect.targetDigest}")
+                        }
                     }
                 }
             }
-            Text("Hanya status server terakhir. Jika permintaan gagal atau timeout, " +
-                "tidak ada keberhasilan yang diasumsikan. Refresh sebelum mengambil keputusan.",
-                style = MaterialTheme.typography.bodySmall)
         }
+        PocketMuted("Status hanya berasal dari respons server terakhir. " +
+            "Timeout atau pembacaan gagal bukan bukti tindakan selesai.")
     }
 
     val current = confirmation

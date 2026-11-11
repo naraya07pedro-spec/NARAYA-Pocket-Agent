@@ -94,3 +94,13 @@ This is CI at source SHA, not yet the merge SHA. **No physical Android, Cloudfla
 When a real owner-configured Google Web OAuth ID and exact HTTPS Worker origin are provided, an explicitly signed-in Android user sees an additional **Workflow business · HUMAN REVIEW** panel. It requires an already-onboarded backend user (the original monitor sync must have registered the owner). It can create a typed **synthetic-only** lead/task, run one deterministic step per tap, cancel a task, request task-bound approval, approve/deny through a confirmation dialog, read the P2-E synthetic D1 result, and request readback-only reconciliation. No real CRM/email/WhatsApp actions are available.
 
 The new panel is not shown in the checked-in default build, because the public OAuth/Worker identifiers are empty. No task or provider effects are scheduled automatically by Android; every network call is initiated by a tap, and all changes require a fresh server-state readback. The P2-E simulator is a **D1 table only**, not a production external provider. For detailed backend, UI and safety contracts see [P2-F review](../docs/P2_F_ANDROID_WORKFLOW_REVIEW.md).
+
+## P2-G: redesigned native Android navigation (not a mockup)
+
+The original one-page UI is now organized into four Material 3 destinations: **Beranda**, **Tugas**, **Approval**, and **Monitor**. The quiet typography-first design deliberately has no generated task statistics or fake green Cloudflare indicator. Beranda reports only local drafts and the truthful *not configured/not signed in* status. Tugas/Approval require the existing short-lived Google ID token and valid Worker origin; otherwise users see a setup explanation and a route back to Monitor.
+
+Tugas shows real owner-scoped typed D1 task records, actual 0–3 step counts, filters and explicit one-step/cancel actions. Approval has task-bound review, consent dialogs and **D1-only** synthetic effect readback; long UUIDs and SHA-256 are kept in expandable detail. A timeout still means *unknown*, never an automatic retry. The original manual GitHub monitoring, local draft store and cloud sync controls have moved intact to Monitor.
+
+New files: `PocketDesign.kt` (brand components/navigation/onboarding), `PocketUiState.kt` (strict server-derived labels/filters/approval eligibility) and `PocketUiStateTest.kt` (failure/consent regression tests). Full architecture and unverified visual/device gates: [P2-G design implementation](../docs/P2_G_ANDROID_PRODUCT_DESIGN.md).
+
+**Visual caveat:** Native compilation, unit tests and APK signature verification do **not** constitute a physical phone screenshot/accessibility/layout QA. OAuth/Worker public build defaults stay blank; no cloud deployment or phone-off execution has been claimed.
