@@ -21,7 +21,7 @@ async function applyStatements(DB, source) {
   let pending='',insideTrigger=false;
   for(const line of lines){
     const trimmed=line.trim();
-    if(!pending.trim()&&/^CREATE TRIGGER\\b/i.test(trimmed))insideTrigger=true;
+    if(!pending.trim()&&/^CREATE TRIGGER\b/i.test(trimmed))insideTrigger=true;
     pending+=line+'\n';
     if(insideTrigger){
       if(trimmed==='END;'){
