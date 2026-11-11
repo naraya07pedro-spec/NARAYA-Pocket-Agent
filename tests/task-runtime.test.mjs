@@ -451,7 +451,8 @@ test('P2-D: denial, expiry and missing effect fail closed; legacy P2-A approval 
       'tampered/corrupt missing effect triggers SQL abort, not approval success');
     const approvalState=e.DB.connection.prepare('SELECT status,version FROM synthetic_approval_intents WHERE id=?')
       .get(deleted.approval.id);
-    assert.deepEqual(approvalState,{status:'PENDING',version:1});
+    assert.equal(approvalState.status,'PENDING');
+    assert.equal(approvalState.version,1);
     // Old unbound approvals are left usable for inert P2-A experiments,
     // but cannot create a P2-D effect ledger entry.
     const legacyLead=await lead(e,t);
