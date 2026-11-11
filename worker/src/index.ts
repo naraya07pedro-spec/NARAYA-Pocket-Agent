@@ -7,6 +7,7 @@ import { syntheticApprovalRoute } from './synthetic-approvals.ts';
 import { syntheticLeadRoute } from './synthetic-leads.ts';
 import { taskRuntimeRoute } from './task-runtime.ts';
 import { taskApprovalRoute } from './task-bound-approvals.ts';
+import { sandboxDispatchRoute } from './sandbox-dispatch.ts';
 import type { Env, Monitor } from './types.ts';
 
 async function authorized(request: Request, secret?: string): Promise<boolean> {
@@ -88,6 +89,9 @@ export default {
       }
       if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations' || /^\/v1\/sync\/monitors\/[0-9a-f-]{36}$/i.test(pathname)) {
         return await mobileSync(request,env,pathname);
+      }
+      if (pathname.startsWith('/v1/sandbox-dispatches/')) {
+        return await sandboxDispatchRoute(request,env,pathname);
       }
       if (pathname === '/v1/task-approvals' ||
           pathname === '/v1/task-effects' || pathname.startsWith('/v1/task-effects/')) {
