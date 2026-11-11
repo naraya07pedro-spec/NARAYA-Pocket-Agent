@@ -7,9 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { getPlatformProxy } from 'wrangler';
 import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
+import { advanceSyntheticTask } from '../worker/src/task-runtime.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
-const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql'];
+const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql', '0008_durable_task_runtime.sql'];
 const migrationSql = migrations.map(name => readFileSync(new URL('../worker/migrations/'+name, import.meta.url), 'utf8'));
 async function applyStatements(DB, source) {
   // D1.exec splits on newlines; apply complete SQL statements through D1.prepare.
@@ -695,6 +696,66 @@ test('Cloudflare local D1: sequence disambiguates three identical-ms Cron observ
     platform=await setupPlatform(dir);
     const again=(await platform.env.DB.prepare('SELECT event_sequence,event_type,previous_sha,head_sha,observed_at FROM observations WHERE monitor_id=? ORDER BY event_sequence DESC').bind(id).all()).results;
     assert.deepEqual(again,data,'D1 persisted causal order must survive Worker process recreation');
+  }finally{
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+
+test('P2-C real local workerd D1: bounded task steps, durable restart and owner quota',{timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-task-runtime-'));
+  let platform;
+  try{
+    platform=await setupPlatform(dir);
+    const db=platform.env.DB;
+    await applySchema(db);
+    const user=crypto.randomUUID(),leadId=crypto.randomUUID(),taskId=crypto.randomUUID();
+    const stamp=Date.now(),hash='b'.repeat(64);
+    await db.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+      .bind(user,'https://synthetic.example.invalid','workerd-test',stamp).run();
+    await db.prepare(`INSERT INTO synthetic_leads(
+      id,owner_id,client_lead_id,source,service_code,budget_band,days_to_deadline,
+      priority,reply_draft,input_digest,created_at
+    ) VALUES(?,?,?,'SYNTHETIC_FORM','SIGNAGE','MID',45,
+      'STANDARD_REVIEW','Synthetic response draft only',?,?)`)
+      .bind(crypto.randomUUID(),user,leadId,hash,stamp).run();
+    await db.prepare(`INSERT INTO task_runs(id,owner_id,client_task_id,kind,
+      client_lead_id,lead_input_digest,status,current_step,version,created_at,updated_at)
+      VALUES(?,?,?,'SYNTHETIC_LEAD_TRIAGE_V1',?,?,'QUEUED',0,1,?,?)`)
+      .bind(taskId,user,crypto.randomUUID(),leadId,hash,stamp,stamp).run();
+    for(const [index,code] of ['VERIFY_LEAD','VERIFY_TRIAGE','VERIFY_DRAFT'].entries()){
+      await db.prepare(`INSERT INTO task_steps(id,task_id,step_index,step_code,status,updated_at)
+        VALUES(?,?,?,?,?,?)`)
+        .bind(crypto.randomUUID(),taskId,index,code,index===0?'READY':'WAITING',stamp).run();
+    }
+    let result=await advanceSyntheticTask({DB:db},user,taskId,1,stamp+100);
+    assert.equal(result.status,200);
+    let task=(await result.json()).task;
+    assert.equal(task.status,'RUNNING');assert.equal(task.currentStep,1);
+    assert.equal((await db.prepare('SELECT claims FROM task_step_budgets WHERE owner_id=?')
+      .bind(user).first()).claims,1);
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const persisted=platform.env.DB;
+    const saved=await persisted.prepare('SELECT version,current_step FROM task_runs WHERE id=?')
+      .bind(taskId).first();
+    assert.equal(saved.current_step,1);
+    result=await advanceSyntheticTask({DB:persisted},user,taskId,saved.version,stamp+200);
+    assert.equal(result.status,200);
+    task=(await result.json()).task;
+    assert.equal(task.currentStep,2);
+    result=await advanceSyntheticTask({DB:persisted},user,taskId,task.version,stamp+300);
+    assert.equal(result.status,200);
+    const final=await result.json();
+    assert.equal(final.task.status,'SUCCEEDED');
+    assert.equal(final.task.currentStep,3);
+    assert.deepEqual(final.steps.map(s=>s.status),
+      ['SUCCEEDED','SUCCEEDED','SUCCEEDED']);
+    assert.equal((await persisted.prepare('SELECT claims FROM task_step_budgets WHERE owner_id=?')
+      .bind(user).first()).claims,3);
+    assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM audit_events').first()).n,0);
+    assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM observations').first()).n,0);
   }finally{
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});

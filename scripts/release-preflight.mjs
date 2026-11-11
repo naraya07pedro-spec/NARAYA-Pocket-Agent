@@ -18,6 +18,7 @@ const EXPECTED_MIGRATIONS=[
   '0005_observation_event_sequence.sql',
   '0006_synthetic_approval_intents.sql',
   '0007_synthetic_lead_intake.sql',
+  '0008_durable_task_runtime.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -43,6 +44,8 @@ export function readSourceSnapshot(base=root){
     approvalSource:text(base,'worker/src/synthetic-approvals.ts'),
     migration0007:text(base,'worker/migrations/0007_synthetic_lead_intake.sql'),
     syntheticLeadSource:text(base,'worker/src/synthetic-leads.ts'),
+    migration0008:text(base,'worker/migrations/0008_durable_task_runtime.sql'),
+    taskRuntimeSource:text(base,'worker/src/task-runtime.ts'),
     schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
@@ -82,7 +85,10 @@ function migrationChainValid(s){
     /CREATE TABLE IF NOT EXISTS synthetic_approval_intents/.test(s.migration0006) &&
     /UNIQUE\(owner_id,client_intent_id\)/.test(s.migration0006) &&
     /CREATE TABLE IF NOT EXISTS synthetic_leads/.test(s.migration0007) &&
-    /UNIQUE\(owner_id,client_lead_id\)/.test(s.migration0007);
+    /UNIQUE\(owner_id,client_lead_id\)/.test(s.migration0007) &&
+    /CREATE TABLE IF NOT EXISTS task_runs/.test(s.migration0008) &&
+    /CREATE TABLE IF NOT EXISTS task_steps/.test(s.migration0008) &&
+    /CREATE TABLE IF NOT EXISTS task_step_budgets/.test(s.migration0008);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};
@@ -213,6 +219,17 @@ export function auditSource(s){
       s.workflows['android.yml'].includes('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug') &&
       s.workflows['android.yml'].indexOf('run: node scripts/android-owner-pilot.mjs --verify-apk') >
         s.workflows['android.yml'].indexOf('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug')),
+    check('p2c_runtime_durable_manual_fenced_no_provider_dispatch',
+      s.workerIndex.includes('return await taskRuntimeRoute(request,env,pathname)') &&
+      s.taskRuntimeSource.includes('const MAX_STEPS_PER_HOUR=12') &&
+      s.taskRuntimeSource.includes('const MAX_ATTEMPTS=3') &&
+      s.taskRuntimeSource.includes('const LEASE_MS=45_000') &&
+      s.taskRuntimeSource.includes('AND t.version=?') &&
+      s.taskRuntimeSource.includes("lease_token=?") &&
+      s.taskRuntimeSource.includes("status='CANCELLED'") &&
+      s.taskRuntimeSource.includes('reserveBudget(env,owner,now)') &&
+      !/\bfetch\s*\(/.test(s.taskRuntimeSource) &&
+      s.migration0008.includes('CREATE TABLE IF NOT EXISTS task_step_budgets')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
