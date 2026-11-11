@@ -159,7 +159,7 @@ test('P2-G gate catches fabricated cloud connection and bypassed reviewer login'
       'if (signedIn && cloudConfigured)','if (true)');},
     s=>{s.androidDesign=s.androidDesign.replace(
       'Koneksi cloud belum dikonfigurasi','Cloud always online');},
-    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replace(
+    s=>{s.androidWorkflowPanel=s.androidWorkflowPanel.replaceAll(
       'if (mode == PocketTab.TASKS)','if (true)');},
     s=>{s.androidUiState=s.androidUiState.replace(
       'Disetujui · belum dikirim','Terkirim ke CRM');},
