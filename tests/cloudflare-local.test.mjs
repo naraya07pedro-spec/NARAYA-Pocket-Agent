@@ -790,7 +790,7 @@ test('P2-D real workerd D1: approval change atomically transitions only bound im
     platform=await setupPlatform(dir);
     const DB=platform.env.DB;
     await applySchema(DB);
-    const id=crypto.randomUUID,owner=id(),lead=id(),task=id(),
+    const id=()=>crypto.randomUUID(),owner=id(),lead=id(),task=id(),
       approval=id(),effect=id(),now=Date.now();
     const leadDigest='a'.repeat(64),payloadDigest='b'.repeat(64),targetDigest='c'.repeat(64);
     await DB.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
