@@ -261,3 +261,36 @@ test('P2-C: strict typed actions, quota on task creation, and never a provider d
     assert.equal(e.DB.connection.prepare('SELECT COUNT(*) AS n FROM task_steps').get().n,9);
   }finally{globalThis.fetch=originalFetch;close(e);}
 });
+
+
+test('P2-C: ambiguous committed lease claim NEVER refunds hourly quota',async()=>{
+  globalThis.fetch=mockJwks;const e=env(),realDB=e.DB;
+  try{
+    const t=await token('task-ambiguous');await onboard(e,t);
+    const l=await lead(e,t),task=(await (await taskCreate(e,t,createBody(l))).json()).task;
+    const owner=realDB.connection.prepare('SELECT owner_id FROM task_runs WHERE id=?')
+      .get(task.id).owner_id;
+    const ambiguousDB={
+      ...realDB,
+      async batch(statements){
+        const committed=await realDB.batch(statements);
+        // D1 committed both lease statements, but response metadata was lost.
+        if(statements.length===2&&
+          String(realDB.connection.prepare('SELECT COUNT(*) AS n FROM task_step_budgets').get().n)==='1' &&
+          committed[0]?.meta?.changes===1){
+          return [{success:true},committed[1]];
+        }
+        return committed;
+      },
+    };
+    const response=await advanceSyntheticTask({...e,DB:ambiguousDB},
+      owner,task.id,task.version,Date.now());
+    assert.equal(response.status,409);
+    assert.equal(realDB.connection.prepare('SELECT claims FROM task_step_budgets').get().claims,1,
+      'ambiguous committed lease must consume its quota slot, not refund');
+    const pending=realDB.connection.prepare('SELECT status,lease_token FROM task_steps WHERE task_id=? AND step_index=0')
+      .get(task.id);
+    assert.equal(pending.status,'RUNNING');
+    assert.ok(pending.lease_token);
+  }finally{globalThis.fetch=originalFetch;close(e);}
+});
