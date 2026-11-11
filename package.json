@@ -7,7 +7,7 @@
     "node": ">=22.16.0 <23"
   },
   "scripts": {
-    "test": "node scripts/release-preflight.mjs && node --experimental-strip-types --test tests/pocket.test.mjs tests/oidc.test.mjs tests/mobile-sync.test.mjs tests/release-preflight.test.mjs tests/offdevice-evidence.test.mjs tests/cloudflare-readonly-inspect.test.mjs tests/cloudflare-billing-readonly.test.mjs",
+    "test": "node scripts/release-preflight.mjs && node --experimental-strip-types --test tests/pocket.test.mjs tests/oidc.test.mjs tests/mobile-sync.test.mjs tests/release-preflight.test.mjs tests/offdevice-evidence.test.mjs tests/cloudflare-readonly-inspect.test.mjs tests/cloudflare-billing-readonly.test.mjs tests/cloudflare-owner-acceptance.test.mjs",
     "typecheck": "tsc --noEmit -p worker/tsconfig.json",
     "preflight": "node scripts/release-preflight.mjs",
     "preflight:json": "node scripts/release-preflight.mjs --json",
@@ -15,6 +15,8 @@
     "cloudflare:inspect-offline": "node scripts/cloudflare-readonly-inspect.mjs",
     "cloudflare:inspect-live": "node scripts/cloudflare-readonly-inspect.mjs --inspect-live",
     "cloudflare:billing-offline": "node scripts/cloudflare-billing-readonly.mjs",
-    "cloudflare:billing-live": "node scripts/cloudflare-billing-readonly.mjs --inspect-live"
+    "cloudflare:billing-live": "node scripts/cloudflare-billing-readonly.mjs --inspect-live",
+    "cloudflare:owner-offline": "node scripts/cloudflare-owner-acceptance.mjs",
+    "cloudflare:owner-live": "node scripts/cloudflare-owner-acceptance.mjs --inspect-live"
   }
 }
