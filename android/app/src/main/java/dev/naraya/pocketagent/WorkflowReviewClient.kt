@@ -28,6 +28,7 @@ internal data class ReviewHttp(val status: Int, val body: String)
 internal fun interface ReviewTransport {
     fun execute(origin: String, path: String, method: String, token: String, jsonBody: String?): ReviewHttp
 }
+internal data class ReviewLead(val clientLeadId: String, val serviceCode: String)
 internal data class ReviewTask(
     val id: String, val leadId: String, val status: String, val version: Int,
     val currentStep: Int,
@@ -46,8 +47,8 @@ internal data class ReviewDispatch(
     val readback: String?, val safeToRetry: Boolean,
 )
 internal data class ReviewSnapshot(
-    val tasks: List<ReviewTask>, val approvals: List<ReviewApproval>,
-    val effects: List<ReviewEffect>,
+    val leads: List<ReviewLead>, val tasks: List<ReviewTask>,
+    val approvals: List<ReviewApproval>, val effects: List<ReviewEffect>,
 )
 internal data class ReviewDemo(val task: ReviewTask, val leadId: String)
 internal data class ReviewTaskEffect(val approval: ReviewApproval, val effect: ReviewEffect)
@@ -129,6 +130,7 @@ internal class WorkflowReviewClient(
         fun allowedRoute(path: String, method: String): Boolean = when (method) {
             "GET" -> path in setOf(
                 "/v1/tasks", "/v1/approval-intents", "/v1/task-effects",
+                "/v1/synthetic-leads",
             ) || (taskDetail.matches(path) && scoped(path, "/v1/tasks/")) ||
                 (dispatchPath.matches(path) && scoped(path, "/v1/sandbox-dispatches/"))
             "POST" -> path in setOf(
@@ -269,6 +271,36 @@ internal class WorkflowReviewClient(
         } catch (_: Exception) {
             ReviewResult.Failed(ReviewFailure.INVALID_SERVER_RESPONSE)
         }
+    }
+
+    fun listLeads(token:String?):ReviewResult<List<ReviewLead>> = parse(
+        exchange(token,"GET","/v1/synthetic-leads",null),setOf(200),
+    ) { root ->
+        boundedRows(root,"leads").map { lead ->
+            require(text(lead,"source")=="SYNTHETIC_FORM")
+            require(text(lead,"sendStatus")=="DRAFT_ONLY")
+            require(text(lead,"classification")=="DETERMINISTIC_RULES_NOT_AI")
+            val service=text(lead,"serviceCode")
+            require(service in setOf("EXHIBITION","INTERIOR","SIGNAGE"))
+            ReviewLead(id(lead,"clientLeadId"),service)
+        }.also { rows -> require(rows.map { it.clientLeadId }.toSet().size==rows.size) }
+    }
+
+    fun snapshot(token:String?):ReviewResult<ReviewSnapshot> {
+        val leads=listLeads(token)
+        if(leads is ReviewResult.Failed)return leads
+        val tasks=listTasks(token)
+        if(tasks is ReviewResult.Failed)return tasks
+        val approvals=listApprovals(token)
+        if(approvals is ReviewResult.Failed)return approvals
+        val effects=listEffects(token)
+        if(effects is ReviewResult.Failed)return effects
+        return ReviewResult.Ok(ReviewSnapshot(
+            (leads as ReviewResult.Ok).value,
+            (tasks as ReviewResult.Ok).value,
+            (approvals as ReviewResult.Ok).value,
+            (effects as ReviewResult.Ok).value,
+        ),200)
     }
 
     fun listTasks(token:String?): ReviewResult<List<ReviewTask>> = parse(
