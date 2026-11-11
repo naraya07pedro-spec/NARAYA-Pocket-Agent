@@ -135,7 +135,7 @@ test('P2-F source gate rejects hidden Android execution, removed confirmation or
   const mutations=[
     s=>{s.androidMainActivity=s.androidMainActivity.replace(
       'if (signedIn && cloudConfigured)','if (true)');},
-    s=>{s.androidWorkflowClient=s.androidWorkflowClient.replace(
+    s=>{s.androidWorkflowClient=s.androidWorkflowClient.replaceAll(
       'CloudSyncClient.validIdTokenShape(token)','true');},
     s=>{s.androidWorkflowClient=s.androidWorkflowClient.replace(
       'instanceFollowRedirects = false','instanceFollowRedirects = true');},
