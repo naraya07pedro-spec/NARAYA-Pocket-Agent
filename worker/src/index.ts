@@ -3,6 +3,7 @@ import { runScheduler } from './scheduler.ts';
 import { mobileSchedulerConfigured } from './scheduler-eligibility.ts';
 import { mobileSync, IdentityCapacityError } from './mobile-sync.ts';
 import { AuthRejected, AuthUnavailable, verifyOidcBearer } from './oidc.ts';
+import { syntheticApprovalRoute } from './synthetic-approvals.ts';
 import type { Env, Monitor } from './types.ts';
 
 async function authorized(request: Request, secret?: string): Promise<boolean> {
@@ -84,6 +85,9 @@ export default {
       }
       if (pathname === '/v1/sync/monitors' || pathname === '/v1/sync/observations' || /^\/v1\/sync\/monitors\/[0-9a-f-]{36}$/i.test(pathname)) {
         return await mobileSync(request,env,pathname);
+      }
+      if (pathname === '/v1/approval-intents' || pathname.startsWith('/v1/approval-intents/')) {
+        return syntheticApprovalRoute(request,env,pathname);
       }
       if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
           !env.OWNER_ID || !/^[A-Za-z0-9_-]{1,64}$/.test(env.OWNER_ID)) {
