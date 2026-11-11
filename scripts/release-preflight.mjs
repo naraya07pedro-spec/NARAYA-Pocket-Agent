@@ -20,6 +20,7 @@ const EXPECTED_MIGRATIONS=[
   '0007_synthetic_lead_intake.sql',
   '0008_durable_task_runtime.sql',
   '0009_task_bound_effect_intents.sql',
+  '0010_sandbox_reconciliation.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -49,6 +50,8 @@ export function readSourceSnapshot(base=root){
     taskRuntimeSource:text(base,'worker/src/task-runtime.ts'),
     migration0009:text(base,'worker/migrations/0009_task_bound_effect_intents.sql'),
     taskApprovalSource:text(base,'worker/src/task-bound-approvals.ts'),
+    migration0010:text(base,'worker/migrations/0010_sandbox_reconciliation.sql'),
+    sandboxDispatchSource:text(base,'worker/src/sandbox-dispatch.ts'),
     schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
@@ -94,7 +97,11 @@ function migrationChainValid(s){
     /CREATE TABLE IF NOT EXISTS task_step_budgets/.test(s.migration0008) &&
     /CREATE TABLE IF NOT EXISTS synthetic_effect_intents/.test(s.migration0009) &&
     /CREATE TRIGGER IF NOT EXISTS task_approval_after_decision/.test(s.migration0009) &&
-    /CREATE TRIGGER IF NOT EXISTS task_effect_no_retarget/.test(s.migration0009);
+    /CREATE TRIGGER IF NOT EXISTS task_effect_no_retarget/.test(s.migration0009) &&
+    /CREATE TABLE IF NOT EXISTS sandbox_dispatches/.test(s.migration0010) &&
+    /CREATE TABLE IF NOT EXISTS sandbox_provider_records/.test(s.migration0010) &&
+    /CREATE TRIGGER IF NOT EXISTS sandbox_dispatch_state_guard/.test(s.migration0010) &&
+    /CREATE TRIGGER IF NOT EXISTS sandbox_provider_immutable/.test(s.migration0010);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};
