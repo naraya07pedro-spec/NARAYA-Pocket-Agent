@@ -8,6 +8,7 @@ import { getPlatformProxy } from 'wrangler';
 import worker from '../worker/src/index.ts';
 import { runScheduler } from '../worker/src/scheduler.ts';
 import { advanceSyntheticTask } from '../worker/src/task-runtime.ts';
+import { attemptSandboxEffect,reconcileSandboxEffect } from '../worker/src/sandbox-dispatch.ts';
 
 const configPath = fileURLToPath(new URL('../worker/wrangler.local.jsonc', import.meta.url));
 const migrations = ['0001_initial.sql', '0002_mobile_identity_sync.sql', '0003_scheduler_control.sql', '0004_global_scheduler_budget.sql', '0005_observation_event_sequence.sql', '0006_synthetic_approval_intents.sql', '0007_synthetic_lead_intake.sql', '0008_durable_task_runtime.sql', '0009_task_bound_effect_intents.sql', '0010_sandbox_reconciliation.sql'];
@@ -880,6 +881,79 @@ test('P2-D real workerd D1: approval change atomically transitions only bound im
       'SELECT COUNT(*) AS n FROM synthetic_effect_intents').first()).n,1);
   }finally{
     globalThis.fetch=originalFetch;
+    if(platform)await platform.dispose();
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+test('P2-E real workerd D1: simulated timeout after commit readback confirms once across restart',{timeout:90000},async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'naraya-d1-p2e-provider-'));
+  let platform;
+  try{
+    platform=await setupPlatform(dir);
+    const DB=platform.env.DB;
+    await applySchema(DB);
+    const newid=()=>crypto.randomUUID();
+    const owner=newid(),lead=newid(),task=newid(),approval=newid(),effect=newid();
+    const pDigest='b'.repeat(64),tDigest='c'.repeat(64),leadDigest='a'.repeat(64);
+    const now=Date.now();
+    await DB.prepare('INSERT INTO user_identities(id,issuer,subject,created_at) VALUES(?,?,?,?)')
+      .bind(owner,'https://synthetic.invalid','p2e-local',now).run();
+    await DB.prepare(`INSERT INTO synthetic_leads(
+      id,owner_id,client_lead_id,source,service_code,budget_band,days_to_deadline,
+      priority,reply_draft,input_digest,created_at)
+      VALUES(?,?,?,'SYNTHETIC_FORM','SIGNAGE','MID',30,
+      'STANDARD_REVIEW','never sent',?,?)`)
+      .bind(newid(),owner,lead,leadDigest,now).run();
+    await DB.prepare(`INSERT INTO task_runs(
+      id,owner_id,client_task_id,kind,client_lead_id,lead_input_digest,
+      status,current_step,version,created_at,updated_at,finished_at)
+      VALUES(?,?,?,'SYNTHETIC_LEAD_TRIAGE_V1',?,?,'SUCCEEDED',3,7,?,?,?)`)
+      .bind(task,owner,newid(),lead,leadDigest,now,now,now).run();
+    for(const [index,code] of ['VERIFY_LEAD','VERIFY_TRIAGE','VERIFY_DRAFT'].entries()){
+      await DB.prepare(`INSERT INTO task_steps(
+        id,task_id,step_index,step_code,status,attempt_count,updated_at)
+        VALUES(?,?,?,?,'SUCCEEDED',1,?)`)
+        .bind(newid(),task,index,code,now).run();
+    }
+    await DB.prepare(`INSERT INTO synthetic_approval_intents(
+      id,owner_id,client_intent_id,provider,operation,target,
+      payload_digest,target_digest,lead_id,service_code,status,version,
+      expires_at,created_at,task_id,task_input_digest,task_version)
+      VALUES(?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,?,?,'SIGNAGE','PENDING',1,?,?,?,?,7)`)
+      .bind(approval,owner,newid(),pDigest,tDigest,
+        lead,now+600000,now,task,leadDigest).run();
+    await DB.prepare(`INSERT INTO synthetic_effect_intents(
+      id,owner_id,task_id,approval_id,provider,operation,target,
+      client_lead_id,service_code,task_input_digest,task_version,
+      payload_digest,target_digest,status,created_at)
+      VALUES(?,?,?,?,'SYNTHETIC_ONLY','CREATE_CRM_LEAD','synthetic-crm',
+        ?,'SIGNAGE',?,7,?,?,'AWAITING_APPROVAL',?)`)
+      .bind(effect,owner,task,approval,lead,leadDigest,pDigest,tDigest,now).run();
+    await DB.prepare(`UPDATE synthetic_approval_intents SET
+      status='APPROVED_NO_DISPATCH',version=2,decided_at=?
+      WHERE id=? AND owner_id=?`).bind(now,approval,owner).run();
+    const a=await attemptSandboxEffect({DB},owner,effect,now+1,
+      'AFTER_PROVIDER_COMMIT_TIMEOUT');
+    assert.equal(a.status,202);
+    assert.equal((await a.json()).dispatch.state,'UNKNOWN_OUTCOME');
+    assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM sandbox_provider_records')
+      .first()).n,1);
+    await platform.dispose();platform=null;
+    platform=await setupPlatform(dir);
+    const persisted=platform.env.DB;
+    const found=await reconcileSandboxEffect({DB:persisted},owner,effect,now+2);
+    assert.equal(found.status,200);
+    assert.equal((await found.json()).dispatch.state,'CONFIRMED_APPLIED');
+    const final=await attemptSandboxEffect({DB:persisted},owner,effect,now+3);
+    assert.equal(final.status,200);
+    assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM sandbox_provider_records')
+      .first()).n,1);
+    assert.equal((await persisted.prepare('SELECT attempt_count FROM sandbox_dispatches WHERE effect_id=?')
+      .bind(effect).first()).attempt_count,1);
+    assert.equal((await persisted.prepare('SELECT COUNT(*) AS n FROM audit_events').first()).n,0);
+  }finally{
     if(platform)await platform.dispose();
     rmSync(dir,{recursive:true,force:true});
   }
