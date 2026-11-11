@@ -88,3 +88,9 @@ Source commit `d90887a3d407d5178368ce197bb99e6e8c84545a` passed **all 5 workflow
 - [Android GitHub adapter real network acceptance](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/42668086200): SUCCESS; JUnit XML asserts **1 test executed, 0 skipped, 0 failed, 0 errors**.
 
 This is CI at source SHA, not yet the merge SHA. **No physical Android, Cloudflare remote, powered-off device, RAM/battery benchmark, OAuth login, or cloud sync verified.**
+
+## P2-F: manual synthetic task and approval review
+
+When a real owner-configured Google Web OAuth ID and exact HTTPS Worker origin are provided, an explicitly signed-in Android user sees an additional **Workflow business · HUMAN REVIEW** panel. It requires an already-onboarded backend user (the original monitor sync must have registered the owner). It can create a typed **synthetic-only** lead/task, run one deterministic step per tap, cancel a task, request task-bound approval, approve/deny through a confirmation dialog, read the P2-E synthetic D1 result, and request readback-only reconciliation. No real CRM/email/WhatsApp actions are available.
+
+The new panel is not shown in the checked-in default build, because the public OAuth/Worker identifiers are empty. No task or provider effects are scheduled automatically by Android; every network call is initiated by a tap, and all changes require a fresh server-state readback. The P2-E simulator is a **D1 table only**, not a production external provider. For detailed backend, UI and safety contracts see [P2-F review](../docs/P2_F_ANDROID_WORKFLOW_REVIEW.md).
