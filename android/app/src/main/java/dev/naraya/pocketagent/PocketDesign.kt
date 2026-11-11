@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * P2-G: intentionally quiet, text-first product language.
@@ -81,7 +82,7 @@ internal fun PocketEyebrow(label: String) {
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = PocketInk.accent,
-        letterSpacing = androidx.compose.ui.unit.TextUnit(1.4f, androidx.compose.ui.unit.TextUnitType.Sp),
+        letterSpacing = 1.4.sp,
     )
 }
 
@@ -123,8 +124,7 @@ internal fun PocketHeader() {
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text("NARAYA", style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.TextUnit(
-                    1f, androidx.compose.ui.unit.TextUnitType.Sp))
+                fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Text("POCKET AGENT", style = MaterialTheme.typography.labelSmall,
                 color = PocketInk.muted)
         }
