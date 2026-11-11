@@ -93,7 +93,7 @@ test('P2-D static gate blocks adding network provider dispatch or deleting immut
     s=>{s.taskApprovalSource+=' fetch("https://provider.invalid");';},
     s=>{s.taskApprovalSource=s.taskApprovalSource.replace(
       "task.status!=='SUCCEEDED'","false");},
-    s=>{s.taskApprovalSource=s.taskApprovalSource.replace(
+    s=>{s.taskApprovalSource=s.taskApprovalSource.replaceAll(
       'eligibleForDispatch:false','eligibleForDispatch:true');},
     s=>{s.migration0009=s.migration0009.replace(
       'CREATE TRIGGER IF NOT EXISTS task_effect_no_retarget',
