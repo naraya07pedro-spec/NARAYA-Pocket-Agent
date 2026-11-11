@@ -73,9 +73,8 @@ async function setup(e,token){
   return {owner,task,approval,effect,leadId};
 }
 async function setupUnapproved(e,token){
-  assert.equal((await call(e,token,'/v1/sync/monitors','POST',{
-    clientDraftId:uuid(),repository:'python/cpython',intervalMinutes:30,
-  })).status,201);
+  // Caller already onboarded this signed user. Do not create a redundant
+  // monitor, since monitor quota is independent from approval semantics.
   const leadId=uuid();
   assert.equal((await call(e,token,'/v1/synthetic-leads','POST',{
     clientLeadId:leadId,source:'SYNTHETIC_FORM',serviceCode:'SIGNAGE',
