@@ -294,3 +294,210 @@ test('P2-C: ambiguous committed lease claim NEVER refunds hourly quota',async()=
     assert.ok(pending.lease_token);
   }finally{globalThis.fetch=originalFetch;close(e);}
 });
+
+
+async function completedSyntheticTask(e,t){
+  const leadId=await lead(e,t);
+  let task=(await (await taskCreate(e,t,createBody(leadId))).json()).task;
+  for(let i=0;i<3;i++){
+    const response=await advance(e,t,task);
+    assert.equal(response.status,200);
+    task=(await response.json()).task;
+  }
+  assert.equal(task.status,'SUCCEEDED');
+  assert.equal(task.currentStep,3);
+  return {task,leadId};
+}
+function taskApprovalBody(task,leadId,clientIntentId=UUID()){
+  return {clientIntentId,taskId:task.id,provider:'SYNTHETIC_ONLY',
+    operation:'CREATE_CRM_LEAD',target:'synthetic-crm',
+    payload:{leadId,serviceCode:'SIGNAGE'}};
+}
+async function makeTaskApproval(e,t,body){
+  return request(e,t,'/v1/task-approvals','POST',body);
+}
+async function effect(e,t,id){
+  const r=await request(e,t,'/v1/task-effects/'+id);
+  assert.equal(r.status,200);
+  return (await r.json()).effect;
+}
+const decideEffect=(approval,decision='APPROVE')=>({
+  decision,expectedVersion:approval.version,
+  payloadDigest:approval.payloadDigest,targetDigest:approval.targetDigest,
+});
+
+test('P2-D: signed task approval requires completed immutable owned task, never a generic legacy approval',async()=>{
+  globalThis.fetch=mockJwks;const e=env();
+  try{
+    const a=await token('p2d-bind-a'),b=await token('p2d-bind-b');
+    assert.equal((await makeTaskApproval(e,a,taskApprovalBody({id:UUID()},UUID()))).status,409);
+    await onboard(e,a);await onboard(e,b);
+    const l=await lead(e,a);
+    let task=(await (await taskCreate(e,a,createBody(l))).json()).task;
+    const candidate=taskApprovalBody(task,l);
+    assert.equal((await makeTaskApproval(e,a,candidate)).status,409,
+      'queued or unfinished task cannot receive a task-bound approval');
+    assert.equal((await makeTaskApproval(e,b,candidate)).status,409,
+      'another signed user cannot attach to an owned task');
+    for(let i=0;i<3;i++)task=(await (await advance(e,a,task)).json()).task;
+    assert.equal(task.status,'SUCCEEDED');
+    const invalid=[
+      {...candidate,taskId:UUID()},
+      {...candidate,payload:{...candidate.payload,leadId:UUID()}},
+      {...candidate,payload:{...candidate.payload,serviceCode:'INTERIOR'}},
+      {...candidate,provider:'REAL_CRM'},
+      {...candidate,target:'https://evil.invalid'},
+      {...candidate,payload:{...candidate.payload,phone:'000'}},
+      {...candidate,send:true},
+    ];
+    for(const sample of invalid){
+      const response=await makeTaskApproval(e,a,sample);
+      assert.ok([400,409].includes(response.status),String(response.status));
+    }
+    const made=await makeTaskApproval(e,a,candidate);
+    assert.equal(made.status,201);
+    const result=await made.json();
+    assert.equal(result.approval.taskId,task.id);
+    assert.equal(result.approval.taskVersion,task.version);
+    assert.equal(result.approval.taskInputDigest,task.leadInputDigest);
+    assert.equal(result.approval.eligibleForDispatch,false);
+    assert.equal(result.effect.status,'AWAITING_APPROVAL');
+    assert.equal(result.effect.externalWrite,'NOT_IMPLEMENTED');
+    assert.equal(result.effect.eligibleForDispatch,false);
+    assert.equal(result.effect.taskId,task.id);
+    assert.equal(result.effect.taskInputDigest,task.leadInputDigest);
+    assert.equal(result.effect.payloadDigest,result.approval.payloadDigest);
+    assert.equal(result.effect.targetDigest,result.approval.targetDigest);
+    assert.match(result.effect.payloadDigest,/^[0-9a-f]{64}$/);
+    assert.equal((await makeTaskApproval(e,a,candidate)).status,200);
+    assert.equal((await makeTaskApproval(e,a,taskApprovalBody(task,l))).status,409,
+      'another idempotency key must not reserve a second effect for one task');
+    assert.equal((await makeTaskApproval(e,a,{...candidate,taskId:UUID()})).status,409,
+      'a reused key cannot switch to another task');
+    assert.equal((await request(e,b,'/v1/task-effects').then(r=>r.json())).effects.length,0);
+    assert.equal((await request(e,b,'/v1/task-effects/'+result.effect.id)).status,404);
+    assert.equal((await request(e,a,'/v1/task-effects/'+result.effect.id+'/dispatch','POST',{})).status,404);
+    assert.equal((await request(e,a,'/v1/task-effects').then(r=>r.json())).effects.length,1);
+    assert.equal(e.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_effect_intents').get().n,1);
+  }finally{globalThis.fetch=originalFetch;close(e);}
+});
+
+test('P2-D: approval decision CAS commits inert effect state atomically, rejects forged/replayed decisions',async()=>{
+  globalThis.fetch=mockJwks;const e=env();
+  try{
+    const a=await token('p2d-decision-a'),b=await token('p2d-decision-b');
+    await onboard(e,a);await onboard(e,b);
+    const {task,leadId}=await completedSyntheticTask(e,a);
+    const made=(await (await makeTaskApproval(e,a,taskApprovalBody(task,leadId))).json());
+    const approval=made.approval,fx=made.effect;
+    assert.equal((await request(e,b,'/v1/approval-intents/'+approval.id+'/decision','POST',
+      decideEffect(approval))).status,409);
+    for(const fake of [
+      {...decideEffect(approval),targetDigest:'a'.repeat(64)},
+      {...decideEffect(approval),payloadDigest:'b'.repeat(64)},
+      {...decideEffect(approval),expectedVersion:approval.version+1},
+    ])assert.equal((await request(e,a,'/v1/approval-intents/'+approval.id+'/decision',
+      'POST',fake)).status,409);
+    assert.equal((await effect(e,a,fx.id)).status,'AWAITING_APPROVAL');
+    const approved=await request(e,a,'/v1/approval-intents/'+approval.id+'/decision',
+      'POST',decideEffect(approval));
+    assert.equal(approved.status,200);
+    assert.equal((await approved.json()).status,'APPROVED_NO_DISPATCH');
+    const effectRow=await effect(e,a,fx.id);
+    assert.equal(effectRow.status,'APPROVED_NO_DISPATCH');
+    assert.equal(effectRow.eligibleForDispatch,false);
+    assert.equal(effectRow.externalWrite,'NOT_IMPLEMENTED');
+    assert.ok(effectRow.decidedAt>0);
+    assert.equal((await request(e,a,'/v1/approval-intents/'+approval.id+'/decision',
+      'POST',decideEffect(approval)).then(r=>r.status)),409);
+    assert.throws(()=>e.DB.connection.prepare(
+      "UPDATE synthetic_effect_intents SET target='altered' WHERE id=?")
+      .run(fx.id),/task_effect_immutable_payload/);
+    assert.throws(()=>e.DB.connection.prepare(
+      "UPDATE synthetic_effect_intents SET status='DENIED' WHERE id=?")
+      .run(fx.id),/task_effect_no_independent_transition/);
+    assert.equal(e.DB.connection.prepare('SELECT COUNT(*) AS n FROM synthetic_effect_intents').get().n,1);
+    assert.equal(e.DB.connection.prepare('SELECT COUNT(*) AS n FROM audit_events').get().n,0);
+    assert.equal(e.DB.connection.prepare('SELECT COUNT(*) AS n FROM observations').get().n,0);
+  }finally{globalThis.fetch=originalFetch;close(e);}
+});
+
+test('P2-D: denial, expiry and missing effect fail closed; legacy P2-A approval cannot mint effects',async()=>{
+  globalThis.fetch=mockJwks;const e=env();
+  try{
+    const t=await token('p2d-denial');await onboard(e,t);
+    const first=await completedSyntheticTask(e,t);
+    const a=(await (await makeTaskApproval(e,t,taskApprovalBody(first.task,first.leadId))).json());
+    const denied=await request(e,t,'/v1/approval-intents/'+a.approval.id+'/decision',
+      'POST',decideEffect(a.approval,'DENY'));
+    assert.equal(denied.status,200);
+    assert.equal((await effect(e,t,a.effect.id)).status,'DENIED');
+    assert.equal((await request(e,t,'/v1/approval-intents/'+a.approval.id+'/decision',
+      'POST',decideEffect(a.approval,'APPROVE'))).status,409);
+    const second=await completedSyntheticTask(e,t);
+    const exp=(await (await makeTaskApproval(e,t,taskApprovalBody(second.task,second.leadId))).json());
+    e.DB.connection.prepare('UPDATE synthetic_approval_intents SET expires_at=? WHERE id=?')
+      .run(Date.now()-1000,exp.approval.id);
+    assert.equal((await request(e,t,'/v1/approval-intents/'+exp.approval.id+'/decision',
+      'POST',decideEffect(exp.approval))).status,409);
+    assert.equal((await effect(e,t,exp.effect.id)).status,'AWAITING_APPROVAL');
+    const third=await completedSyntheticTask(e,t);
+    const deleted=(await (await makeTaskApproval(e,t,taskApprovalBody(third.task,third.leadId))).json());
+    e.DB.connection.prepare('DELETE FROM synthetic_effect_intents WHERE id=?')
+      .run(deleted.effect.id);
+    const noEffect=await request(e,t,'/v1/approval-intents/'+deleted.approval.id+'/decision',
+      'POST',decideEffect(deleted.approval));
+    assert.equal(noEffect.status,500,
+      'tampered/corrupt missing effect triggers SQL abort, not approval success');
+    const approvalState=e.DB.connection.prepare('SELECT status,version FROM synthetic_approval_intents WHERE id=?')
+      .get(deleted.approval.id);
+    assert.deepEqual(approvalState,{status:'PENDING',version:1});
+    // Old unbound approvals are left usable for inert P2-A experiments,
+    // but cannot create a P2-D effect ledger entry.
+    const legacyLead=await lead(e,t);
+    const legacy=await request(e,t,'/v1/approval-intents','POST',{
+      clientIntentId:UUID(),provider:'SYNTHETIC_ONLY',operation:'CREATE_CRM_LEAD',
+      target:'synthetic-crm',payload:{leadId:legacyLead,serviceCode:'SIGNAGE'},
+    });
+    assert.equal(legacy.status,201);
+    const old=(await legacy.json()).intent;
+    assert.equal((await request(e,t,'/v1/approval-intents/'+old.id+'/decision',
+      'POST',decideEffect(old)).then(r=>r.status)),200);
+    assert.equal(e.DB.connection.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents').get().n,2);
+    assert.equal(e.DB.connection.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents WHERE approval_id=?')
+      .get(old.id).n,0);
+  }finally{globalThis.fetch=originalFetch;close(e);}
+});
+
+test('P2-D: D1 transactional effect write failure rolls back task approval and preserves retryability',async()=>{
+  globalThis.fetch=mockJwks;const e=env(),db=e.DB;
+  try{
+    const t=await token('p2d-rollback');await onboard(e,t);
+    const {task,leadId}=await completedSyntheticTask(e,t);
+    const body=taskApprovalBody(task,leadId);
+    let hits=0;
+    e.DB={...db,async batch(statements){
+      if(statements.length===2){
+        hits++;
+        return db.batch(statements.map((stmt,i)=>i===1?{
+          async run(){throw new Error('injected_effect_insert_failure');}
+        }:stmt));
+      }
+      return db.batch(statements);
+    }};
+    const failed=await makeTaskApproval(e,t,body);
+    assert.equal(failed.status,500);
+    assert.equal(hits,1);
+    assert.equal(db.connection.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_approval_intents').get().n,0);
+    assert.equal(db.connection.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents').get().n,0);
+    e.DB=db;
+    const retried=await makeTaskApproval(e,t,body);
+    assert.equal(retried.status,201);
+    assert.equal(db.connection.prepare(
+      'SELECT COUNT(*) AS n FROM synthetic_effect_intents').get().n,1);
+  }finally{globalThis.fetch=originalFetch;db.close();}
+});
