@@ -1,5 +1,23 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-11 | P2-C | Core backend task runtime (PR #37, CI-verified source; remote BLOCKED)
+
+**Why:** P1 was a bounded GitHub monitor, P2-A/B were synthetic lead intake plus approval. Neither was a durable task/step execution runtime. P2-C adds the first task engine **without** claiming a fully generic agent or any real-world provider effects.
+
+**Implemented on PR #37:**
+- Additive D1 migration **0008**: `task_runs` (owner, idempotency key, version, status), three ordered `task_steps` (state, attempts, lease UUID, lease expiry, result code), and one durable `task_step_budgets` row per owner.
+- Signed OIDC/registered-user `/v1/tasks` create/list/detail, one-step **manual** advance, and optimistic-version cancellation. Fixed task kind `SYNTHETIC_LEAD_TRIAGE_V1` uses the existing user's stored synthetic lead and immutable input digest. It performs only `VERIFY_LEAD`, `VERIFY_TRIAGE`, and `VERIFY_DRAFT` (draft **not sent**).
+- Bounded task admission: max 3 concurrent unfinished tasks and 50 stored task rows per owner. Fixed UTC hourly budget 12 step claims per owner. D1 lease 45s, fenced completion, reclaim after lease expiry, up to 3 attempts with exponential backoff, terminal failure and durable cancellation. Quota refund is permitted **only** on two explicitly zero-change claim results; ambiguous committed claims are never refunded.
+- New adversarial tests for signed identity, tenant isolation, dedup, payload mismatch, cancel during in-flight step, stale vs renewed lease, retry exhaustion, backward-time budget, ambiguous D1 commit metadata and forbidden arbitrary actions. A real **local workerd/D1** case confirms three-step progression across database persistence and platform restart.
+- No new scheduled handler and no outbound provider/API/LLM write path. Live Cloudflare deployment, Google account login, physical device-off and production-grade arbitrary-agent DAGs are **not proven**.
+
+**Exact source/PR-head CI checkpoint:** `97ba1d4186096112a0f0f14de09f85a378c9421b`, **5/5 GitHub Actions SUCCESS**: [Node 175/175 and typecheck](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43008950948), [real local workerd/D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43008950952), [public GitHub read/local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43008950933), [Android native adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43008951029), [Android debug APK + security](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43008950937). This is PR-head code evidence, **NOT yet main commit proof**, and workerd means local Cloudflare runtime, **NOT a deployed owner Cloudflare service**.
+
+**Next engineering priorities:** (1) immutable approval-to-task/effect-intent binding; (2) sandbox external provider effect ledger with `UNKNOWN_OUTCOME` after possible commit, provider read-back, no blind replay; (3) Android task review/cancel interface; (4) operator/owner Cloudflare account quota and billing gate, owner-authorized inert deployment, real Google OAuth and a measured physically powered-OFF phone test. **`remote_acceptance: BLOCKED`, `safe_to_deploy: false`, `safe_to_activate_scheduler: false`.**
+
+[Detailed contract](P2_C_DURABLE_TASK_RUNTIME.md) · [PR #37](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/37) · [Issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8)
+
+
 ## 2026-11-10 | P1-W Google issuer / JWKS signer provenance hardening (PR #29 MERGED; remote BLOCKED)
 
 **Audit finding:** Google identity checks verified a JWT RSA signature but fetched its key from any operator-configured HTTPS JWKS URL, without ensuring Google issuer claims were authenticated with **Google's actual signing keys**. Bad config could make a forged Google-issuer token appear valid. This is a **source-level potential vulnerability**, not a verified live exploit.
