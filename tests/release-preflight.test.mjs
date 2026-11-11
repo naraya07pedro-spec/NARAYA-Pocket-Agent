@@ -18,7 +18,7 @@ test('checked-in offline source is safe but REMOTE BLOCKED, with no attempted Cl
   assert.ok(result.remote_blockers.includes('worker_has_no_public_https_route'));
   assert.ok(result.remote_blockers.includes('remote_d1_id_not_configured'));
   assert.ok(result.remote_blockers.some(v=>v.includes('billing')));
-  assert.equal(result.checks.length,19);
+  assert.equal(result.checks.length,20);
   assert.ok(result.checks.every(c=>c.status==='PASS'));
   assert.equal(result.side_effects.startsWith('NONE'),true);
 });
@@ -32,6 +32,22 @@ test('preflight rejects Cron accidentally enabled by config or unguarded Worker 
   assert.ok(failures(audit(s)).includes('global_cron_kill_switch'));
   const m=clone();m.prod.vars={MOBILE_SCHEDULING_ENABLED:'true'};
   assert.ok(failures(audit(m)).includes('mobile_activation_default_off'));
+});
+
+test('P1-Z sign-out handles the actual AndroidX ClearCredentialException, not GetCredentialException',()=>{
+  const s=clone();
+  const check='android_google_logout_catches_clear_credential_exception';
+  assert.ok(!failures(audit(s)).includes(check));
+  s.androidGoogleIdentity=s.androidGoogleIdentity.replace(
+    'catch (_: ClearCredentialException) {',
+    'catch (_: GetCredentialException) {',
+  );
+  assert.ok(failures(audit(s)).includes(check));
+  const missing=clone();
+  missing.androidGoogleIdentity=missing.androidGoogleIdentity.replace(
+    'import androidx.credentials.exceptions.ClearCredentialException','',
+  );
+  assert.ok(failures(audit(missing)).includes(check));
 });
 
 test('preflight detects accidental public routes and schedule expansion',()=>{

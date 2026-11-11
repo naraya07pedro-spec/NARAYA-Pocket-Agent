@@ -45,6 +45,7 @@ export function readSourceSnapshot(base=root){
     workerTypes:text(base,'worker/src/types.ts'),
     androidGradle:text(base,'android/app/build.gradle.kts'),
     androidCloudClient:text(base,'android/app/src/main/java/dev/naraya/pocketagent/CloudSyncClient.kt'),
+    androidGoogleIdentity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/GoogleIdentityClient.kt'),
     androidMainActivity:text(base,'android/app/src/main/java/dev/naraya/pocketagent/MainActivity.kt'),
     offdeviceEvidenceGate:text(base,'scripts/offdevice-evidence-gate.mjs'),
     workflows,
@@ -190,6 +191,12 @@ export function auditSource(s){
       s.oidcSource.includes("const valid = await crypto.subtle.verify(") &&
       s.oidcSource.includes("return { issuer, subject: payload.sub as string }") &&
       s.workerTypes.includes('OIDC_AUTHORIZED_PRESENTERS?: string')),
+    check('android_google_logout_catches_clear_credential_exception',
+      s.androidGoogleIdentity.includes('import androidx.credentials.exceptions.ClearCredentialException') &&
+      s.androidGoogleIdentity.includes('import androidx.credentials.exceptions.GetCredentialException') &&
+      s.androidGoogleIdentity.includes('catch (_: GetCredentialException)') &&
+      /suspend fun signOut\(\)\s*\{[\s\S]*?catch \(_: ClearCredentialException\)/.test(s.androidGoogleIdentity) &&
+      !/suspend fun signOut\(\)\s*\{[\s\S]*?catch \(_: GetCredentialException\)/.test(s.androidGoogleIdentity)),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),

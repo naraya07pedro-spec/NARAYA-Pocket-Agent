@@ -5,6 +5,7 @@ import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -41,8 +42,9 @@ internal class GoogleIdentityClient(private val activity: ComponentActivity) {
     suspend fun signOut() {
         try {
             manager.clearCredentialState(ClearCredentialStateRequest())
-        } catch (_: GetCredentialException) {
-            // Local ephemeral session is always cleared by the caller first.
+        } catch (_: ClearCredentialException) {
+            // Provider clear failure cannot resurrect the RAM-only local session;
+            // do not crash the sign-out coroutine on a credential-provider error.
         }
     }
 }
