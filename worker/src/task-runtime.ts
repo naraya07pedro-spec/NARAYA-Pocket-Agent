@@ -242,7 +242,11 @@ export async function advanceSyntheticTask(
         id,task.current_step,lease),
   ]);
   if(!one(claimed[0])||!one(claimed[1])){
-    await refundBudget(env,owner,slot.start);
+    // Only refund when both durable statements EXPLICITLY report zero changes.
+    // Missing metadata/partial or ambiguous commits may have claimed a lease.
+    // Refunding those would silently permit exceeding the hourly budget.
+    if(claimed.length===2 && claimed.every(row=>row.meta?.changes===0))
+      await refundBudget(env,owner,slot.start);
     return json({error:'task_step_claim_conflict'},409);
   }
   // No provider calls. Only previously persisted dummy/typed data is read.
