@@ -110,7 +110,11 @@ BEGIN
 END;
 CREATE TRIGGER IF NOT EXISTS sandbox_provider_immutable
 BEFORE UPDATE ON sandbox_provider_records
-BEGIN SELECT RAISE(ABORT,'sandbox_provider_receipt_immutable'); END;
+BEGIN
+  SELECT RAISE(ABORT,'sandbox_provider_receipt_immutable');
+END;
 CREATE TRIGGER IF NOT EXISTS sandbox_provider_no_delete
 BEFORE DELETE ON sandbox_provider_records
-BEGIN SELECT RAISE(ABORT,'sandbox_provider_receipt_no_delete'); END;
+BEGIN
+  SELECT RAISE(ABORT,'sandbox_provider_receipt_no_delete');
+END;
