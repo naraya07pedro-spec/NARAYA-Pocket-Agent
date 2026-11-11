@@ -219,6 +219,17 @@ export function auditSource(s){
       s.workflows['android.yml'].includes('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug') &&
       s.workflows['android.yml'].indexOf('run: node scripts/android-owner-pilot.mjs --verify-apk') >
         s.workflows['android.yml'].indexOf('run: gradle --no-daemon --project-dir android :app:testDebugUnitTest :app:assembleDebug')),
+    check('p2c_runtime_durable_manual_fenced_no_provider_dispatch',
+      s.workerIndex.includes('return await taskRuntimeRoute(request,env,pathname)') &&
+      s.taskRuntimeSource.includes('const MAX_STEPS_PER_HOUR=12') &&
+      s.taskRuntimeSource.includes('const MAX_ATTEMPTS=3') &&
+      s.taskRuntimeSource.includes('const LEASE_MS=45_000') &&
+      s.taskRuntimeSource.includes('AND t.version=?') &&
+      s.taskRuntimeSource.includes("lease_token=?") &&
+      s.taskRuntimeSource.includes("status='CANCELLED'") &&
+      s.taskRuntimeSource.includes('reserveBudget(env,owner,now)') &&
+      !/\\bfetch\\s*\\(/.test(s.taskRuntimeSource) &&
+      s.migration0008.includes('CREATE TABLE IF NOT EXISTS task_step_budgets')),
     check('android_public_configuration_off_by_default',
       /gradleProperty\("narayaGoogleWebClientId"\)\.orElse\(""\)/.test(s.androidGradle) &&
       /gradleProperty\("narayaApiOrigin"\)\.orElse\(""\)/.test(s.androidGradle)),
