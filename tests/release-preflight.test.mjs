@@ -70,7 +70,7 @@ test('P2-C static gate refuses external fetch, disabled lease fencing and missin
   const mutations=[
     s=>{s.taskRuntimeSource=s.taskRuntimeSource.replace(
       'const MAX_STEPS_PER_HOUR=12','const MAX_STEPS_PER_HOUR=999999');},
-    s=>{s.taskRuntimeSource=s.taskRuntimeSource.replace(
+    s=>{s.taskRuntimeSource=s.taskRuntimeSource.replaceAll(
       'AND t.version=?','AND 1=1');},
     s=>{s.taskRuntimeSource += '\\nfetch("https://untrusted.invalid");\\n';},
     s=>{s.workerIndex=s.workerIndex.replace(
