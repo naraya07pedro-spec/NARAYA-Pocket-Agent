@@ -16,6 +16,7 @@ const EXPECTED_MIGRATIONS=[
   '0003_scheduler_control.sql',
   '0004_global_scheduler_budget.sql',
   '0005_observation_event_sequence.sql',
+  '0006_synthetic_approval_intents.sql',
 ];
 const READ_ONLY_ORIGINS=['https://api.github.com'];
 
@@ -37,6 +38,8 @@ export function readSourceSnapshot(base=root){
     migrations,
     migration0004:text(base,'worker/migrations/0004_global_scheduler_budget.sql'),
     migration0005:text(base,'worker/migrations/0005_observation_event_sequence.sql'),
+    migration0006:text(base,'worker/migrations/0006_synthetic_approval_intents.sql'),
+    approvalSource:text(base,'worker/src/synthetic-approvals.ts'),
     schedulerSource:text(base,'worker/src/scheduler.ts'),
     workerIndex:text(base,'worker/src/index.ts'),
     schedulerEligibility:text(base,'worker/src/scheduler-eligibility.ts'),
@@ -72,7 +75,9 @@ function migrationChainValid(s){
     /\bADD COLUMN budget_claims\b/.test(s.migration0004) &&
     /ADD COLUMN event_sequence INTEGER/.test(s.migration0005) &&
     /UPDATE observations SET event_sequence = rowid/.test(s.migration0005) &&
-    /UNIQUE INDEX/.test(s.migration0005);
+    /UNIQUE INDEX/.test(s.migration0005) &&
+    /CREATE TABLE IF NOT EXISTS synthetic_approval_intents/.test(s.migration0006) &&
+    /UNIQUE\(owner_id,client_intent_id\)/.test(s.migration0006);
 }
 function stringRiskInVars(conf){
   const vars=conf.vars??{};
