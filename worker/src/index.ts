@@ -87,7 +87,7 @@ export default {
         return await mobileSync(request,env,pathname);
       }
       if (pathname === '/v1/approval-intents' || pathname.startsWith('/v1/approval-intents/')) {
-        return syntheticApprovalRoute(request,env,pathname);
+        return await syntheticApprovalRoute(request,env,pathname);
       }
       if (!env.OWNER_API_TOKEN || env.OWNER_API_TOKEN.length < 32 ||
           !env.OWNER_ID || !/^[A-Za-z0-9_-]{1,64}$/.test(env.OWNER_ID)) {
