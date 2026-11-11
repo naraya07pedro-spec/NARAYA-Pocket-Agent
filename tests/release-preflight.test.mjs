@@ -133,7 +133,7 @@ test('P2-F source gate rejects hidden Android execution, removed confirmation or
   const name='p2f_android_explicit_user_review_no_hidden_dispatch';
   assert.ok(!failures(audit(snapshot())).includes(name));
   const mutations=[
-    s=>{s.androidMainActivity=s.androidMainActivity.replace(
+    s=>{s.androidMainActivity=s.androidMainActivity.replaceAll(
       'if (signedIn && cloudConfigured)','if (true)');},
     s=>{s.androidWorkflowClient=s.androidWorkflowClient.replaceAll(
       'CloudSyncClient.validIdTokenShape(token)','true');},
@@ -145,9 +145,9 @@ test('P2-F source gate rejects hidden Android execution, removed confirmation or
       'perform("rekonsiliasi read-only"','perform("blind retry"');},
     s=>{s.androidWorkflowClient+=' WorkManager';},
   ];
-  for(const mutate of mutations){
+  for(const [index,mutate] of mutations.entries()){
     const changed=clone();mutate(changed);
-    assert.ok(failures(audit(changed)).includes(name));
+    assert.ok(failures(audit(changed)).includes(name), 'uncaught P2-F mutation '+index);
   }
 });
 
