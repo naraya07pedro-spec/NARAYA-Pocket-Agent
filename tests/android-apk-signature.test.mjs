@@ -96,6 +96,14 @@ test('P1-AB invokes actual SDK verification workflow (injected runner) and refus
     assert.equal(calls[0].opts.shell,false);
     assert.equal(calls[1].args[0],'dump');
     assert.equal(calls[1].args[1],'badging');
+    // CI has no durable owner key. It must still verify the real APK signer
+    // and exact package, but must not claim owner-key continuity.
+    const ciEvidence=verifyCompiledApk({apkPath:apk,sdkRoot:temp,
+      javaExecutable:'synthetic-java',run:mock});
+    assert.equal(ciEvidence.signature_verified_for_min_sdk_26,true);
+    assert.equal(ciEvidence.certificate_matches_owner_keystore,'NOT_CHECKED_NO_OWNER_KEY');
+    assert.equal(ciEvidence.apk_sha256,signer.sha256);
+
 
     const badRuns=[
       (cmd,args)=>args[0]==='-jar'?{status:1,stdout:good}:{status:0,stdout:badging},
