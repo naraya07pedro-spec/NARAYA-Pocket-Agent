@@ -1,5 +1,33 @@
 # Progress ledger | NARAYA Pocket Agent
 
+## 2026-11-11 | P2-G | Anti-template Android product UI implemented (PR #41)
+
+**Decision:** replace the previous single oversized Android screen with a real native Material 3 product shell inspired by Engineering (structure), Quiet Utility (honest onboarding) and Editorial (human approval). This is a **code implementation**, not an exported mockup or rendered screenshot. No fabricated agent metrics, cloud-green status, production CRM results, external provider sends, active Cron or automated task execution.
+
+**Implemented on PR #41:**
+- `MainActivity.kt` now has four stable native destinations **Beranda / Tugas / Approval / Monitor**. Prior manual GitHub check, local draft persistence, optional Google ID-token sign-in/cloud monitor actions and read-only observations remain in Monitor without removal or secret persistence.
+- `PocketDesign.kt` provides restrained charcoal/neutral/teal Material 3 colors, typographic hierarchy, clear hairline bordered components, navigation and a quiet onboarding/home. Home shows **actual local draft count only**; missing Google OAuth/Worker config displays **not configured**, and any local signed-in session is deliberately not described as a proven Cloudflare deployment. Task and approval tabs are accessible only under existing `signedIn && cloudConfigured`; other users see the actual setup gate, not fake task cards.
+- `WorkflowReviewPanel.kt` is now **two distinct screens** using the same signed, ephemeral reviewer state and existing server API: Tugas (filtered real D1 tasks, completed step counter 0–3, explicit single manual advance, explicit cancel, task-bound approval request) and Approval (matching nonexpired immutable approval, separate confirm/reject dialogs, bound effect details on demand, D1-only one-shot simulation and readback-only reconciliation for `UNKNOWN_OUTCOME`). Sensitive decisions still require a confirmation modal, with no optimistic remote success claims. Failed signed snapshot refresh now also clears stale task/approval data.
+- `PocketUiState.kt` strictly derives Indonesian labels, filter membership, review counts and decision eligibility from **owner-scoped verified server rows**. It calls `APPROVED_NO_DISPATCH` **disetujui, belum dikirim**, and `CONFIRMED_APPLIED` **tercatat di simulasi D1**, never a real CRM send.
+- `PocketUiStateTest.kt` covers truthful status text, task-state filters, incomplete/missing lead, duplicate effects, expired/denied/mismatched digest or target approval, and pending count semantics. Source-safety gates increase to **26**, with adversarial mutation tests for cloud truthfulness, sign-in gating, UI separation, consent and expiry.
+- New [P2-G design implementation contract](P2_G_ANDROID_PRODUCT_DESIGN.md) and updated [Android README](../android/README.md).
+
+**Verified exact code candidate commit `e892fa9ae5ef32c38fe660c5575a234d98de7ddb`: all five GitHub Actions SUCCESS**
+1. [Offline source, TypeScript and Node **189/189**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43057134767)
+2. [Actual local workerd/D1 **14/14**](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43057134756)
+3. [Public GitHub GET and isolated local D1](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43057134593)
+4. [Android native GitHub adapter](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43057134708)
+5. [Android Kotlin/Compose debug APK including new UI, JVM suite and Android SDK `APK_SIGNATURE_AND_PACKAGE_VERIFIED`; original **20/20** cloud security JVM tests](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/actions/runs/43057134612)
+
+**Defect recorded, not hidden:** Initial new adversarial source test failed because it mutated only one of multiple `if (mode == PocketTab.TASKS)` guards; the mutation was changed to `replaceAll` so removing all guards is actually detected. The entire source suite subsequently passed. This paragraph is **candidate code evidence**, not yet final PR-head or merged-main CI. Reverify both exact SHAs after recording these docs.
+
+**Explicitly not yet verified:** pixel-level UI screenshot/layout overflow, minimum-width emulator or real hardware accessibility, full human interaction testing with live Google account, Cloudflare owner plan/billing and Worker/D1 remote migration/deployment, Cron evidence with phone physically OFF, or any actual third-party provider/CRM write. The shipping CI debug APK still has EMPTY OAuth and Worker origin defaults; task/review surfaces correctly show the disconnected gate. No actual Cloudflare deploy, billing spend, Cron activation, contact or PII occurred.
+
+**Safety status:** `remote_acceptance=BLOCKED`, `safe_to_deploy=false`, `safe_to_activate_scheduler=false`. Keep owner live-acceptance [issue #8](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/issues/8) OPEN.
+
+[PR #41](https://github.com/naraya07pedro-spec/NARAYA-Pocket-Agent/pull/41) · [P2-G docs](P2_G_ANDROID_PRODUCT_DESIGN.md) · [Prior P2-F contract](P2_F_ANDROID_WORKFLOW_REVIEW.md)
+
+
 ## 2026-11-11 | P2-F | Android signed-in human review and synthetic workflow controls (PR #40)
 
 **Reason:** P2-C/D/E implemented a durable three-step task, task-bound immutable approval, and a one-shot synthetic D1 effect with UNKNOWN_OUTCOME readback, but Android users could not actually review and operate the workflow. P2-F adds that missing **native Kotlin/Jetpack Compose user-facing control panel**. It does **not** add real autonomous provider execution, cloud deployment, or Google/phone-off evidence.
